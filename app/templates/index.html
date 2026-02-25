@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sdilej Search Workbench</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="hero">
+        <h1>Sdilej Search Workbench</h1>
+        <p>Search + filter + sort proxy for <code>sdilej.cz</code>, built for self-hosting on Raspberry Pi.</p>
+      </header>
+
+      <section class="panel">
+        <form method="get" action="/" class="search-form">
+          <label>
+            Query
+            <input
+              id="queryInput"
+              list="suggestions"
+              type="text"
+              name="query"
+              value="{{ query }}"
+              maxlength="200"
+              autocomplete="off"
+              placeholder="Type search term (optional)"
+            />
+            <datalist id="suggestions"></datalist>
+          </label>
+
+          <label>
+            Category
+            <select name="category">
+              {% for label, value in category_options %}
+                <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            Sort
+            <select name="sort">
+              {% for label, value in sort_options %}
+                <option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            Language
+            <input
+              type="text"
+              name="language"
+              value="{{ language }}"
+              maxlength="32"
+              placeholder="e.g. SK or Slovak"
+            />
+          </label>
+
+          <label>
+            Language scope
+            <select name="language_scope">
+              {% for label, value in language_scope_options %}
+                <option value="{{ value }}" {% if language_scope == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            Release year
+            <input
+              type="number"
+              name="release_year"
+              min="1900"
+              max="2099"
+              value="{{ release_year if release_year is not none else '' }}"
+              placeholder="e.g. 2003"
+            />
+          </label>
+
+          <label>
+            Max results
+            <input type="number" name="max_results" min="1" max="500" value="{{ max_results }}" />
+          </label>
+
+          <button type="submit">Search</button>
+        </form>
+      </section>
+
+      {% if error %}
+        <section class="panel error">
+          <strong>Error:</strong> {{ error }}
+        </section>
+      {% endif %}
+
+      {% if search %}
+        <section class="panel meta">
+          <div><strong>Effective query:</strong> <code>{{ search.effective_query }}</code></div>
+          <div><strong>Resolved slug:</strong> <code>{{ search.slug }}</code></div>
+          <div><strong>Search URL:</strong> <a href="{{ search.search_url }}" target="_blank" rel="noreferrer">{{ search.search_url }}</a></div>
+          <div><strong>Language filter:</strong> {{ search.language or "none" }} ({{ search.language_scope }})</div>
+          <div><strong>Year filter:</strong> {{ search.release_year if search.release_year is not none else "none" }}</div>
+          <div><strong>Parsed results:</strong> {{ search.result_count }} / {{ search.unfiltered_result_count }}</div>
+        </section>
+
+        <section class="results-grid">
+          {% for item in search.results %}
+            <article class="result-card">
+              <a href="{{ item.detail_url }}" target="_blank" rel="noreferrer" class="thumb-wrap">
+                {% if item.thumbnail_url %}
+                  <img src="{{ item.thumbnail_url }}" alt="{{ item.title }}" loading="lazy" />
+                {% else %}
+                  <div class="thumb-placeholder">No thumbnail</div>
+                {% endif %}
+              </a>
+              <div class="card-body">
+                <h3>
+                  <a href="{{ item.detail_url }}" target="_blank" rel="noreferrer">{{ item.title }}</a>
+                </h3>
+                <ul>
+                  <li><strong>Size:</strong> {{ item.size or "n/a" }}</li>
+                  <li><strong>Duration:</strong> {{ item.duration or "n/a" }}</li>
+                  <li><strong>Extension:</strong> {{ item.extension or "n/a" }}</li>
+                  <li><strong>Year:</strong> {{ item.primary_year if item.primary_year is not none else "n/a" }}</li>
+                  <li><strong>Playable:</strong> {{ "yes" if item.is_playable else "no" }}</li>
+                  <li><strong>Languages:</strong> {{ item.detected_languages | join(", ") if item.detected_languages else "n/a" }}</li>
+                  <li><strong>Dub hint:</strong> {{ "yes" if item.has_dub_hint else "no" }}</li>
+                  <li><strong>Subtitle hint:</strong> {{ "yes" if item.has_subtitle_hint else "no" }}</li>
+                </ul>
+              </div>
+            </article>
+          {% endfor %}
+        </section>
+      {% endif %}
+    </main>
+
+    <script>
+      const input = document.getElementById("queryInput");
+      const list = document.getElementById("suggestions");
+      let timer = null;
+
+      input.addEventListener("input", () => {
+        const q = input.value.trim();
+        clearTimeout(timer);
+        if (q.length < 2) {
+          list.innerHTML = "";
+          return;
+        }
+
+        timer = setTimeout(async () => {
+          try {
+            const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(q)}&limit=10`);
+            if (!res.ok) return;
+            const payload = await res.json();
+            list.innerHTML = "";
+            for (const suggestion of payload.suggestions || []) {
+              const opt = document.createElement("option");
+              opt.value = suggestion;
+              list.appendChild(opt);
+            }
+          } catch (_) {
+            // Ignore autocomplete failures; main search still works.
+          }
+        }, 180);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,158 @@
+:root {
+  --bg: #eef2f5;
+  --panel: #ffffff;
+  --text: #1f2937;
+  --muted: #4b5563;
+  --accent: #0f766e;
+  --accent-dark: #115e59;
+  --border: #d6dee6;
+  --danger: #991b1b;
+  --danger-bg: #fee2e2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 5% 15%, #d7f7ef 0, transparent 25%),
+    radial-gradient(circle at 95% 85%, #dae8ff 0, transparent 25%),
+    var(--bg);
+}
+
+a {
+  color: var(--accent-dark);
+}
+
+.container {
+  width: min(1300px, 95vw);
+  margin: 1.5rem auto;
+}
+
+.hero h1 {
+  margin: 0 0 0.4rem;
+  font-size: clamp(1.6rem, 2.8vw, 2.8rem);
+}
+
+.hero p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.search-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.search-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+  gap: 0.35rem;
+}
+
+.search-form input,
+.search-form select,
+.search-form button {
+  min-height: 42px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.search-form button {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.search-form button:hover {
+  filter: brightness(1.04);
+}
+
+.error {
+  border-color: #fecaca;
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.meta {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.results-grid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 1rem;
+}
+
+.result-card {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.thumb-wrap {
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: #e5e7eb;
+}
+
+.thumb-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb-placeholder {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.card-body {
+  padding: 0.8rem;
+}
+
+.card-body h3 {
+  font-size: 0.98rem;
+  margin: 0 0 0.6rem;
+  line-height: 1.3;
+}
+
+.card-body ul {
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+@media (max-width: 560px) {
+  .search-form {
+    grid-template-columns: 1fr;
+  }
+}
