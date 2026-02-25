@@ -8,10 +8,16 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - Category filters: all, video, audio, archive, image
 - Sort options: relevance, most downloaded, newest, largest, smallest
 - Language-aware filtering with filename heuristics (e.g. `SK`, `(sk)`, `CZ EN SK`, `SKtit`, `SK dabing`)
+- `strict_dubbing` mode (requires explicit `dub`/`dabing` markers)
 - Release year filter from title patterns (`1999`, `2003`, ...)
 - Queryless search mode: if `query` is empty, app derives one from language/year (e.g. `sk 2003`)
+- Result deduplication by file ID (numeric id in detail URL)
 - Autocomplete suggestions from sdilej endpoint
-- Parsed card view (title, size, duration, extension, playable marker)
+- Parsed card view (title, size, duration, extension, playable marker, file ID, year/language hints)
+- Detail probe endpoint parses download buttons and runs optional preflight request
+- SQLite persistence for:
+  - search history
+  - saved picks (upsert by file ID)
 - JSON API endpoints for future download-manager integration
 
 ## Project structure
@@ -41,6 +47,8 @@ docker compose up --build
 
 Open: `http://localhost:8080`
 
+Persistent data is stored in `./data/app.db` via Compose volume mount.
+
 ## Raspberry Pi deployment (arm64)
 
 1. Copy project to Pi.
@@ -55,9 +63,14 @@ docker compose up -d --build
 
 ## API endpoints
 
-- `GET /api/search?query=matrix&category=video&sort=newest&language=SK&language_scope=audio&release_year=2003&max_results=100`
+- `GET /api/search?query=matrix&category=video&sort=newest&language=SK&language_scope=audio&strict_dubbing=true&release_year=2003&max_results=100`
 - `GET /api/search?category=video&language=SK&language_scope=audio&release_year=2003&max_results=100` (no query)
+- `GET /api/detail?detail_url=https://sdilej.cz/15947667/scoob-2020-sk-.mkv&preflight=true`
 - `GET /api/autocomplete?q=mat&limit=10`
+- `GET /api/history?limit=50`
+- `GET /api/saved?limit=200`
+- `POST /api/saved` (upsert saved pick)
+- `DELETE /api/saved/{file_id}`
 - `GET /healthz`
 
 ## Next step

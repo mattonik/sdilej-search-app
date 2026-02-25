@@ -8,7 +8,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
-from .models import Category, LanguageScope, SearchResponse, SearchResult, SortMode
+from .models import Category, DetailProbeResponse, LanguageScope, SearchResponse, SearchResult, SortMode
 
 BASE_URL = "https://sdilej.cz"
 SEARCH_ENTRYPOINT = f"{BASE_URL}/sk/s"
@@ -42,6 +42,7 @@ _DURATION_RE = re.compile(r"D[eé]lka\s*:\s*([0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)"
 _YEAR_RE = re.compile(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)")
 _SUBTITLE_HINT_RE = re.compile(r"(?<![a-z0-9])(?:tit(?:ulky)?|sub(?:title)?s?)(?![a-z0-9])")
 _DUB_HINT_RE = re.compile(r"(?<![a-z0-9])(?:dab(?:ing)?|dub)(?![a-z0-9])")
+_FILE_ID_RE = re.compile(r"^/(\d+)/")
 
 # Common language codes typically present in filenames on sdilej.
 _DETECTABLE_LANGUAGE_CODES = (
@@ -138,6 +139,7 @@ class SdilejClient:
         max_results: int = 150,
         language: str | None = None,
         language_scope: LanguageScope = "any",
+        strict_dubbing: bool = False,
         release_year: int | None = None,
     ) -> SearchResponse:
         normalized_query = query.strip()
@@ -152,6 +154,8 @@ class SdilejClient:
             raise SdilejClientError("Release year must be between 1900 and 2099.")
 
         normalized_language = self._normalize_language_input(language)
+        if strict_dubbing and not normalized_language:
+            raise SdilejClientError("strict_dubbing=true requires language to be set.")
         effective_query = self._resolve_effective_query(
             query=normalized_query,
             language=normalized_language,
@@ -173,11 +177,13 @@ class SdilejClient:
             result = self._parse_card(card)
             if result is not None:
                 all_results.append(result)
+        all_results = self._dedupe_results(all_results)
 
         filtered_results = self._apply_language_filter(
             all_results,
             language=normalized_language,
             scope=language_scope,
+            strict_dubbing=strict_dubbing,
         )
         filtered_results = self._apply_year_filter(filtered_results, release_year=release_year)
 
@@ -191,11 +197,58 @@ class SdilejClient:
             sort=sort,
             language=normalized_language,
             language_scope=language_scope,
+            strict_dubbing=strict_dubbing,
             release_year=release_year,
             search_url=search_url,
             unfiltered_result_count=len(all_results),
             result_count=len(limited_results),
             results=limited_results,
+        )
+
+    def probe_detail(self, detail_url: str, run_preflight: bool = True) -> DetailProbeResponse:
+        if not detail_url.strip():
+            raise SdilejClientError("detail_url must not be empty.")
+
+        absolute_url = self._normalize_detail_url(detail_url)
+        response = self.session.get(absolute_url, timeout=self.timeout_seconds)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "lxml")
+
+        title = self._extract_detail_title(soup)
+        size, duration, resolution = self._extract_detail_badges(soup)
+        fast_url, slow_url = self._extract_download_buttons(soup, absolute_url)
+        selected_url = slow_url or fast_url
+
+        preflight_status_code = None
+        preflight_location = None
+        preflight_content_type = None
+        preflight_content_length = None
+        preflight_accept_ranges = None
+
+        if run_preflight and selected_url:
+            preflight = self._preflight_download_target(selected_url)
+            preflight_status_code = preflight.status_code
+            preflight_location = preflight.location
+            preflight_content_type = preflight.content_type
+            preflight_content_length = preflight.content_length
+            preflight_accept_ranges = preflight.accept_ranges
+
+        return DetailProbeResponse(
+            file_id=self._extract_file_id(absolute_url),
+            detail_url=absolute_url,
+            title=title,
+            size=size,
+            duration=duration,
+            resolution=resolution,
+            download_fast_url=fast_url,
+            download_slow_url=slow_url,
+            selected_download_url=selected_url,
+            preflight_status_code=preflight_status_code,
+            preflight_location=preflight_location,
+            preflight_content_type=preflight_content_type,
+            preflight_content_length=preflight_content_length,
+            preflight_accept_ranges=preflight_accept_ranges,
         )
 
     def _resolve_slug(self, query: str) -> str:
@@ -251,10 +304,12 @@ class SdilejClient:
         parsed_meta = self._parse_meta(meta_line.get_text(" ", strip=True) if meta_line else "")
 
         extension = self._extract_extension(detail_url)
+        file_id = self._extract_file_id(detail_url)
         years = self._extract_years(title)
         language_signals = self._extract_language_signals(title)
 
         return SearchResult(
+            file_id=file_id,
             title=title,
             detail_url=detail_url,
             thumbnail_url=thumbnail_url,
@@ -319,6 +374,7 @@ class SdilejClient:
         results: list[SearchResult],
         language: str | None,
         scope: LanguageScope,
+        strict_dubbing: bool,
     ) -> list[SearchResult]:
         if language is None:
             return results
@@ -326,7 +382,7 @@ class SdilejClient:
         filtered: list[SearchResult] = []
         for result in results:
             match = self._match_language(result.title, language)
-            if self._language_scope_match(match, scope):
+            if self._language_scope_match(match, scope, strict_dubbing):
                 filtered.append(result)
         return filtered
 
@@ -344,9 +400,17 @@ class SdilejClient:
                 filtered.append(result)
         return filtered
 
-    def _language_scope_match(self, match: LanguageMatch, scope: LanguageScope) -> bool:
+    def _language_scope_match(
+        self,
+        match: LanguageMatch,
+        scope: LanguageScope,
+        strict_dubbing: bool,
+    ) -> bool:
         if not match.matched:
             return False
+
+        if strict_dubbing:
+            return match.is_dub
 
         if scope == "any":
             return True
@@ -467,9 +531,122 @@ class SdilejClient:
             "Provide at least one of: query, language, or release_year."
         )
 
+    def _extract_file_id(self, detail_url: str) -> int | None:
+        parsed = urlparse(detail_url)
+        match = _FILE_ID_RE.match(parsed.path)
+        if not match:
+            return None
+        return int(match.group(1))
+
+    def _dedupe_results(self, results: list[SearchResult]) -> list[SearchResult]:
+        deduped: list[SearchResult] = []
+        seen_file_ids: set[int] = set()
+        seen_urls: set[str] = set()
+
+        for result in results:
+            if result.file_id is not None:
+                if result.file_id in seen_file_ids:
+                    continue
+                seen_file_ids.add(result.file_id)
+                deduped.append(result)
+                continue
+
+            if result.detail_url in seen_urls:
+                continue
+            seen_urls.add(result.detail_url)
+            deduped.append(result)
+
+        return deduped
+
+    def _normalize_detail_url(self, detail_url: str) -> str:
+        url = detail_url.strip()
+        if url.startswith("http://") or url.startswith("https://"):
+            return url
+        if url.startswith("/"):
+            return urljoin(BASE_URL, url)
+        raise SdilejClientError("detail_url must be absolute or start with '/'.")
+
+    def _extract_detail_title(self, soup: BeautifulSoup) -> str | None:
+        h1 = soup.select_one("h1")
+        if h1 and h1.get_text(strip=True):
+            return h1.get_text(strip=True)
+        title_tag = soup.select_one("title")
+        if title_tag and title_tag.get_text(strip=True):
+            return title_tag.get_text(strip=True)
+        return None
+
+    def _extract_detail_badges(self, soup: BeautifulSoup) -> tuple[str | None, str | None, str | None]:
+        badges = [item.get_text(" ", strip=True) for item in soup.select("span.meta-badge")]
+        badges = [item for item in badges if item]
+        size = badges[0] if len(badges) > 0 else None
+        duration = badges[1] if len(badges) > 1 else None
+        resolution = badges[2] if len(badges) > 2 else None
+        return size, duration, resolution
+
+    def _extract_download_buttons(
+        self,
+        soup: BeautifulSoup,
+        detail_url: str,
+    ) -> tuple[str | None, str | None]:
+        fast_url = None
+        slow_url = None
+
+        for container in soup.select("div.detail-buttons"):
+            for link in container.select("a[href]"):
+                classes = link.get("class", [])
+                href = link.get("href", "").strip()
+                if not href:
+                    continue
+                absolute_href = urljoin(detail_url, href)
+
+                class_set = set(classes)
+                text = link.get_text(" ", strip=True).lower()
+
+                if "btn-success" in class_set or "rychle" in text:
+                    fast_url = absolute_href
+                if "btn-danger" in class_set or "pomalu" in text:
+                    slow_url = absolute_href
+
+        return fast_url, slow_url
+
+    def _preflight_download_target(self, url: str):
+        response = self.session.get(
+            url,
+            allow_redirects=False,
+            timeout=self.timeout_seconds,
+            stream=True,
+        )
+        status_code = response.status_code
+        location = response.headers.get("Location")
+        content_type = response.headers.get("Content-Type")
+        content_length_raw = response.headers.get("Content-Length")
+        accept_ranges = response.headers.get("Accept-Ranges")
+        response.close()
+
+        content_length = None
+        if content_length_raw and content_length_raw.isdigit():
+            content_length = int(content_length_raw)
+
+        return _PreflightResult(
+            status_code=status_code,
+            location=location,
+            content_type=content_type,
+            content_length=content_length,
+            accept_ranges=accept_ranges,
+        )
+
 
 @dataclass(slots=True)
 class _LanguageSignals:
     detected_languages: list[str]
     has_dub_hint: bool
     has_subtitle_hint: bool
+
+
+@dataclass(slots=True)
+class _PreflightResult:
+    status_code: int
+    location: str | None
+    content_type: str | None
+    content_length: int | None
+    accept_ranges: str | None

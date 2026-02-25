@@ -91,8 +91,22 @@ Filter scopes:
 - `any` - any language mention.
 - `audio` - dubbing/audio-like mentions plus generic language tags (`CZ EN SK`).
 - `subtitles` - subtitle-specific mentions only.
+- `strict_dubbing=true` - only keeps entries where selected language is explicitly tied to dub markers (`dub`, `dabing`).
 
 Year filtering:
 
 - App parses 4-digit year tokens in titles (`19xx`, `20xx`).
 - `release_year=2003` keeps only items where title contains `2003`.
+
+Deduplication:
+
+- App extracts file id from detail URL pattern `https://sdilej.cz/<id>/<slug>`.
+- Results are deduplicated by this numeric `file_id` (fallback to `detail_url` if id is missing).
+
+Detail page probe:
+
+- App can parse detail pages to discover download entry points and metadata.
+- Key selectors:
+  - `div.detail-buttons a.btn.btn-success` -> fast download button
+  - `div.detail-buttons a.btn.btn-danger` -> slow/free download button
+- Probe also records preflight headers for selected download URL (`status`, `location`, `content-type`, `content-length`, `accept-ranges`).

@@ -8,6 +8,7 @@ LanguageScope = Literal["any", "audio", "subtitles"]
 
 @dataclass(slots=True)
 class SearchResult:
+    file_id: int | None
     title: str
     detail_url: str
     thumbnail_url: str | None
@@ -34,6 +35,7 @@ class SearchResponse:
     sort: SortMode
     language: str | None
     language_scope: LanguageScope
+    strict_dubbing: bool
     release_year: int | None
     search_url: str
     unfiltered_result_count: int
@@ -44,3 +46,24 @@ class SearchResponse:
         data = asdict(self)
         data["results"] = [item.to_dict() for item in self.results]
         return data
+
+
+@dataclass(slots=True)
+class DetailProbeResponse:
+    file_id: int | None
+    detail_url: str
+    title: str | None
+    size: str | None
+    duration: str | None
+    resolution: str | None
+    download_fast_url: str | None
+    download_slow_url: str | None
+    selected_download_url: str | None
+    preflight_status_code: int | None
+    preflight_location: str | None
+    preflight_content_type: str | None
+    preflight_content_length: int | None
+    preflight_accept_ranges: str | None
+
+    def to_dict(self) -> dict:
+        return asdict(self)

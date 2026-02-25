@@ -65,6 +65,25 @@ a {
   gap: 0.35rem;
 }
 
+.search-form .checkbox-field span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  background: #f8fafb;
+}
+
+.search-form .checkbox-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+}
+
 .search-form input,
 .search-form select,
 .search-form button {
@@ -149,6 +168,30 @@ a {
   font-size: 0.85rem;
   display: grid;
   gap: 0.25rem;
+}
+
+.card-actions {
+  margin-top: 0.8rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.card-actions button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  background: #f4f7fa;
+}
+
+.card-actions button:hover {
+  background: #e9eef4;
+}
+
+.card-actions .save-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
 }
 
 @media (max-width: 560px) {

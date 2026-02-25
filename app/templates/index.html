@@ -68,6 +68,14 @@
             </select>
           </label>
 
+          <label class="checkbox-field">
+            Strict dubbing
+            <span>
+              <input type="checkbox" name="strict_dubbing" value="true" {% if strict_dubbing %}checked{% endif %} />
+              only explicit dub/dabing markers
+            </span>
+          </label>
+
           <label>
             Release year
             <input
@@ -101,6 +109,7 @@
           <div><strong>Resolved slug:</strong> <code>{{ search.slug }}</code></div>
           <div><strong>Search URL:</strong> <a href="{{ search.search_url }}" target="_blank" rel="noreferrer">{{ search.search_url }}</a></div>
           <div><strong>Language filter:</strong> {{ search.language or "none" }} ({{ search.language_scope }})</div>
+          <div><strong>Strict dubbing:</strong> {{ "enabled" if search.strict_dubbing else "disabled" }}</div>
           <div><strong>Year filter:</strong> {{ search.release_year if search.release_year is not none else "none" }}</div>
           <div><strong>Parsed results:</strong> {{ search.result_count }} / {{ search.unfiltered_result_count }}</div>
         </section>
@@ -129,6 +138,27 @@
                   <li><strong>Dub hint:</strong> {{ "yes" if item.has_dub_hint else "no" }}</li>
                   <li><strong>Subtitle hint:</strong> {{ "yes" if item.has_subtitle_hint else "no" }}</li>
                 </ul>
+                <div class="card-actions">
+                  <button
+                    type="button"
+                    class="save-btn"
+                    data-file-id="{{ item.file_id if item.file_id is not none else '' }}"
+                    data-title="{{ item.title }}"
+                    data-detail-url="{{ item.detail_url }}"
+                    data-size="{{ item.size or '' }}"
+                    data-duration="{{ item.duration or '' }}"
+                    data-extension="{{ item.extension or '' }}"
+                    data-primary-year="{{ item.primary_year if item.primary_year is not none else '' }}"
+                    data-detected-languages="{{ item.detected_languages | join(',') }}"
+                    data-has-dub-hint="{{ 1 if item.has_dub_hint else 0 }}"
+                    data-has-subtitle-hint="{{ 1 if item.has_subtitle_hint else 0 }}"
+                  >
+                    Save pick
+                  </button>
+                  <button type="button" class="probe-btn" data-detail-url="{{ item.detail_url }}">
+                    Probe detail
+                  </button>
+                </div>
               </div>
             </article>
           {% endfor %}
@@ -164,6 +194,47 @@
             // Ignore autocomplete failures; main search still works.
           }
         }, 180);
+      });
+
+      document.querySelectorAll(".save-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const payload = {
+            file_id: btn.dataset.fileId ? Number(btn.dataset.fileId) : null,
+            title: btn.dataset.title || null,
+            detail_url: btn.dataset.detailUrl,
+            size: btn.dataset.size || null,
+            duration: btn.dataset.duration || null,
+            extension: btn.dataset.extension || null,
+            primary_year: btn.dataset.primaryYear ? Number(btn.dataset.primaryYear) : null,
+            detected_languages: (btn.dataset.detectedLanguages || "")
+              .split(",")
+              .map((x) => x.trim())
+              .filter(Boolean),
+            has_dub_hint: btn.dataset.hasDubHint === "1",
+            has_subtitle_hint: btn.dataset.hasSubtitleHint === "1",
+          };
+
+          const res = await fetch("/api/saved", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(`Save failed: ${data.error || "unknown error"}`);
+            return;
+          }
+          btn.textContent = "Saved";
+          btn.disabled = true;
+        });
+      });
+
+      document.querySelectorAll(".probe-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const detailUrl = btn.dataset.detailUrl;
+          const target = `/api/detail?detail_url=${encodeURIComponent(detailUrl)}&preflight=true`;
+          window.open(target, "_blank", "noopener,noreferrer");
+        });
       });
     </script>
   </body>
