@@ -13,6 +13,7 @@ from .storage import Storage
 DEFAULT_DOWNLOAD_DIR = "./downloads"
 DOWNLOAD_TIMEOUT_SECONDS = 120
 DOWNLOAD_CHUNK_SIZE = 1024 * 256
+MAX_WORKER_THREADS = 8
 
 _FILENAME_RE = re.compile(r"filename\*=UTF-8''([^;]+)|filename=\"?([^\";]+)\"?")
 _CONTENT_RANGE_TOTAL_RE = re.compile(r"^bytes\s+\d+-\d+/(\d+)$", re.IGNORECASE)
@@ -27,23 +28,64 @@ class DownloadWorker:
         self.storage = storage
         self.poll_seconds = poll_seconds
         self._stop_event = threading.Event()
-        self._thread = threading.Thread(target=self._run_loop, name="download-worker", daemon=True)
+        self._threads: list[threading.Thread] = []
+        self._config_lock = threading.Lock()
+        self._throttle_lock = threading.Lock()
+
+        self.max_concurrent_jobs = 1
+        self.default_chunk_count = 1
+        self.bandwidth_limit_kbps = 0
+        self._throttle_tokens = 0.0
+        self._throttle_last_refill = time.monotonic()
+
+    def configure(
+        self,
+        *,
+        max_concurrent_jobs: int | None = None,
+        default_chunk_count: int | None = None,
+        bandwidth_limit_kbps: int | None = None,
+    ) -> None:
+        with self._config_lock:
+            if max_concurrent_jobs is not None:
+                self.max_concurrent_jobs = max(1, min(int(max_concurrent_jobs), MAX_WORKER_THREADS))
+            if default_chunk_count is not None:
+                self.default_chunk_count = max(1, min(int(default_chunk_count), 8))
+            if bandwidth_limit_kbps is not None:
+                self.bandwidth_limit_kbps = max(0, int(bandwidth_limit_kbps))
+
+        with self._throttle_lock:
+            limit_bps = self._current_bandwidth_limit_bps()
+            self._throttle_last_refill = time.monotonic()
+            self._throttle_tokens = float(limit_bps) if limit_bps > 0 else 0.0
 
     def start(self) -> None:
-        if self._thread.is_alive():
+        if any(thread.is_alive() for thread in self._threads):
             return
-        self._thread.start()
+        self._stop_event.clear()
+        self._threads = [
+            threading.Thread(target=self._run_loop, args=(idx,), name=f"download-worker-{idx}", daemon=True)
+            for idx in range(MAX_WORKER_THREADS)
+        ]
+        for thread in self._threads:
+            thread.start()
 
     def stop(self, timeout: float = 5.0) -> None:
         self._stop_event.set()
-        if self._thread.is_alive():
-            self._thread.join(timeout=timeout)
+        for thread in self._threads:
+            if thread.is_alive():
+                thread.join(timeout=timeout)
 
     def is_alive(self) -> bool:
-        return self._thread.is_alive()
+        return any(thread.is_alive() for thread in self._threads)
 
-    def _run_loop(self) -> None:
+    def _run_loop(self, worker_index: int) -> None:
         while not self._stop_event.is_set():
+            with self._config_lock:
+                max_concurrent = self.max_concurrent_jobs
+            if worker_index >= max_concurrent:
+                self._stop_event.wait(self.poll_seconds)
+                continue
+
             job = self.storage.claim_next_download_job()
             if not job:
                 self._stop_event.wait(self.poll_seconds)
@@ -55,6 +97,11 @@ class DownloadWorker:
         job_id = int(job["id"])
         detail_url = str(job["detail_url"])
         preferred_mode = str(job.get("preferred_mode") or "auto")
+        with self._config_lock:
+            default_chunk_count = self.default_chunk_count
+        configured_chunk_count = int(job.get("chunk_count") or default_chunk_count or 1)
+        effective_chunk_count = max(1, min(configured_chunk_count, 8))
+        io_chunk_size = DOWNLOAD_CHUNK_SIZE * effective_chunk_count
 
         credentials = self.storage.get_account_credentials()
         if preferred_mode == "premium" and not credentials:
@@ -226,12 +273,13 @@ class DownloadWorker:
             last_progress_push = 0.0
 
             with open(part_path, append_mode) as handle:
-                for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                for chunk in response.iter_content(chunk_size=io_chunk_size):
                     if self._stop_event.is_set() or self.storage.is_job_canceled(job_id):
                         raise DownloadCanceledError("Job canceled. Partial file kept for resume.")
 
                     if not chunk:
                         continue
+                    self._throttle(len(chunk))
                     handle.write(chunk)
                     bytes_downloaded += len(chunk)
 
@@ -313,6 +361,34 @@ class DownloadWorker:
         if source_saved_file_id is None:
             return
         self.storage.delete_saved_candidate(int(source_saved_file_id))
+
+    def _current_bandwidth_limit_bps(self) -> int:
+        return int(self.bandwidth_limit_kbps * 1024)
+
+    def _throttle(self, byte_count: int) -> None:
+        if byte_count <= 0:
+            return
+        limit_bps = self._current_bandwidth_limit_bps()
+        if limit_bps <= 0:
+            return
+
+        while not self._stop_event.is_set():
+            with self._throttle_lock:
+                now = time.monotonic()
+                elapsed = max(0.0, now - self._throttle_last_refill)
+                if elapsed > 0:
+                    burst_cap = float(limit_bps)
+                    self._throttle_tokens = min(burst_cap, self._throttle_tokens + elapsed * limit_bps)
+                    self._throttle_last_refill = now
+
+                if self._throttle_tokens >= byte_count:
+                    self._throttle_tokens -= byte_count
+                    return
+
+                deficit = byte_count - self._throttle_tokens
+
+            sleep_seconds = max(deficit / limit_bps, 0.002)
+            time.sleep(min(sleep_seconds, 0.2))
 
     def _is_html_response(self, response) -> bool:
         content_type = (response.headers.get("Content-Type") or "").lower()

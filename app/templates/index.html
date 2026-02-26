@@ -82,8 +82,41 @@
           </label>
 
           <label>
+            Type
+            <select id="downloadMediaKind">
+              <option value="auto" selected>Auto detect</option>
+              <option value="movie">Movie</option>
+              <option value="tv">TV show</option>
+            </select>
+          </label>
+
+          <label>
+            Kids tag
+            <select id="downloadKidsTag">
+              <option value="auto" selected>Auto detect</option>
+              <option value="yes">Kids</option>
+              <option value="no">Not kids</option>
+            </select>
+          </label>
+
+          <label>
+            Series (for TV)
+            <input id="downloadSeriesName" type="text" placeholder="e.g. Bluey" autocomplete="off" />
+          </label>
+
+          <label>
+            Season (for TV)
+            <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" />
+          </label>
+
+          <label>
             Output dir (optional)
             <input id="downloadOutputDir" type="text" placeholder="/downloads/movies" autocomplete="off" />
+          </label>
+
+          <label>
+            Chunk count
+            <input id="downloadChunkCount" type="number" min="1" max="8" value="1" />
           </label>
 
           <label>
@@ -95,6 +128,24 @@
             <button type="submit">Enqueue download</button>
             <button id="refreshDownloadsBtn" type="button" class="secondary-btn">Refresh queue</button>
             <button id="clearFinishedBtn" type="button" class="secondary-btn">Clear finished</button>
+          </div>
+        </form>
+
+        <form id="downloadSettingsForm" class="download-form settings-form">
+          <label>
+            Max concurrent jobs
+            <input id="settingsMaxConcurrent" type="number" min="1" max="8" value="1" />
+          </label>
+          <label>
+            Default chunk count
+            <input id="settingsDefaultChunks" type="number" min="1" max="8" value="1" />
+          </label>
+          <label>
+            Bandwidth limit (KB/s)
+            <input id="settingsBandwidth" type="number" min="0" max="2000000" value="0" />
+          </label>
+          <div class="download-actions">
+            <button type="submit">Save download settings</button>
           </div>
         </form>
 
@@ -246,12 +297,12 @@
                   </button>
                   <button
                     type="button"
-                    class="queue-premium-btn"
+                    class="queue-dialog-btn"
                     data-file-id="{{ item.file_id if item.file_id is not none else '' }}"
                     data-title="{{ item.title }}"
                     data-detail-url="{{ item.detail_url }}"
                   >
-                    Queue premium
+                    Add to queue...
                   </button>
                 </div>
               </div>
@@ -259,6 +310,67 @@
           {% endfor %}
         </section>
       {% endif %}
+
+      <div id="queueDialogBackdrop" class="queue-dialog-backdrop hidden">
+        <section class="queue-dialog" role="dialog" aria-modal="true" aria-labelledby="queueDialogTitle">
+          <header class="queue-dialog-header">
+            <h3 id="queueDialogTitle">Queue Item</h3>
+            <button type="button" id="queueDialogClose" class="queue-dialog-close" aria-label="Close dialog">x</button>
+          </header>
+          <div id="queueDialogItemTitle" class="queue-dialog-item"></div>
+          <form id="queueDialogForm" class="queue-dialog-form">
+            <label>
+              Mode
+              <select id="queueDialogMode">
+                <option value="premium">Premium</option>
+                <option value="auto">Auto</option>
+                <option value="free">Free</option>
+              </select>
+            </label>
+            <label>
+              Type
+              <select id="queueDialogMediaKind">
+                <option value="auto">Auto detect</option>
+                <option value="movie">Movie</option>
+                <option value="tv">TV show</option>
+              </select>
+            </label>
+            <label>
+              Kids tag
+              <select id="queueDialogKidsTag">
+                <option value="auto">Auto detect</option>
+                <option value="yes">Kids</option>
+                <option value="no">Not kids</option>
+              </select>
+            </label>
+            <label>
+              Series
+              <input id="queueDialogSeriesName" type="text" placeholder="e.g. Bluey" autocomplete="off" />
+            </label>
+            <label>
+              Season
+              <input id="queueDialogSeasonNumber" type="number" min="1" max="99" value="" />
+            </label>
+            <label>
+              Chunk count
+              <input id="queueDialogChunkCount" type="number" min="1" max="8" value="1" />
+            </label>
+            <label>
+              Priority
+              <input id="queueDialogPriority" type="number" min="-1000" max="1000" value="0" />
+            </label>
+            <label>
+              Output dir (optional)
+              <input id="queueDialogOutputDir" type="text" placeholder="/downloads/movies" autocomplete="off" />
+            </label>
+            <div id="queueDialogPreview" class="queue-dialog-preview"></div>
+            <div class="queue-dialog-actions">
+              <button type="button" id="queueDialogCancel" class="secondary-btn">Cancel</button>
+              <button type="submit" id="queueDialogConfirm">Confirm queue</button>
+            </div>
+          </form>
+        </section>
+      </div>
     </main>
 
     <script>
@@ -273,8 +385,17 @@
       const downloadForm = document.getElementById("downloadForm");
       const downloadDetailUrl = document.getElementById("downloadDetailUrl");
       const downloadMode = document.getElementById("downloadMode");
+      const downloadMediaKind = document.getElementById("downloadMediaKind");
+      const downloadKidsTag = document.getElementById("downloadKidsTag");
+      const downloadSeriesName = document.getElementById("downloadSeriesName");
+      const downloadSeasonNumber = document.getElementById("downloadSeasonNumber");
       const downloadOutputDir = document.getElementById("downloadOutputDir");
+      const downloadChunkCount = document.getElementById("downloadChunkCount");
       const downloadPriority = document.getElementById("downloadPriority");
+      const downloadSettingsForm = document.getElementById("downloadSettingsForm");
+      const settingsMaxConcurrent = document.getElementById("settingsMaxConcurrent");
+      const settingsDefaultChunks = document.getElementById("settingsDefaultChunks");
+      const settingsBandwidth = document.getElementById("settingsBandwidth");
       const downloadStatus = document.getElementById("downloadStatus");
       const downloadJobsEl = document.getElementById("downloadJobs");
       const refreshDownloadsBtn = document.getElementById("refreshDownloadsBtn");
@@ -283,7 +404,23 @@
       const downloadWorkerState = document.getElementById("downloadWorkerState");
       const workspaceTabs = Array.from(document.querySelectorAll(".workspace-tab"));
       const tabSections = Array.from(document.querySelectorAll(".tab-section"));
+      const queueDialogBackdrop = document.getElementById("queueDialogBackdrop");
+      const queueDialogClose = document.getElementById("queueDialogClose");
+      const queueDialogCancel = document.getElementById("queueDialogCancel");
+      const queueDialogForm = document.getElementById("queueDialogForm");
+      const queueDialogTitle = document.getElementById("queueDialogTitle");
+      const queueDialogItemTitle = document.getElementById("queueDialogItemTitle");
+      const queueDialogMode = document.getElementById("queueDialogMode");
+      const queueDialogMediaKind = document.getElementById("queueDialogMediaKind");
+      const queueDialogKidsTag = document.getElementById("queueDialogKidsTag");
+      const queueDialogSeriesName = document.getElementById("queueDialogSeriesName");
+      const queueDialogSeasonNumber = document.getElementById("queueDialogSeasonNumber");
+      const queueDialogChunkCount = document.getElementById("queueDialogChunkCount");
+      const queueDialogPriority = document.getElementById("queueDialogPriority");
+      const queueDialogOutputDir = document.getElementById("queueDialogOutputDir");
+      const queueDialogPreview = document.getElementById("queueDialogPreview");
       let timer = null;
+      let queueDialogState = null;
 
       const esc = (value) =>
         String(value ?? "")
@@ -418,6 +555,10 @@
                 <div class="job-meta">
                   <span><strong>ID:</strong> ${esc(job.id)}</span>
                   <span><strong>Mode:</strong> ${esc(job.preferred_mode)}</span>
+                  <span><strong>Type:</strong> ${esc(job.media_kind ?? "n/a")}</span>
+                  <span><strong>Kids:</strong> ${job.is_kids ? "yes" : "no"}</span>
+                  <span><strong>Dest:</strong> ${esc(job.destination_subpath ?? "manual")}</span>
+                  <span><strong>Chunks:</strong> ${esc(job.chunk_count ?? "n/a")}</span>
                   <span><strong>Priority:</strong> ${esc(job.priority)}</span>
                   <span><strong>Attempt:</strong> ${esc(job.attempt_count)}</span>
                   <span><strong>Progress:</strong> ${formatBytes(done)} / ${formatBytes(total)}</span>
@@ -429,6 +570,7 @@
                 <div class="job-actions">
                   ${canCancel ? `<button data-action="cancel" data-id="${job.id}">Cancel</button>` : ""}
                   ${canCancel ? `<button data-action="cancel_complete" data-id="${job.id}">Cancel completely</button>` : ""}
+                  ${job.status === "queued" ? `<button data-action="classify" data-id="${job.id}" data-title="${esc(title)}" data-detail-url="${esc(job.detail_url)}" data-mode="${esc(job.preferred_mode)}" data-media-kind="${esc(job.media_kind || "")}" data-is-kids="${job.is_kids ? "1" : "0"}" data-series-name="${esc(job.series_name || "")}" data-season-number="${esc(job.season_number ?? "")}" data-output-dir="${esc(job.output_dir || "")}" data-chunk-count="${esc(job.chunk_count ?? "")}" data-priority="${esc(job.priority)}">Category</button>` : ""}
                   ${canRetry ? `<button data-action="retry" data-id="${job.id}">Retry</button>` : ""}
                   ${canMoveTop ? `<button data-action="top" data-id="${job.id}">Move top</button>` : ""}
                   ${(job.status === "queued" || job.status === "running") ? `<button data-action="priority" data-id="${job.id}" data-priority="${job.priority}">Set priority</button>` : ""}
@@ -453,6 +595,22 @@
               } else if (action === "cancel_complete") {
                 await fetch(`/api/downloads/${jobId}/cancel-complete`, { method: "POST" });
                 setDownloadStatus(`Canceled job #${jobId} completely.`, "ok");
+              } else if (action === "classify") {
+                await openQueueDialog({
+                  intent: "edit",
+                  jobId,
+                  detailUrl: btn.dataset.detailUrl || "",
+                  title: btn.dataset.title || "",
+                  preferredMode: btn.dataset.mode || "premium",
+                  mediaKind: btn.dataset.mediaKind || null,
+                  isKids: btn.dataset.isKids === "1",
+                  seriesName: btn.dataset.seriesName || null,
+                  seasonNumber: btn.dataset.seasonNumber ? Number(btn.dataset.seasonNumber) : null,
+                  outputDir: btn.dataset.outputDir || "",
+                  chunkCount: btn.dataset.chunkCount ? Number(btn.dataset.chunkCount) : Number(downloadChunkCount.value || 1),
+                  priority: btn.dataset.priority ? Number(btn.dataset.priority) : Number(downloadPriority.value || 0),
+                });
+                return;
               } else if (action === "retry") {
                 await fetch(`/api/downloads/${jobId}/retry`, { method: "POST" });
                 setDownloadStatus(`Retried job #${jobId}.`, "ok");
@@ -523,6 +681,23 @@
         }
       };
 
+      const refreshDownloadSettings = async () => {
+        try {
+          const res = await fetch("/api/downloads/settings");
+          const data = await res.json();
+          if (!res.ok) {
+            setDownloadStatus(data.error || "Failed to load download settings.", "error");
+            return;
+          }
+          settingsMaxConcurrent.value = data.max_concurrent_jobs ?? 1;
+          settingsDefaultChunks.value = data.default_chunk_count ?? 1;
+          settingsBandwidth.value = data.bandwidth_limit_kbps ?? 0;
+          downloadChunkCount.value = data.default_chunk_count ?? 1;
+        } catch (_) {
+          setDownloadStatus("Download settings unavailable.", "error");
+        }
+      };
+
       const enqueueDownload = async (payload) => {
         try {
           const res = await fetch("/api/downloads", {
@@ -532,7 +707,17 @@
           });
           const data = await res.json();
           if (!res.ok) {
-            setDownloadStatus(data.error || "Failed to enqueue job.", "error");
+            if (res.status === 409 && data.duplicate_job) {
+              const dup = data.duplicate_job;
+              setDownloadStatus(
+                `${data.error || "Duplicate download."} Existing job #${dup.id} is ${dup.status}.`,
+                "error"
+              );
+            } else if (res.status === 409 && data.requires_confirmation) {
+              setDownloadStatus(data.error || "Classification confirmation is required.", "error");
+            } else {
+              setDownloadStatus(data.error || "Failed to enqueue job.", "error");
+            }
             return false;
           }
           setDownloadStatus(`Queued #${data.id}: ${data.title || data.detail_url}`, "ok");
@@ -542,6 +727,181 @@
           return false;
         }
       };
+
+      const resolveKidsValue = (rawValue) => {
+        if (rawValue === "yes") return true;
+        if (rawValue === "no") return false;
+        return null;
+      };
+
+      const buildMediaRoutingPayload = () => {
+        const mediaKind = downloadMediaKind.value === "auto" ? null : downloadMediaKind.value;
+        const isKids = resolveKidsValue(downloadKidsTag.value);
+        const payload = {
+          media_kind: mediaKind,
+          is_kids: isKids,
+          series_name: null,
+          season_number: null,
+        };
+        if (mediaKind === "tv") {
+          payload.series_name = downloadSeriesName.value.trim() || null;
+          const season = Number(downloadSeasonNumber.value || 0);
+          payload.season_number = Number.isFinite(season) && season > 0 ? season : null;
+        }
+        return payload;
+      };
+
+      const queueDialogMediaPayload = () => {
+        const mediaKind = queueDialogMediaKind.value === "auto" ? null : queueDialogMediaKind.value;
+        const isKids = resolveKidsValue(queueDialogKidsTag.value);
+        const seasonValue = Number(queueDialogSeasonNumber.value || 0);
+        return {
+          media_kind: mediaKind,
+          is_kids: isKids,
+          series_name: mediaKind === "tv" ? (queueDialogSeriesName.value.trim() || null) : null,
+          season_number: mediaKind === "tv" && Number.isFinite(seasonValue) && seasonValue > 0 ? seasonValue : null,
+        };
+      };
+
+      const updateQueueDialogMode = () => {
+        const isTv = queueDialogMediaKind.value === "tv";
+        queueDialogSeriesName.disabled = !isTv;
+        queueDialogSeasonNumber.disabled = !isTv;
+        if (!isTv) {
+          queueDialogSeriesName.value = "";
+          queueDialogSeasonNumber.value = "";
+        }
+      };
+
+      const classifyForQueueDialog = async () => {
+        if (!queueDialogState) return;
+        const payload = {
+          title: queueDialogState.title || "",
+          ...queueDialogMediaPayload(),
+        };
+        try {
+          const res = await fetch("/api/media/classify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            queueDialogPreview.textContent = data.error || "Classification preview failed.";
+            return;
+          }
+
+          const c = data.classification || {};
+          if (queueDialogMediaKind.value === "auto" && (c.media_kind === "movie" || c.media_kind === "tv")) {
+            queueDialogMediaKind.value = c.media_kind;
+            updateQueueDialogMode();
+          }
+          if (queueDialogKidsTag.value === "auto" && typeof c.is_kids === "boolean") {
+            queueDialogKidsTag.value = c.is_kids ? "yes" : "no";
+          }
+          if (queueDialogMediaKind.value === "tv") {
+            if (!queueDialogSeriesName.value && c.series_name) {
+              queueDialogSeriesName.value = c.series_name;
+            }
+            if (!queueDialogSeasonNumber.value && c.season_number) {
+              queueDialogSeasonNumber.value = c.season_number;
+            }
+          }
+
+          const confidence = c.confidence ? ` (${c.confidence})` : "";
+          const note = data.requires_confirmation ? " Confirmation required." : "";
+          queueDialogPreview.textContent = `Detected: ${c.media_kind || "unknown"}${confidence}. Route: ${data.destination_subpath || "unsorted"}.${note}`;
+        } catch (_) {
+          queueDialogPreview.textContent = "Classification preview failed.";
+        }
+      };
+
+      const openQueueDialog = async (config) => {
+        queueDialogState = { ...config };
+        queueDialogTitle.textContent = config.intent === "edit" ? `Recategorize Job #${config.jobId}` : "Add To Queue";
+        queueDialogItemTitle.textContent = config.title || config.detailUrl || "";
+        queueDialogMode.value = config.preferredMode || "premium";
+        queueDialogMediaKind.value = config.mediaKind || "auto";
+        queueDialogKidsTag.value =
+          config.isKids === true ? "yes" : config.isKids === false ? "no" : "auto";
+        queueDialogSeriesName.value = config.seriesName || "";
+        queueDialogSeasonNumber.value = config.seasonNumber ? String(config.seasonNumber) : "";
+        queueDialogChunkCount.value = String(config.chunkCount || Number(downloadChunkCount.value || 1) || 1);
+        queueDialogPriority.value = String(config.priority || Number(downloadPriority.value || 0) || 0);
+        queueDialogOutputDir.value = config.outputDir || downloadOutputDir.value || "";
+
+        const editMode = config.intent === "edit";
+        queueDialogMode.disabled = editMode;
+        queueDialogChunkCount.disabled = editMode;
+        queueDialogPriority.disabled = editMode;
+        queueDialogOutputDir.disabled = editMode;
+        updateQueueDialogMode();
+
+        queueDialogBackdrop.classList.remove("hidden");
+        await classifyForQueueDialog();
+      };
+
+      const closeQueueDialog = () => {
+        queueDialogBackdrop.classList.add("hidden");
+        queueDialogState = null;
+        queueDialogPreview.textContent = "";
+      };
+
+      queueDialogClose.addEventListener("click", closeQueueDialog);
+      queueDialogCancel.addEventListener("click", closeQueueDialog);
+      queueDialogBackdrop.addEventListener("click", (event) => {
+        if (event.target === queueDialogBackdrop) {
+          closeQueueDialog();
+        }
+      });
+      [queueDialogMediaKind, queueDialogKidsTag, queueDialogSeriesName, queueDialogSeasonNumber].forEach((el) => {
+        el.addEventListener("change", async () => {
+          updateQueueDialogMode();
+          await classifyForQueueDialog();
+        });
+      });
+
+      queueDialogForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!queueDialogState) return;
+        const mediaPayload = queueDialogMediaPayload();
+
+        if (queueDialogState.intent === "edit") {
+          const res = await fetch(`/api/downloads/${queueDialogState.jobId}/classification`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(mediaPayload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setDownloadStatus(data.error || "Failed to update category.", "error");
+            if (data.destination_subpath) {
+              queueDialogPreview.textContent = `Suggested route: ${data.destination_subpath}`;
+            }
+            return;
+          }
+          setDownloadStatus(`Updated category for job #${queueDialogState.jobId}.`, "ok");
+          closeQueueDialog();
+          await refreshDownloads();
+          return;
+        }
+
+        const payload = {
+          detail_url: queueDialogState.detailUrl,
+          file_id: queueDialogState.fileId,
+          title: queueDialogState.title || null,
+          preferred_mode: queueDialogMode.value || "premium",
+          output_dir: queueDialogOutputDir.value.trim() || null,
+          chunk_count: Number(queueDialogChunkCount.value || 1),
+          priority: Number(queueDialogPriority.value || 0),
+          ...mediaPayload,
+        };
+        const ok = await enqueueDownload(payload);
+        if (ok) {
+          closeQueueDialog();
+          await refreshDownloads();
+        }
+      });
 
       document.querySelectorAll(".save-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
@@ -576,20 +936,15 @@
         });
       });
 
-      document.querySelectorAll(".queue-premium-btn").forEach((btn) => {
+      document.querySelectorAll(".queue-dialog-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          const payload = {
-            detail_url: btn.dataset.detailUrl,
-            file_id: btn.dataset.fileId ? Number(btn.dataset.fileId) : null,
-            title: btn.dataset.title || null,
-            preferred_mode: "premium",
-            output_dir: downloadOutputDir.value.trim() || null,
-            priority: Number(downloadPriority.value || 0),
-          };
-          const ok = await enqueueDownload(payload);
-          if (ok) {
-            await refreshDownloads();
-          }
+          await openQueueDialog({
+            intent: "enqueue",
+            detailUrl: btn.dataset.detailUrl,
+            fileId: btn.dataset.fileId ? Number(btn.dataset.fileId) : null,
+            title: btn.dataset.title || "",
+            preferredMode: "premium",
+          });
         });
       });
 
@@ -630,7 +985,9 @@
           detail_url: detailUrl,
           preferred_mode: downloadMode.value || "premium",
           output_dir: downloadOutputDir.value.trim() || null,
+          chunk_count: Number(downloadChunkCount.value || 1),
           priority: Number(downloadPriority.value || 0),
+          ...buildMediaRoutingPayload(),
         };
 
         const ok = await enqueueDownload(payload);
@@ -662,6 +1019,38 @@
           await refreshDownloads();
         } catch (_) {
           setDownloadStatus("Failed to clear finished jobs.", "error");
+        }
+      });
+
+      downloadSettingsForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const payload = {
+          max_concurrent_jobs: Number(settingsMaxConcurrent.value || 1),
+          default_chunk_count: Number(settingsDefaultChunks.value || 1),
+          bandwidth_limit_kbps: Number(settingsBandwidth.value || 0),
+        };
+        setDownloadStatus("Saving download settings...", "neutral");
+        try {
+          const res = await fetch("/api/downloads/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setDownloadStatus(data.error || "Failed to save download settings.", "error");
+            return;
+          }
+          settingsMaxConcurrent.value = data.max_concurrent_jobs;
+          settingsDefaultChunks.value = data.default_chunk_count;
+          settingsBandwidth.value = data.bandwidth_limit_kbps;
+          downloadChunkCount.value = data.default_chunk_count;
+          setDownloadStatus(
+            `Settings saved: ${data.max_concurrent_jobs} workers, default chunks ${data.default_chunk_count}, bandwidth ${data.bandwidth_limit_kbps} KB/s.`,
+            "ok"
+          );
+        } catch (_) {
+          setDownloadStatus("Failed to save download settings.", "error");
         }
       });
 
@@ -721,6 +1110,7 @@
       });
 
       refreshAccountStatus();
+      refreshDownloadSettings();
       refreshDownloads();
       setInterval(refreshDownloads, 2500);
     </script>

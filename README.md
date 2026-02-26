@@ -22,10 +22,18 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - Background downloader queue worker:
   - queued/running/done/failed/canceled states
   - progress tracking
+  - speed controls: max concurrent jobs, per-job chunk count, global bandwidth cap
   - premium-first mode with strict premium-link validation
   - partial `.part` resume support (when server supports byte ranges)
   - startup recovery: `running` jobs are automatically re-queued after restart/rebuild
   - cancel + retry
+  - duplicate protection when queueing by `file_id`/`detail_url`
+  - media-aware routing for new jobs:
+    - `movie` -> `/movies`
+    - `tv` -> `/tv/{series}/seasonNN`
+    - `kids + movie` -> `/kids/movies`
+    - `kids + tv` -> `/kids/tv/{series}/seasonNN`
+  - uncertain title classification can require user confirmation before enqueue
   - queue controls: move-to-top, custom priority, clear finished jobs
   - account credentials (for subscription/premium flow)
 - JSON API endpoints for future download-manager integration
@@ -83,13 +91,23 @@ docker compose up -d --build
 - `GET /api/history?limit=50`
 - `GET /api/saved?limit=200`
 - `POST /api/saved` (upsert saved pick)
+  - stores inferred media metadata (`media_kind`, `is_kids`, `series_name`, `season_number`, `episode_number`)
 - `DELETE /api/saved/{file_id}`
 - `GET /api/account` (credential status)
 - `POST /api/account` (set credentials, optional verification)
 - `DELETE /api/account` (clear credentials)
 - `GET /api/downloads?limit=200&status=queued`
 - `POST /api/downloads` (enqueue download job)
+  - supports `chunk_count` override (1..8)
+  - supports optional media routing hints: `media_kind`, `is_kids`, `series_name`, `season_number`, `episode_number`
+  - duplicate queue/download protection returns `409` + `duplicate_job`
   - supports `source_saved_file_id` + `delete_saved_on_complete`
+- `GET /api/downloads/settings`
+- `POST /api/downloads/settings` (`max_concurrent_jobs`, `default_chunk_count`, `bandwidth_limit_kbps`)
+- `GET /api/downloads/library-paths`
+- `POST /api/downloads/library-paths` (`movies_dir`, `tv_dir`, `kids_movies_dir`, `kids_tv_dir`, `unsorted_dir`, `confirm_on_uncertain`)
+- `POST /api/media/classify` (preview auto-classification + resolved destination path)
+- `POST /api/downloads/{id}/classification` (recategorize queued job and reroute destination)
 - `POST /api/downloads/{id}/cancel`
 - `POST /api/downloads/{id}/cancel-complete`
 - `POST /api/downloads/{id}/retry`

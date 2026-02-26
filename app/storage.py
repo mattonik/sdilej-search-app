@@ -6,9 +6,11 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from .media_routing import default_library_paths
 from .models import SearchResponse
 
 DEFAULT_DB_PATH = "./data/app.db"
+DEFAULT_LIBRARY_PATHS = default_library_paths()
 
 
 class Storage:
@@ -54,6 +56,12 @@ class Storage:
                     detected_languages_json TEXT NOT NULL DEFAULT '[]',
                     has_dub_hint INTEGER NOT NULL DEFAULT 0,
                     has_subtitle_hint INTEGER NOT NULL DEFAULT 0,
+                    media_kind TEXT,
+                    is_kids INTEGER NOT NULL DEFAULT 0,
+                    series_name TEXT,
+                    season_number INTEGER,
+                    episode_number INTEGER,
+                    classification_confidence TEXT,
                     notes TEXT,
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -79,6 +87,13 @@ class Storage:
                     status TEXT NOT NULL DEFAULT 'queued',
                     priority INTEGER NOT NULL DEFAULT 0,
                     attempt_count INTEGER NOT NULL DEFAULT 0,
+                    chunk_count INTEGER,
+                    media_kind TEXT,
+                    is_kids INTEGER NOT NULL DEFAULT 0,
+                    series_name TEXT,
+                    season_number INTEGER,
+                    episode_number INTEGER,
+                    destination_subpath TEXT,
                     source_saved_file_id INTEGER,
                     delete_saved_on_complete INTEGER NOT NULL DEFAULT 0,
                     save_path TEXT,
@@ -197,6 +212,12 @@ class Storage:
         detected_languages: list[str],
         has_dub_hint: bool,
         has_subtitle_hint: bool,
+        media_kind: str | None,
+        is_kids: bool,
+        series_name: str | None,
+        season_number: int | None,
+        episode_number: int | None,
+        classification_confidence: str | None,
         notes: str | None,
     ) -> dict[str, Any]:
         detected_json = json.dumps(detected_languages)
@@ -216,8 +237,14 @@ class Storage:
                     detected_languages_json,
                     has_dub_hint,
                     has_subtitle_hint,
+                    media_kind,
+                    is_kids,
+                    series_name,
+                    season_number,
+                    episode_number,
+                    classification_confidence,
                     notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(file_id) DO UPDATE SET
                     title=excluded.title,
                     detail_url=excluded.detail_url,
@@ -229,6 +256,12 @@ class Storage:
                     detected_languages_json=excluded.detected_languages_json,
                     has_dub_hint=excluded.has_dub_hint,
                     has_subtitle_hint=excluded.has_subtitle_hint,
+                    media_kind=excluded.media_kind,
+                    is_kids=excluded.is_kids,
+                    series_name=excluded.series_name,
+                    season_number=excluded.season_number,
+                    episode_number=excluded.episode_number,
+                    classification_confidence=excluded.classification_confidence,
                     notes=excluded.notes,
                     updated_at=datetime('now')
                 """,
@@ -244,6 +277,12 @@ class Storage:
                     detected_json,
                     1 if has_dub_hint else 0,
                     1 if has_subtitle_hint else 0,
+                    media_kind,
+                    1 if is_kids else 0,
+                    series_name,
+                    season_number,
+                    episode_number,
+                    classification_confidence,
                     notes,
                 ),
             )
@@ -262,6 +301,12 @@ class Storage:
                     detected_languages_json,
                     has_dub_hint,
                     has_subtitle_hint,
+                    media_kind,
+                    is_kids,
+                    series_name,
+                    season_number,
+                    episode_number,
+                    classification_confidence,
                     notes,
                     created_at,
                     updated_at
@@ -290,6 +335,12 @@ class Storage:
                     detected_languages_json,
                     has_dub_hint,
                     has_subtitle_hint,
+                    media_kind,
+                    is_kids,
+                    series_name,
+                    season_number,
+                    episode_number,
+                    classification_confidence,
                     notes,
                     created_at,
                     updated_at
@@ -301,6 +352,40 @@ class Storage:
             ).fetchall()
 
         return [self._row_to_saved_candidate(row) for row in rows]
+
+    def get_saved_candidate(self, file_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    file_id,
+                    title,
+                    detail_url,
+                    download_url,
+                    size,
+                    duration,
+                    extension,
+                    primary_year,
+                    detected_languages_json,
+                    has_dub_hint,
+                    has_subtitle_hint,
+                    media_kind,
+                    is_kids,
+                    series_name,
+                    season_number,
+                    episode_number,
+                    classification_confidence,
+                    notes,
+                    created_at,
+                    updated_at
+                FROM saved_candidates
+                WHERE file_id = ?
+                """,
+                (file_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_saved_candidate(row)
 
     def delete_saved_candidate(self, file_id: int) -> bool:
         with self._connect() as conn:
@@ -356,6 +441,13 @@ class Storage:
         preferred_mode: str,
         output_dir: str | None,
         priority: int,
+        chunk_count: int | None = None,
+        media_kind: str | None = None,
+        is_kids: bool = False,
+        series_name: str | None = None,
+        season_number: int | None = None,
+        episode_number: int | None = None,
+        destination_subpath: str | None = None,
         source_saved_file_id: int | None = None,
         delete_saved_on_complete: bool = False,
     ) -> dict[str, Any]:
@@ -369,10 +461,17 @@ class Storage:
                     preferred_mode,
                     output_dir,
                     priority,
+                    chunk_count,
+                    media_kind,
+                    is_kids,
+                    series_name,
+                    season_number,
+                    episode_number,
+                    destination_subpath,
                     source_saved_file_id,
                     delete_saved_on_complete,
                     status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued')
                 """,
                 (
                     file_id,
@@ -381,6 +480,13 @@ class Storage:
                     preferred_mode,
                     output_dir,
                     priority,
+                    chunk_count,
+                    media_kind,
+                    1 if is_kids else 0,
+                    series_name,
+                    season_number,
+                    episode_number,
+                    destination_subpath,
                     source_saved_file_id,
                     1 if delete_saved_on_complete else 0,
                 ),
@@ -388,6 +494,43 @@ class Storage:
             job_id = cursor.lastrowid
 
         return self.get_download_job(job_id)
+
+    def find_duplicate_download(
+        self,
+        *,
+        detail_url: str,
+        file_id: int | None,
+    ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            if file_id is not None:
+                row = conn.execute(
+                    """
+                    SELECT *
+                    FROM download_jobs
+                    WHERE file_id = ?
+                      AND status IN ('queued', 'running', 'done')
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (file_id,),
+                ).fetchone()
+                if row is not None:
+                    return self._row_to_download_job(row)
+
+            row = conn.execute(
+                """
+                SELECT *
+                FROM download_jobs
+                WHERE detail_url = ?
+                  AND status IN ('queued', 'running', 'done')
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (detail_url,),
+            ).fetchone()
+            if row is None:
+                return None
+            return self._row_to_download_job(row)
 
     def list_download_jobs(self, limit: int = 200, status: str | None = None) -> list[dict[str, Any]]:
         safe_limit = max(1, min(limit, 1000))
@@ -718,6 +861,46 @@ class Storage:
             )
             return cursor.rowcount > 0
 
+    def update_download_job_classification(
+        self,
+        job_id: int,
+        *,
+        media_kind: str,
+        is_kids: bool,
+        series_name: str | None,
+        season_number: int | None,
+        episode_number: int | None,
+        output_dir: str,
+        destination_subpath: str,
+    ) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    media_kind = ?,
+                    is_kids = ?,
+                    series_name = ?,
+                    season_number = ?,
+                    episode_number = ?,
+                    output_dir = ?,
+                    destination_subpath = ?,
+                    updated_at = datetime('now')
+                WHERE id = ? AND status = 'queued'
+                """,
+                (
+                    media_kind,
+                    1 if is_kids else 0,
+                    series_name,
+                    season_number,
+                    episode_number,
+                    output_dir,
+                    destination_subpath,
+                    job_id,
+                ),
+            )
+            return cursor.rowcount > 0
+
     def delete_download_jobs(self, statuses: list[str]) -> int:
         valid_statuses = [status for status in statuses if status in {"done", "failed", "canceled"}]
         if not valid_statuses:
@@ -803,6 +986,157 @@ class Storage:
             summary[row["status"]] = row["count"]
         return summary
 
+    def get_download_settings(self) -> dict[str, int]:
+        defaults = {
+            "max_concurrent_jobs": 1,
+            "default_chunk_count": 1,
+            "bandwidth_limit_kbps": 0,
+        }
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT key, value
+                FROM app_settings
+                WHERE key IN ('download_max_concurrent_jobs', 'download_default_chunk_count', 'download_bandwidth_limit_kbps')
+                """
+            ).fetchall()
+
+        mapping = {row["key"]: row["value"] for row in rows}
+        settings = dict(defaults)
+        try:
+            if "download_max_concurrent_jobs" in mapping:
+                settings["max_concurrent_jobs"] = int(mapping["download_max_concurrent_jobs"])
+            if "download_default_chunk_count" in mapping:
+                settings["default_chunk_count"] = int(mapping["download_default_chunk_count"])
+            if "download_bandwidth_limit_kbps" in mapping:
+                settings["bandwidth_limit_kbps"] = int(mapping["download_bandwidth_limit_kbps"])
+        except ValueError:
+            return defaults
+
+        settings["max_concurrent_jobs"] = max(1, min(settings["max_concurrent_jobs"], 8))
+        settings["default_chunk_count"] = max(1, min(settings["default_chunk_count"], 8))
+        settings["bandwidth_limit_kbps"] = max(0, settings["bandwidth_limit_kbps"])
+        return settings
+
+    def set_download_settings(
+        self,
+        *,
+        max_concurrent_jobs: int,
+        default_chunk_count: int,
+        bandwidth_limit_kbps: int,
+    ) -> dict[str, int]:
+        max_concurrent_jobs = max(1, min(int(max_concurrent_jobs), 8))
+        default_chunk_count = max(1, min(int(default_chunk_count), 8))
+        bandwidth_limit_kbps = max(0, int(bandwidth_limit_kbps))
+
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES ('download_max_concurrent_jobs', ?, datetime('now'))
+                ON CONFLICT(key) DO UPDATE SET
+                    value=excluded.value,
+                    updated_at=datetime('now')
+                """,
+                (str(max_concurrent_jobs),),
+            )
+            conn.execute(
+                """
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES ('download_default_chunk_count', ?, datetime('now'))
+                ON CONFLICT(key) DO UPDATE SET
+                    value=excluded.value,
+                    updated_at=datetime('now')
+                """,
+                (str(default_chunk_count),),
+            )
+            conn.execute(
+                """
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES ('download_bandwidth_limit_kbps', ?, datetime('now'))
+                ON CONFLICT(key) DO UPDATE SET
+                    value=excluded.value,
+                    updated_at=datetime('now')
+                """,
+                (str(bandwidth_limit_kbps),),
+            )
+        return {
+            "max_concurrent_jobs": max_concurrent_jobs,
+            "default_chunk_count": default_chunk_count,
+            "bandwidth_limit_kbps": bandwidth_limit_kbps,
+        }
+
+    def get_library_paths(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            **DEFAULT_LIBRARY_PATHS,
+            "confirm_on_uncertain": True,
+        }
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT key, value
+                FROM app_settings
+                WHERE key IN (
+                    'library_movies_dir',
+                    'library_tv_dir',
+                    'library_kids_movies_dir',
+                    'library_kids_tv_dir',
+                    'library_unsorted_dir',
+                    'library_confirm_on_uncertain'
+                )
+                """
+            ).fetchall()
+
+        mapping = {row["key"]: row["value"] for row in rows}
+        result = dict(defaults)
+        if "library_movies_dir" in mapping:
+            result["movies_dir"] = mapping["library_movies_dir"]
+        if "library_tv_dir" in mapping:
+            result["tv_dir"] = mapping["library_tv_dir"]
+        if "library_kids_movies_dir" in mapping:
+            result["kids_movies_dir"] = mapping["library_kids_movies_dir"]
+        if "library_kids_tv_dir" in mapping:
+            result["kids_tv_dir"] = mapping["library_kids_tv_dir"]
+        if "library_unsorted_dir" in mapping:
+            result["unsorted_dir"] = mapping["library_unsorted_dir"]
+        if "library_confirm_on_uncertain" in mapping:
+            result["confirm_on_uncertain"] = mapping["library_confirm_on_uncertain"] in {"1", "true", "yes", "on"}
+
+        return result
+
+    def set_library_paths(
+        self,
+        *,
+        movies_dir: str,
+        tv_dir: str,
+        kids_movies_dir: str,
+        kids_tv_dir: str,
+        unsorted_dir: str,
+        confirm_on_uncertain: bool,
+    ) -> dict[str, Any]:
+        value_map = {
+            "library_movies_dir": movies_dir,
+            "library_tv_dir": tv_dir,
+            "library_kids_movies_dir": kids_movies_dir,
+            "library_kids_tv_dir": kids_tv_dir,
+            "library_unsorted_dir": unsorted_dir,
+            "library_confirm_on_uncertain": "1" if confirm_on_uncertain else "0",
+        }
+        with self._connect() as conn:
+            for key, value in value_map.items():
+                conn.execute(
+                    """
+                    INSERT INTO app_settings (key, value, updated_at)
+                    VALUES (?, ?, datetime('now'))
+                    ON CONFLICT(key) DO UPDATE SET
+                        value=excluded.value,
+                        updated_at=datetime('now')
+                    """,
+                    (key, str(value)),
+                )
+
+        return self.get_library_paths()
+
     def _row_to_saved_candidate(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
             "file_id": row["file_id"],
@@ -816,6 +1150,12 @@ class Storage:
             "detected_languages": json.loads(row["detected_languages_json"] or "[]"),
             "has_dub_hint": bool(row["has_dub_hint"]),
             "has_subtitle_hint": bool(row["has_subtitle_hint"]),
+            "media_kind": row["media_kind"],
+            "is_kids": bool(row["is_kids"]),
+            "series_name": row["series_name"],
+            "season_number": row["season_number"],
+            "episode_number": row["episode_number"],
+            "classification_confidence": row["classification_confidence"],
             "notes": row["notes"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -836,6 +1176,13 @@ class Storage:
             "status": row["status"],
             "priority": row["priority"],
             "attempt_count": row["attempt_count"],
+            "chunk_count": row["chunk_count"],
+            "media_kind": row["media_kind"],
+            "is_kids": bool(row["is_kids"]),
+            "series_name": row["series_name"],
+            "season_number": row["season_number"],
+            "episode_number": row["episode_number"],
+            "destination_subpath": row["destination_subpath"],
             "source_saved_file_id": row["source_saved_file_id"],
             "delete_saved_on_complete": bool(row["delete_saved_on_complete"]),
             "save_path": row["save_path"],
@@ -862,11 +1209,90 @@ class Storage:
             column="updated_at",
             definition="TEXT NOT NULL DEFAULT (datetime('now'))",
         )
+        self._ensure_column(
+            conn,
+            table="saved_candidates",
+            column="media_kind",
+            definition="TEXT",
+        )
+        self._ensure_column(
+            conn,
+            table="saved_candidates",
+            column="is_kids",
+            definition="INTEGER NOT NULL DEFAULT 0",
+        )
+        self._ensure_column(
+            conn,
+            table="saved_candidates",
+            column="series_name",
+            definition="TEXT",
+        )
+        self._ensure_column(
+            conn,
+            table="saved_candidates",
+            column="season_number",
+            definition="INTEGER",
+        )
+        self._ensure_column(
+            conn,
+            table="saved_candidates",
+            column="episode_number",
+            definition="INTEGER",
+        )
+        self._ensure_column(
+            conn,
+            table="saved_candidates",
+            column="classification_confidence",
+            definition="TEXT",
+        )
 
         self._ensure_column(
             conn,
             table="download_jobs",
             column="working_path",
+            definition="TEXT",
+        )
+
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="chunk_count",
+            definition="INTEGER",
+        )
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="media_kind",
+            definition="TEXT",
+        )
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="is_kids",
+            definition="INTEGER NOT NULL DEFAULT 0",
+        )
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="series_name",
+            definition="TEXT",
+        )
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="season_number",
+            definition="INTEGER",
+        )
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="episode_number",
+            definition="INTEGER",
+        )
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="destination_subpath",
             definition="TEXT",
         )
 

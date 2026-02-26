@@ -172,6 +172,12 @@ a {
   align-items: end;
 }
 
+.settings-form {
+  margin-top: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+}
+
 .download-form label {
   display: flex;
   flex-direction: column;
@@ -547,6 +553,116 @@ a {
   background: #f4f7fa;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.queue-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.queue-dialog {
+  width: min(760px, 96vw);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9rem;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+}
+
+.queue-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.queue-dialog-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.queue-dialog-close {
+  border: 1px solid var(--border);
+  background: #f4f7fa;
+  border-radius: 8px;
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.queue-dialog-item {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.queue-dialog-form {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.7rem;
+  align-items: end;
+}
+
+.queue-dialog-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.queue-dialog-form input,
+.queue-dialog-form select,
+.queue-dialog-form button {
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.65rem;
+  font-size: 0.92rem;
+}
+
+.queue-dialog-preview {
+  grid-column: 1 / -1;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+}
+
+.queue-dialog-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.queue-dialog-actions button {
+  cursor: pointer;
+}
+
+.queue-dialog-actions button.secondary-btn {
+  background: #f4f7fa;
+  color: var(--text);
+}
+
+.queue-dialog-actions button:not(.secondary-btn) {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff;
+  border-color: var(--accent-dark);
+}
+
 @media (max-width: 560px) {
   .workspace-tabs {
     flex-direction: column;
@@ -599,5 +715,9 @@ a {
 
   .search-form {
     grid-template-columns: 1fr;
+  }
+
+  .queue-dialog-actions button {
+    flex: 1;
   }
 }

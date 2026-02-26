@@ -26,6 +26,10 @@
             <input id="savedOutputDir" type="text" placeholder="/downloads/movies" autocomplete="off" />
           </label>
           <label>
+            Chunk count
+            <input id="savedChunkCount" type="number" min="1" max="8" value="1" />
+          </label>
+          <label>
             Priority
             <input id="savedPriority" type="number" min="-100" max="100" value="0" />
           </label>
@@ -47,8 +51,38 @@
                 <li><strong>Extension:</strong> {{ item.extension or "n/a" }}</li>
                 <li><strong>Year:</strong> {{ item.primary_year if item.primary_year is not none else "n/a" }}</li>
                 <li><strong>Languages:</strong> {{ item.detected_languages | join(", ") if item.detected_languages else "n/a" }}</li>
+                <li><strong>Type:</strong> {{ item.media_kind or "auto" }}</li>
+                <li><strong>Kids:</strong> {{ "yes" if item.is_kids else "no" }}</li>
+                <li><strong>Series:</strong> {{ item.series_name or "n/a" }}</li>
+                <li><strong>Season:</strong> {{ item.season_number if item.season_number is not none else "n/a" }}</li>
                 <li><strong>Updated:</strong> {{ item.updated_at }}</li>
               </ul>
+              <div class="download-form">
+                <label>
+                  Type
+                  <select class="saved-media-kind">
+                    <option value="auto" {% if not item.media_kind or item.media_kind == "unknown" %}selected{% endif %}>Auto detect</option>
+                    <option value="movie" {% if item.media_kind == "movie" %}selected{% endif %}>Movie</option>
+                    <option value="tv" {% if item.media_kind == "tv" %}selected{% endif %}>TV show</option>
+                  </select>
+                </label>
+                <label>
+                  Kids tag
+                  <select class="saved-kids-tag">
+                    <option value="auto" {% if item.classification_confidence != "manual" %}selected{% endif %}>Auto detect</option>
+                    <option value="yes" {% if item.classification_confidence == "manual" and item.is_kids %}selected{% endif %}>Kids</option>
+                    <option value="no" {% if item.classification_confidence == "manual" and not item.is_kids %}selected{% endif %}>Not kids</option>
+                  </select>
+                </label>
+                <label>
+                  Series
+                  <input class="saved-series-name" type="text" value="{{ item.series_name or '' }}" placeholder="e.g. Bluey" />
+                </label>
+                <label>
+                  Season
+                  <input class="saved-season-number" type="number" min="1" max="99" value="{{ item.season_number if item.season_number is not none else '' }}" />
+                </label>
+              </div>
               <div class="saved-actions">
                 <button
                   type="button"
@@ -91,11 +125,28 @@
     <script>
       const savedStatus = document.getElementById("savedStatus");
       const savedOutputDir = document.getElementById("savedOutputDir");
+      const savedChunkCount = document.getElementById("savedChunkCount");
       const savedPriority = document.getElementById("savedPriority");
+      const resolveKidsValue = (rawValue) => {
+        if (rawValue === "yes") return true;
+        if (rawValue === "no") return false;
+        return null;
+      };
 
       const setSavedStatus = (text, mode = "neutral") => {
         savedStatus.textContent = text;
         savedStatus.dataset.mode = mode;
+      };
+
+      const loadDefaults = async () => {
+        try {
+          const res = await fetch("/api/downloads/settings");
+          const data = await res.json();
+          if (!res.ok) return;
+          savedChunkCount.value = data.default_chunk_count ?? 1;
+        } catch (_) {
+          // Keep built-in defaults.
+        }
       };
 
       document.querySelectorAll(".saved-download-btn").forEach((btn) => {
@@ -104,6 +155,17 @@
           const detailUrl = btn.dataset.detailUrl;
           const title = btn.dataset.title;
           const removeOnComplete = btn.dataset.removeOnComplete === "1";
+          const card = btn.closest(".saved-card");
+          const mediaKindEl = card?.querySelector(".saved-media-kind");
+          const kidsTagEl = card?.querySelector(".saved-kids-tag");
+          const seriesNameEl = card?.querySelector(".saved-series-name");
+          const seasonNumberEl = card?.querySelector(".saved-season-number");
+
+          const mediaKind = mediaKindEl && mediaKindEl.value !== "auto" ? mediaKindEl.value : null;
+          const isKids = kidsTagEl ? resolveKidsValue(kidsTagEl.value) : null;
+          const seriesName = seriesNameEl ? (seriesNameEl.value.trim() || null) : null;
+          const seasonRaw = seasonNumberEl ? Number(seasonNumberEl.value || 0) : 0;
+          const seasonNumber = Number.isFinite(seasonRaw) && seasonRaw > 0 ? seasonRaw : null;
 
           const payload = {
             detail_url: detailUrl,
@@ -111,7 +173,12 @@
             file_id: fileId,
             preferred_mode: "premium",
             output_dir: savedOutputDir.value.trim() || null,
+            chunk_count: Number(savedChunkCount.value || 1),
             priority: Number(savedPriority.value || 0),
+            media_kind: mediaKind,
+            is_kids: isKids,
+            series_name: mediaKind === "tv" ? seriesName : null,
+            season_number: mediaKind === "tv" ? seasonNumber : null,
             source_saved_file_id: fileId,
             delete_saved_on_complete: removeOnComplete,
           };
@@ -124,7 +191,70 @@
             });
             const data = await res.json();
             if (!res.ok) {
-              setSavedStatus(data.error || "Failed to queue download.", "error");
+              if (res.status === 409 && data.duplicate_job) {
+                setSavedStatus(
+                  `${data.error || "Duplicate download."} Existing job #${data.duplicate_job.id} is ${data.duplicate_job.status}.`,
+                  "error"
+                );
+              } else if (res.status === 409 && data.requires_confirmation) {
+                const classification = data.classification || {};
+                const kindInput = window.prompt(
+                  "Classify content (movie/tv):",
+                  classification.media_kind === "tv" ? "tv" : "movie"
+                );
+                if (kindInput == null) {
+                  setSavedStatus("Queue canceled. Classification confirmation required.", "neutral");
+                  return;
+                }
+                const kindValue = kindInput.trim().toLowerCase();
+                const mediaKindRetry = kindValue.startsWith("t") ? "tv" : "movie";
+                const kidsInput = window.prompt(
+                  "Kids content? (yes/no):",
+                  classification.is_kids ? "yes" : "no"
+                );
+                const isKidsRetry = typeof kidsInput === "string" && kidsInput.trim().toLowerCase().startsWith("y");
+
+                const retryPayload = {
+                  ...payload,
+                  media_kind: mediaKindRetry,
+                  is_kids: isKidsRetry,
+                  series_name: null,
+                  season_number: null,
+                };
+                if (mediaKindRetry === "tv") {
+                  const seriesInput = window.prompt("Series name:", classification.series_name || title || "");
+                  if (seriesInput == null || !seriesInput.trim()) {
+                    setSavedStatus("Queue canceled. Series name is required for TV routing.", "error");
+                    return;
+                  }
+                  const seasonInput = window.prompt("Season number:", String(classification.season_number || 1));
+                  const seasonRetry = Number(seasonInput);
+                  if (!Number.isFinite(seasonRetry) || seasonRetry < 1) {
+                    setSavedStatus("Queue canceled. Invalid season number.", "error");
+                    return;
+                  }
+                  retryPayload.series_name = seriesInput.trim();
+                  retryPayload.season_number = seasonRetry;
+                }
+                const retryRes = await fetch("/api/downloads", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(retryPayload),
+                });
+                const retryData = await retryRes.json();
+                if (!retryRes.ok) {
+                  setSavedStatus(retryData.error || "Failed to queue download.", "error");
+                  return;
+                }
+                setSavedStatus(
+                  removeOnComplete
+                    ? `Queued #${retryData.id}. Saved pick will be removed after download completes.`
+                    : `Queued #${retryData.id}.`,
+                  "ok"
+                );
+              } else {
+                setSavedStatus(data.error || "Failed to queue download.", "error");
+              }
               return;
             }
             setSavedStatus(
@@ -156,6 +286,8 @@
           }
         });
       });
+
+      loadDefaults();
     </script>
   </body>
 </html>
