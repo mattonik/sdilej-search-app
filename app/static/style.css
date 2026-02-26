@@ -51,6 +51,73 @@ a {
   margin-top: 1rem;
 }
 
+.account-panel h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.account-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+
+.account-status {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.account-status[data-mode="ok"] {
+  color: #166534;
+}
+
+.account-status[data-mode="error"] {
+  color: #b91c1c;
+}
+
+.account-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.account-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+  gap: 0.35rem;
+}
+
+.account-form input,
+.account-form button {
+  min-height: 42px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.account-form button {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.account-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.account-actions .secondary-btn {
+  background: #f4f7fa;
+  color: var(--text);
+}
+
 .search-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -76,7 +143,26 @@ a {
   background: #f8fafb;
 }
 
+.account-form .checkbox-field span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  background: #f8fafb;
+}
+
 .search-form .checkbox-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+.account-form .checkbox-field input[type="checkbox"] {
   width: 16px;
   height: 16px;
   min-height: 16px;
@@ -195,6 +281,23 @@ a {
 }
 
 @media (max-width: 560px) {
+  .account-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .account-form {
+    grid-template-columns: 1fr;
+  }
+
+  .account-actions {
+    width: 100%;
+  }
+
+  .account-actions button {
+    flex: 1;
+  }
+
   .search-form {
     grid-template-columns: 1fr;
   }

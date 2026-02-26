@@ -13,6 +13,7 @@ from .models import Category, DetailProbeResponse, LanguageScope, SearchResponse
 BASE_URL = "https://sdilej.cz"
 SEARCH_ENTRYPOINT = f"{BASE_URL}/sk/s"
 AUTOCOMPLETE_ENDPOINT = f"{BASE_URL}/autocomplete.php"
+LOGIN_PAGE_URL = f"{BASE_URL}/prihlasit"
 
 CATEGORY_SEGMENT: dict[Category, str] = {
     "all": "-",
@@ -130,6 +131,91 @@ class SdilejClient:
 
         suggestions = [line.strip() for line in response.text.splitlines() if line.strip()]
         return suggestions[:limit]
+
+    def login(self, login: str, password: str) -> tuple[bool, str]:
+        login_value = login.strip()
+        if not login_value or not password:
+            raise SdilejClientError("Both login and password are required for account login.")
+
+        page = self.session.get(LOGIN_PAGE_URL, timeout=self.timeout_seconds)
+        page.raise_for_status()
+        soup = BeautifulSoup(page.text, "lxml")
+
+        form = soup.select_one("form#loginform")
+        if form is None:
+            if self._is_logged_in_html(page.text):
+                return True, "Login form not found and logged-in markers were detected."
+            return False, "Login form not found."
+
+        action = urljoin(BASE_URL, form.get("action", "/sql.php"))
+        payload: dict[str, str] = {}
+        for hidden in form.select("input[type='hidden'][name]"):
+            payload[hidden.get("name", "").strip()] = hidden.get("value", "")
+
+        # Login page includes a global csrf field (outside login form).
+        if "csrf" not in payload:
+            global_csrf = soup.select_one("input[type='hidden'][name='csrf']")
+            if global_csrf:
+                payload["csrf"] = global_csrf.get("value", "")
+
+        payload["login"] = login_value
+        payload["heslo"] = password
+
+        submit = self.session.post(
+            action,
+            data=payload,
+            headers={
+                "Origin": BASE_URL,
+                "Referer": page.url,
+            },
+            timeout=self.timeout_seconds,
+            allow_redirects=True,
+        )
+        submit.raise_for_status()
+
+        if self._is_logged_in_html(submit.text):
+            return True, "Login successful."
+
+        # Follow-up check against homepage with the same authenticated session.
+        check = self.session.get(BASE_URL, timeout=self.timeout_seconds)
+        check.raise_for_status()
+        if self._is_logged_in_html(check.text):
+            return True, "Login successful."
+
+        reason = self._extract_login_error(submit.text) or self._extract_login_error(check.text)
+        if reason:
+            return False, reason
+        return False, "Login failed; credentials were not accepted."
+
+    def _is_logged_in_html(self, html: str) -> bool:
+        soup = BeautifulSoup(html, "lxml")
+        if soup.select_one("a[href*='logout.php']"):
+            return True
+
+        body = soup.body
+        if body:
+            body_classes = {cls.strip().lower() for cls in (body.get("class") or []) if cls}
+            if "user-logged-in" in body_classes:
+                return True
+
+        topmenu = soup.select_one("#topmenu")
+        if topmenu:
+            topmenu_classes = {cls.strip().lower() for cls in (topmenu.get("class") or []) if cls}
+            if "is-logged-in" in topmenu_classes:
+                return True
+
+        return False
+
+    def _extract_login_error(self, html: str) -> str | None:
+        soup = BeautifulSoup(html, "lxml")
+        error_box = soup.select_one("div.alert.alert-danger")
+        if not error_box:
+            return None
+
+        text = " ".join(error_box.get_text(" ", strip=True).split())
+        if not text:
+            return None
+        return f"Login failed: {text}"
 
     def search(
         self,

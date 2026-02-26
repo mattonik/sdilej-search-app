@@ -18,6 +18,11 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - SQLite persistence for:
   - search history
   - saved picks (upsert by file ID)
+- Background downloader queue worker:
+  - queued/running/done/failed/canceled states
+  - progress tracking
+  - cancel + retry
+  - account credentials (for subscription/premium flow)
 - JSON API endpoints for future download-manager integration
 
 ## Project structure
@@ -71,7 +76,40 @@ docker compose up -d --build
 - `GET /api/saved?limit=200`
 - `POST /api/saved` (upsert saved pick)
 - `DELETE /api/saved/{file_id}`
+- `GET /api/account` (credential status)
+- `POST /api/account` (set credentials, optional verification)
+- `DELETE /api/account` (clear credentials)
+- `GET /api/downloads?limit=200&status=queued`
+- `POST /api/downloads` (enqueue download job)
+- `POST /api/downloads/{id}/cancel`
+- `POST /api/downloads/{id}/retry`
 - `GET /healthz`
+
+## Subscription credentials
+
+To use your subscription for downloader jobs:
+
+1. Set credentials:
+
+```bash
+curl -X POST http://localhost:8080/api/account \\
+  -H 'Content-Type: application/json' \\
+  -d '{"login":"your_login_or_email","password":"your_password","verify":true}'
+```
+
+2. Enqueue premium-mode job:
+
+```bash
+curl -X POST http://localhost:8080/api/downloads \\
+  -H 'Content-Type: application/json' \\
+  -d '{"detail_url":"https://sdilej.cz/15947667/scoob-2020-sk-.mkv","preferred_mode":"premium"}'
+```
+
+3. Watch queue:
+
+```bash
+curl http://localhost:8080/api/downloads
+```
 
 ## Next step
 

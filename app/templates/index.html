@@ -13,6 +13,38 @@
         <p>Search + filter + sort proxy for <code>sdilej.cz</code>, built for self-hosting on Raspberry Pi.</p>
       </header>
 
+      <section class="panel account-panel">
+        <div class="account-header">
+          <h2>Account Credentials</h2>
+          <div id="accountStatus" class="account-status">Checking account status...</div>
+        </div>
+
+        <form id="accountForm" class="account-form">
+          <label>
+            Login (email or username)
+            <input id="accountLogin" type="text" autocomplete="username" placeholder="your@email.com" required />
+          </label>
+
+          <label>
+            Password
+            <input id="accountPassword" type="password" autocomplete="current-password" placeholder="Your password" required />
+          </label>
+
+          <label class="checkbox-field">
+            Verify credentials
+            <span>
+              <input id="accountVerify" type="checkbox" checked />
+              validate by real login request
+            </span>
+          </label>
+
+          <div class="account-actions">
+            <button type="submit">Save credentials</button>
+            <button id="accountClearBtn" type="button" class="secondary-btn">Clear credentials</button>
+          </div>
+        </form>
+      </section>
+
       <section class="panel">
         <form method="get" action="/" class="search-form">
           <label>
@@ -170,6 +202,12 @@
       const input = document.getElementById("queryInput");
       const list = document.getElementById("suggestions");
       let timer = null;
+      const accountStatus = document.getElementById("accountStatus");
+      const accountForm = document.getElementById("accountForm");
+      const accountLogin = document.getElementById("accountLogin");
+      const accountPassword = document.getElementById("accountPassword");
+      const accountVerify = document.getElementById("accountVerify");
+      const accountClearBtn = document.getElementById("accountClearBtn");
 
       input.addEventListener("input", () => {
         const q = input.value.trim();
@@ -236,6 +274,88 @@
           window.open(target, "_blank", "noopener,noreferrer");
         });
       });
+
+      const setAccountStatus = (text, mode = "neutral") => {
+        accountStatus.textContent = text;
+        accountStatus.dataset.mode = mode;
+      };
+
+      const refreshAccountStatus = async () => {
+        try {
+          const res = await fetch("/api/account");
+          const data = await res.json();
+          if (!res.ok) {
+            setAccountStatus(`Status error: ${data.error || "unknown error"}`, "error");
+            return;
+          }
+          if (data.configured) {
+            accountLogin.value = data.login || "";
+            setAccountStatus(`Configured for: ${data.login}`, "ok");
+          } else {
+            accountLogin.value = "";
+            setAccountStatus("Not configured", "neutral");
+          }
+        } catch (_) {
+          setAccountStatus("Status unavailable", "error");
+        }
+      };
+
+      accountForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const login = accountLogin.value.trim();
+        const password = accountPassword.value;
+
+        if (!login || !password) {
+          setAccountStatus("Login and password are required.", "error");
+          return;
+        }
+
+        setAccountStatus("Saving credentials...", "neutral");
+        try {
+          const res = await fetch("/api/account", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              login,
+              password,
+              verify: accountVerify.checked,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setAccountStatus(data.error || "Failed to save credentials.", "error");
+            return;
+          }
+          accountPassword.value = "";
+          setAccountStatus(
+            data.verified === false
+              ? `Saved (not verified): ${data.login}`
+              : `Saved for: ${data.login}`,
+            "ok"
+          );
+          await refreshAccountStatus();
+        } catch (_) {
+          setAccountStatus("Failed to save credentials.", "error");
+        }
+      });
+
+      accountClearBtn.addEventListener("click", async () => {
+        setAccountStatus("Clearing credentials...", "neutral");
+        try {
+          const res = await fetch("/api/account", { method: "DELETE" });
+          const data = await res.json();
+          if (!res.ok || !data.cleared) {
+            setAccountStatus(data.error || "Failed to clear credentials.", "error");
+            return;
+          }
+          accountPassword.value = "";
+          await refreshAccountStatus();
+        } catch (_) {
+          setAccountStatus("Failed to clear credentials.", "error");
+        }
+      });
+
+      refreshAccountStatus();
     </script>
   </body>
 </html>

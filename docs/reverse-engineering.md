@@ -110,3 +110,13 @@ Detail page probe:
   - `div.detail-buttons a.btn.btn-success` -> fast download button
   - `div.detail-buttons a.btn.btn-danger` -> slow/free download button
 - Probe also records preflight headers for selected download URL (`status`, `location`, `content-type`, `content-length`, `accept-ranges`).
+
+Login form (for subscription-based downloader):
+
+- Login page: `GET https://sdilej.cz/prihlasit`
+- Form selector: `form#loginform`
+- Submit action: `/sql.php` (relative on current page)
+- Main fields:
+  - `login` (email or username)
+  - `heslo` (password)
+  - optional `remember=1`

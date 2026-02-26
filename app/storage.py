@@ -35,7 +35,7 @@ class Storage:
                     sort TEXT NOT NULL,
                     language TEXT,
                     language_scope TEXT NOT NULL,
-                    strict_dubbing INTEGER NOT NULL,
+                    strict_dubbing INTEGER NOT NULL DEFAULT 0,
                     release_year INTEGER,
                     search_url TEXT NOT NULL,
                     result_count INTEGER NOT NULL,
@@ -57,6 +57,45 @@ class Storage:
                     notes TEXT,
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS download_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    started_at TEXT,
+                    finished_at TEXT,
+                    file_id INTEGER,
+                    title TEXT,
+                    detail_url TEXT NOT NULL,
+                    preferred_mode TEXT NOT NULL DEFAULT 'auto',
+                    output_dir TEXT,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    priority INTEGER NOT NULL DEFAULT 0,
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    save_path TEXT,
+                    final_url TEXT,
+                    bytes_total INTEGER,
+                    bytes_downloaded INTEGER NOT NULL DEFAULT 0,
+                    speed_bps REAL,
+                    error TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS download_attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id INTEGER NOT NULL,
+                    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    finished_at TEXT,
+                    status_code INTEGER,
+                    final_url TEXT,
+                    error TEXT,
+                    FOREIGN KEY(job_id) REFERENCES download_jobs(id)
                 );
                 """
             )
@@ -264,6 +303,332 @@ class Storage:
             cursor = conn.execute("DELETE FROM saved_candidates WHERE file_id = ?", (file_id,))
             return cursor.rowcount > 0
 
+    def set_account_credentials(self, login: str, password: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES ('account_login', ?, datetime('now'))
+                ON CONFLICT(key) DO UPDATE SET
+                    value=excluded.value,
+                    updated_at=datetime('now')
+                """,
+                (login,),
+            )
+            conn.execute(
+                """
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES ('account_password', ?, datetime('now'))
+                ON CONFLICT(key) DO UPDATE SET
+                    value=excluded.value,
+                    updated_at=datetime('now')
+                """,
+                (password,),
+            )
+
+    def clear_account_credentials(self) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM app_settings WHERE key IN ('account_login', 'account_password')")
+
+    def get_account_credentials(self) -> tuple[str, str] | None:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT key, value FROM app_settings WHERE key IN ('account_login', 'account_password')"
+            ).fetchall()
+
+        values = {row["key"]: row["value"] for row in rows}
+        login = values.get("account_login")
+        password = values.get("account_password")
+        if not login or not password:
+            return None
+        return login, password
+
+    def enqueue_download_job(
+        self,
+        *,
+        detail_url: str,
+        file_id: int | None,
+        title: str | None,
+        preferred_mode: str,
+        output_dir: str | None,
+        priority: int,
+    ) -> dict[str, Any]:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO download_jobs (
+                    file_id,
+                    title,
+                    detail_url,
+                    preferred_mode,
+                    output_dir,
+                    priority,
+                    status
+                ) VALUES (?, ?, ?, ?, ?, ?, 'queued')
+                """,
+                (file_id, title, detail_url, preferred_mode, output_dir, priority),
+            )
+            job_id = cursor.lastrowid
+
+        return self.get_download_job(job_id)
+
+    def list_download_jobs(self, limit: int = 200, status: str | None = None) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(limit, 1000))
+        with self._connect() as conn:
+            if status:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM download_jobs
+                    WHERE status = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (status, safe_limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM download_jobs
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (safe_limit,),
+                ).fetchall()
+
+        return [self._row_to_download_job(row) for row in rows]
+
+    def get_download_job(self, job_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM download_jobs WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            return None
+        return self._row_to_download_job(row)
+
+    def claim_next_download_job(self) -> dict[str, Any] | None:
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """
+                SELECT id
+                FROM download_jobs
+                WHERE status = 'queued'
+                ORDER BY priority DESC, id ASC
+                LIMIT 1
+                """
+            ).fetchone()
+
+            if row is None:
+                conn.commit()
+                return None
+
+            job_id = row["id"]
+            updated = conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    status = 'running',
+                    started_at = COALESCE(started_at, datetime('now')),
+                    updated_at = datetime('now'),
+                    attempt_count = attempt_count + 1,
+                    error = NULL
+                WHERE id = ? AND status = 'queued'
+                """,
+                (job_id,),
+            )
+            if updated.rowcount != 1:
+                conn.rollback()
+                return None
+
+            conn.execute(
+                "INSERT INTO download_attempts (job_id) VALUES (?)",
+                (job_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return self.get_download_job(job_id)
+
+    def update_download_progress(
+        self,
+        job_id: int,
+        *,
+        bytes_downloaded: int,
+        bytes_total: int | None,
+        speed_bps: float | None,
+        final_url: str | None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    bytes_downloaded = ?,
+                    bytes_total = ?,
+                    speed_bps = ?,
+                    final_url = COALESCE(?, final_url),
+                    updated_at = datetime('now')
+                WHERE id = ? AND status = 'running'
+                """,
+                (
+                    bytes_downloaded,
+                    bytes_total,
+                    speed_bps,
+                    final_url,
+                    job_id,
+                ),
+            )
+
+    def complete_download_job(
+        self,
+        job_id: int,
+        *,
+        save_path: str,
+        final_url: str | None,
+        bytes_total: int,
+        status_code: int | None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    status = 'done',
+                    save_path = ?,
+                    final_url = COALESCE(?, final_url),
+                    bytes_total = ?,
+                    bytes_downloaded = ?,
+                    speed_bps = NULL,
+                    finished_at = datetime('now'),
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (save_path, final_url, bytes_total, bytes_total, job_id),
+            )
+            conn.execute(
+                """
+                UPDATE download_attempts
+                SET
+                    finished_at = datetime('now'),
+                    status_code = ?,
+                    final_url = ?,
+                    error = NULL
+                WHERE id = (
+                    SELECT id
+                    FROM download_attempts
+                    WHERE job_id = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                )
+                """,
+                (status_code, final_url, job_id),
+            )
+
+    def fail_download_job(
+        self,
+        job_id: int,
+        *,
+        error: str,
+        final_url: str | None,
+        status_code: int | None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    status = CASE WHEN status = 'canceled' THEN 'canceled' ELSE 'failed' END,
+                    error = ?,
+                    final_url = COALESCE(?, final_url),
+                    speed_bps = NULL,
+                    finished_at = CASE WHEN status = 'canceled' THEN finished_at ELSE datetime('now') END,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (error, final_url, job_id),
+            )
+            conn.execute(
+                """
+                UPDATE download_attempts
+                SET
+                    finished_at = datetime('now'),
+                    status_code = ?,
+                    final_url = ?,
+                    error = ?
+                WHERE id = (
+                    SELECT id
+                    FROM download_attempts
+                    WHERE job_id = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                )
+                """,
+                (status_code, final_url, error, job_id),
+            )
+
+    def cancel_download_job(self, job_id: int) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    status = 'canceled',
+                    updated_at = datetime('now'),
+                    finished_at = CASE WHEN status IN ('queued', 'running') THEN datetime('now') ELSE finished_at END
+                WHERE id = ? AND status IN ('queued', 'running')
+                """,
+                (job_id,),
+            )
+            return cursor.rowcount > 0
+
+    def retry_download_job(self, job_id: int) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    status = 'queued',
+                    updated_at = datetime('now'),
+                    started_at = NULL,
+                    finished_at = NULL,
+                    save_path = NULL,
+                    final_url = NULL,
+                    bytes_total = NULL,
+                    bytes_downloaded = 0,
+                    speed_bps = NULL,
+                    error = NULL
+                WHERE id = ? AND status IN ('failed', 'canceled')
+                """,
+                (job_id,),
+            )
+            return cursor.rowcount > 0
+
+    def is_job_canceled(self, job_id: int) -> bool:
+        with self._connect() as conn:
+            row = conn.execute("SELECT status FROM download_jobs WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            return True
+        return row["status"] == "canceled"
+
+    def get_download_summary(self) -> dict[str, int]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT status, COUNT(*) AS count FROM download_jobs GROUP BY status"
+            ).fetchall()
+        summary = {
+            "queued": 0,
+            "running": 0,
+            "done": 0,
+            "failed": 0,
+            "canceled": 0,
+        }
+        for row in rows:
+            summary[row["status"]] = row["count"]
+        return summary
+
     def _row_to_saved_candidate(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
             "file_id": row["file_id"],
@@ -282,8 +647,30 @@ class Storage:
             "updated_at": row["updated_at"],
         }
 
+    def _row_to_download_job(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": row["id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "started_at": row["started_at"],
+            "finished_at": row["finished_at"],
+            "file_id": row["file_id"],
+            "title": row["title"],
+            "detail_url": row["detail_url"],
+            "preferred_mode": row["preferred_mode"],
+            "output_dir": row["output_dir"],
+            "status": row["status"],
+            "priority": row["priority"],
+            "attempt_count": row["attempt_count"],
+            "save_path": row["save_path"],
+            "final_url": row["final_url"],
+            "bytes_total": row["bytes_total"],
+            "bytes_downloaded": row["bytes_downloaded"],
+            "speed_bps": row["speed_bps"],
+            "error": row["error"],
+        }
+
     def _migrate_schema(self, conn: sqlite3.Connection) -> None:
-        # Backward-compatible upgrades for existing local DBs.
         self._ensure_column(
             conn,
             table="search_history",

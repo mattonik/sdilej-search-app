@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urljoin, urlparse
 
 from fastapi import FastAPI, Query, Request
@@ -10,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
+from .downloader import DownloadWorker
 from .models import Category, LanguageScope, SortMode
 from .sdilej_client import BASE_URL, SdilejClient, SdilejClientError
 from .storage import Storage
@@ -23,7 +25,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 client = SdilejClient()
 storage = Storage()
-storage.init_db()
+worker = DownloadWorker(storage=storage)
 
 DEFAULT_CATEGORY: Category = "all"
 DEFAULT_SORT: SortMode = "relevance"
@@ -65,6 +67,32 @@ class SaveCandidatePayload(BaseModel):
     has_dub_hint: bool = False
     has_subtitle_hint: bool = False
     notes: str | None = None
+
+
+class AccountPayload(BaseModel):
+    login: str
+    password: str
+    verify: bool = True
+
+
+class EnqueueDownloadPayload(BaseModel):
+    detail_url: str
+    file_id: int | None = None
+    title: str | None = None
+    preferred_mode: Literal["auto", "premium", "free"] = "auto"
+    output_dir: str | None = None
+    priority: int = Field(default=0, ge=-100, le=100)
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    storage.init_db()
+    worker.start()
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    worker.stop()
 
 
 def _parse_optional_year(raw_value: str | None) -> int | None:
@@ -262,6 +290,114 @@ def api_saved_delete(file_id: int):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
+@app.get("/api/account")
+def api_account_get():
+    credentials = storage.get_account_credentials()
+    if not credentials:
+        return JSONResponse({"configured": False, "login": None})
+    return JSONResponse({"configured": True, "login": credentials[0]})
+
+
+@app.post("/api/account")
+def api_account_set(payload: AccountPayload):
+    try:
+        login_value = payload.login.strip()
+        if not login_value or not payload.password:
+            return JSONResponse(status_code=400, content={"error": "login and password are required."})
+
+        verified = None
+        message = None
+        if payload.verify:
+            probe_client = SdilejClient(timeout_seconds=45)
+            ok, msg = probe_client.login(login_value, payload.password)
+            verified = ok
+            message = msg
+            if not ok:
+                return JSONResponse(status_code=400, content={"error": f"Credential verification failed: {msg}"})
+
+        storage.set_account_credentials(login_value, payload.password)
+        return JSONResponse(
+            {
+                "saved": True,
+                "configured": True,
+                "login": login_value,
+                "verified": verified,
+                "message": message,
+            }
+        )
+    except SdilejClientError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.delete("/api/account")
+def api_account_delete():
+    storage.clear_account_credentials()
+    return JSONResponse({"cleared": True})
+
+
+@app.get("/api/downloads")
+def api_downloads_list(
+    limit: int = Query(default=200, ge=1, le=1000),
+    status: str | None = Query(default=None),
+):
+    try:
+        jobs = storage.list_download_jobs(limit=limit, status=status)
+        return JSONResponse({"items": jobs, "summary": storage.get_download_summary(), "worker_alive": worker.is_alive()})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.post("/api/downloads")
+def api_downloads_enqueue(payload: EnqueueDownloadPayload):
+    try:
+        detail_url = _normalize_detail_url(payload.detail_url)
+        file_id = payload.file_id if payload.file_id is not None else _extract_file_id(detail_url)
+        title = payload.title.strip() if payload.title else None
+
+        if file_id is None or title is None:
+            probe = client.probe_detail(detail_url=detail_url, run_preflight=False)
+            file_id = file_id if file_id is not None else probe.file_id
+            title = title or probe.title
+
+        job = storage.enqueue_download_job(
+            detail_url=detail_url,
+            file_id=file_id,
+            title=title,
+            preferred_mode=payload.preferred_mode,
+            output_dir=payload.output_dir,
+            priority=payload.priority,
+        )
+        return JSONResponse(job)
+    except SdilejClientError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.post("/api/downloads/{job_id}/cancel")
+def api_downloads_cancel(job_id: int):
+    try:
+        changed = storage.cancel_download_job(job_id)
+        if not changed:
+            return JSONResponse(status_code=404, content={"error": "Job not found or not cancelable."})
+        return JSONResponse({"canceled": True, "job_id": job_id})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.post("/api/downloads/{job_id}/retry")
+def api_downloads_retry(job_id: int):
+    try:
+        changed = storage.retry_download_job(job_id)
+        if not changed:
+            return JSONResponse(status_code=404, content={"error": "Job not found or not retryable."})
+        return JSONResponse({"retried": True, "job_id": job_id})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
 @app.get("/api/autocomplete")
 def api_autocomplete(
     q: str = Query(..., min_length=1, max_length=200),
@@ -276,4 +412,4 @@ def api_autocomplete(
 
 @app.get("/healthz")
 def healthcheck():
-    return {"status": "ok"}
+    return {"status": "ok", "worker_alive": worker.is_alive()}
