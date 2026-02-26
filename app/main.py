@@ -82,6 +82,8 @@ class EnqueueDownloadPayload(BaseModel):
     preferred_mode: Literal["auto", "premium", "free"] = "auto"
     output_dir: str | None = None
     priority: int = Field(default=0, ge=-100, le=100)
+    source_saved_file_id: int | None = Field(default=None, ge=1)
+    delete_saved_on_complete: bool = False
 
 
 class UpdatePriorityPayload(BaseModel):
@@ -190,6 +192,22 @@ def index(
             "category_options": CATEGORY_OPTIONS,
             "sort_options": SORT_OPTIONS,
             "language_scope_options": LANGUAGE_SCOPE_OPTIONS,
+        },
+    )
+
+
+@app.get("/saved")
+def saved_page(
+    request: Request,
+    limit: int = Query(default=500, ge=1, le=5000),
+):
+    items = storage.list_saved_candidates(limit=limit)
+    return templates.TemplateResponse(
+        request=request,
+        name="saved.html",
+        context={
+            "items": items,
+            "limit": limit,
         },
     )
 
@@ -377,6 +395,8 @@ def api_downloads_enqueue(payload: EnqueueDownloadPayload):
             preferred_mode=payload.preferred_mode,
             output_dir=payload.output_dir,
             priority=payload.priority,
+            source_saved_file_id=payload.source_saved_file_id,
+            delete_saved_on_complete=payload.delete_saved_on_complete,
         )
         return JSONResponse(job)
     except SdilejClientError as exc:

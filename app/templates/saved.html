@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Saved Picks</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="hero">
+        <h1>Saved Picks</h1>
+        <p>Manage your saved files and queue premium downloads.</p>
+      </header>
+
+      <nav class="workspace-tabs">
+        <a href="/#search" class="workspace-tab-link">Search</a>
+        <a href="/#downloads" class="workspace-tab-link">Account + Downloads</a>
+        <span class="workspace-tab active">Saved Picks</span>
+      </nav>
+
+      <section class="panel">
+        <form id="savedQueueDefaults" class="download-form">
+          <label>
+            Output dir (optional)
+            <input id="savedOutputDir" type="text" placeholder="/downloads/movies" autocomplete="off" />
+          </label>
+          <label>
+            Priority
+            <input id="savedPriority" type="number" min="-100" max="100" value="0" />
+          </label>
+        </form>
+        <div id="savedStatus" class="download-status">Ready.</div>
+      </section>
+
+      <section class="saved-grid">
+        {% if items %}
+          {% for item in items %}
+            <article class="saved-card">
+              <h3>
+                <a href="{{ item.detail_url }}" target="_blank" rel="noreferrer">{{ item.title }}</a>
+              </h3>
+              <ul>
+                <li><strong>File ID:</strong> {{ item.file_id }}</li>
+                <li><strong>Size:</strong> {{ item.size or "n/a" }}</li>
+                <li><strong>Duration:</strong> {{ item.duration or "n/a" }}</li>
+                <li><strong>Extension:</strong> {{ item.extension or "n/a" }}</li>
+                <li><strong>Year:</strong> {{ item.primary_year if item.primary_year is not none else "n/a" }}</li>
+                <li><strong>Languages:</strong> {{ item.detected_languages | join(", ") if item.detected_languages else "n/a" }}</li>
+                <li><strong>Updated:</strong> {{ item.updated_at }}</li>
+              </ul>
+              <div class="saved-actions">
+                <button
+                  type="button"
+                  class="saved-download-btn"
+                  data-file-id="{{ item.file_id }}"
+                  data-title="{{ item.title }}"
+                  data-detail-url="{{ item.detail_url }}"
+                  data-remove-on-complete="0"
+                >
+                  Download
+                </button>
+                <button
+                  type="button"
+                  class="saved-download-btn"
+                  data-file-id="{{ item.file_id }}"
+                  data-title="{{ item.title }}"
+                  data-detail-url="{{ item.detail_url }}"
+                  data-remove-on-complete="1"
+                >
+                  Download + Remove Save
+                </button>
+                <button
+                  type="button"
+                  class="saved-delete-btn"
+                  data-file-id="{{ item.file_id }}"
+                >
+                  Delete Save
+                </button>
+              </div>
+            </article>
+          {% endfor %}
+        {% else %}
+          <section class="panel">
+            No saved picks yet.
+          </section>
+        {% endif %}
+      </section>
+    </main>
+
+    <script>
+      const savedStatus = document.getElementById("savedStatus");
+      const savedOutputDir = document.getElementById("savedOutputDir");
+      const savedPriority = document.getElementById("savedPriority");
+
+      const setSavedStatus = (text, mode = "neutral") => {
+        savedStatus.textContent = text;
+        savedStatus.dataset.mode = mode;
+      };
+
+      document.querySelectorAll(".saved-download-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const fileId = Number(btn.dataset.fileId);
+          const detailUrl = btn.dataset.detailUrl;
+          const title = btn.dataset.title;
+          const removeOnComplete = btn.dataset.removeOnComplete === "1";
+
+          const payload = {
+            detail_url: detailUrl,
+            title,
+            file_id: fileId,
+            preferred_mode: "premium",
+            output_dir: savedOutputDir.value.trim() || null,
+            priority: Number(savedPriority.value || 0),
+            source_saved_file_id: fileId,
+            delete_saved_on_complete: removeOnComplete,
+          };
+
+          try {
+            const res = await fetch("/api/downloads", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              setSavedStatus(data.error || "Failed to queue download.", "error");
+              return;
+            }
+            setSavedStatus(
+              removeOnComplete
+                ? `Queued #${data.id}. Saved pick will be removed after download completes.`
+                : `Queued #${data.id}.`,
+              "ok"
+            );
+          } catch (_) {
+            setSavedStatus("Failed to queue download.", "error");
+          }
+        });
+      });
+
+      document.querySelectorAll(".saved-delete-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const fileId = Number(btn.dataset.fileId);
+          try {
+            const res = await fetch(`/api/saved/${fileId}`, { method: "DELETE" });
+            const data = await res.json();
+            if (!res.ok) {
+              setSavedStatus(data.error || "Failed to delete saved pick.", "error");
+              return;
+            }
+            setSavedStatus(`Deleted saved pick #${fileId}.`, "ok");
+            btn.closest(".saved-card")?.remove();
+          } catch (_) {
+            setSavedStatus("Failed to delete saved pick.", "error");
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

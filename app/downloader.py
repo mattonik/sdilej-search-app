@@ -167,6 +167,7 @@ class DownloadWorker:
                         bytes_total=existing_size,
                         status_code=status_code,
                     )
+                    self._run_post_complete_actions(job_id)
                     return
 
                 if self._supports_resume(response):
@@ -258,6 +259,7 @@ class DownloadWorker:
                 bytes_total=final_total,
                 status_code=status_code,
             )
+            self._run_post_complete_actions(job_id)
 
         except DownloadCanceledError as exc:
             clear_working_path = False
@@ -300,6 +302,17 @@ class DownloadWorker:
         if fast_url and not fast_url.rstrip("/").endswith("/cenik"):
             return fast_url
         return slow_url or fast_url
+
+    def _run_post_complete_actions(self, job_id: int) -> None:
+        job = self.storage.get_download_job(job_id)
+        if not job:
+            return
+        if not job.get("delete_saved_on_complete"):
+            return
+        source_saved_file_id = job.get("source_saved_file_id")
+        if source_saved_file_id is None:
+            return
+        self.storage.delete_saved_candidate(int(source_saved_file_id))
 
     def _is_html_response(self, response) -> bool:
         content_type = (response.headers.get("Content-Type") or "").lower()

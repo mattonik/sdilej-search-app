@@ -13,7 +13,13 @@
         <p>Search + filter + sort proxy for <code>sdilej.cz</code>, built for self-hosting on Raspberry Pi.</p>
       </header>
 
-      <section class="panel account-panel">
+      <nav class="workspace-tabs">
+        <button type="button" class="workspace-tab active" data-tab="search">Search</button>
+        <button type="button" class="workspace-tab" data-tab="downloads">Account + Downloads</button>
+        <a href="/saved" class="workspace-tab-link">Saved Picks</a>
+      </nav>
+
+      <section class="panel account-panel tab-section tab-downloads">
         <div class="account-header">
           <h2>Account Credentials</h2>
           <div id="accountStatus" class="account-status">Checking account status...</div>
@@ -45,7 +51,7 @@
         </form>
       </section>
 
-      <section class="panel downloader-panel">
+      <section class="panel downloader-panel tab-section tab-downloads">
         <div class="downloader-header">
           <h2>Premium Download Manager</h2>
           <div class="downloader-meta">
@@ -96,7 +102,7 @@
         <div id="downloadJobs" class="download-jobs"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel tab-section tab-search">
         <form method="get" action="/" class="search-form">
           <label>
             Query
@@ -181,13 +187,13 @@
       </section>
 
       {% if error %}
-        <section class="panel error">
+        <section class="panel error tab-section tab-search">
           <strong>Error:</strong> {{ error }}
         </section>
       {% endif %}
 
       {% if search %}
-        <section class="panel meta">
+        <section class="panel meta tab-section tab-search">
           <div><strong>Effective query:</strong> <code>{{ search.effective_query }}</code></div>
           <div><strong>Resolved slug:</strong> <code>{{ search.slug }}</code></div>
           <div><strong>Search URL:</strong> <a href="{{ search.search_url }}" target="_blank" rel="noreferrer">{{ search.search_url }}</a></div>
@@ -197,7 +203,7 @@
           <div><strong>Parsed results:</strong> {{ search.result_count }} / {{ search.unfiltered_result_count }}</div>
         </section>
 
-        <section class="results-grid">
+        <section class="results-grid tab-section tab-search">
           {% for item in search.results %}
             <article class="result-card">
               <a href="{{ item.detail_url }}" target="_blank" rel="noreferrer" class="thumb-wrap">
@@ -238,9 +244,6 @@
                   >
                     Save pick
                   </button>
-                  <button type="button" class="probe-btn" data-detail-url="{{ item.detail_url }}">
-                    Probe detail
-                  </button>
                   <button
                     type="button"
                     class="queue-premium-btn"
@@ -278,6 +281,8 @@
       const clearFinishedBtn = document.getElementById("clearFinishedBtn");
       const downloadSummary = document.getElementById("downloadSummary");
       const downloadWorkerState = document.getElementById("downloadWorkerState");
+      const workspaceTabs = Array.from(document.querySelectorAll(".workspace-tab"));
+      const tabSections = Array.from(document.querySelectorAll(".tab-section"));
       let timer = null;
 
       const esc = (value) =>
@@ -323,6 +328,34 @@
         if (m > 0) return `${m}m ${s}s`;
         return `${s}s`;
       };
+
+      const setActiveTab = (tabName) => {
+        const resolved = tabName === "downloads" ? "downloads" : "search";
+        workspaceTabs.forEach((tab) => {
+          tab.classList.toggle("active", tab.dataset.tab === resolved);
+        });
+        tabSections.forEach((section) => {
+          const showSearch = section.classList.contains("tab-search");
+          const showDownloads = section.classList.contains("tab-downloads");
+          const visible = (resolved === "search" && showSearch) || (resolved === "downloads" && showDownloads);
+          section.style.display = visible ? "" : "none";
+        });
+        window.location.hash = resolved;
+        window.localStorage.setItem("activeWorkspaceTab", resolved);
+      };
+
+      workspaceTabs.forEach((tab) => {
+        tab.addEventListener("click", () => setActiveTab(tab.dataset.tab || "search"));
+      });
+
+      const initialTab = (() => {
+        const hash = (window.location.hash || "").replace("#", "").trim();
+        if (hash === "search" || hash === "downloads") return hash;
+        const saved = window.localStorage.getItem("activeWorkspaceTab");
+        if (saved === "search" || saved === "downloads") return saved;
+        return "search";
+      })();
+      setActiveTab(initialTab);
 
       input.addEventListener("input", () => {
         const q = input.value.trim();
@@ -540,14 +573,6 @@
           }
           btn.textContent = "Saved";
           btn.disabled = true;
-        });
-      });
-
-      document.querySelectorAll(".probe-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const detailUrl = btn.dataset.detailUrl;
-          const target = `/api/detail?detail_url=${encodeURIComponent(detailUrl)}&preflight=true`;
-          window.open(target, "_blank", "noopener,noreferrer");
         });
       });
 

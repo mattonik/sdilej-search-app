@@ -79,6 +79,8 @@ class Storage:
                     status TEXT NOT NULL DEFAULT 'queued',
                     priority INTEGER NOT NULL DEFAULT 0,
                     attempt_count INTEGER NOT NULL DEFAULT 0,
+                    source_saved_file_id INTEGER,
+                    delete_saved_on_complete INTEGER NOT NULL DEFAULT 0,
                     save_path TEXT,
                     working_path TEXT,
                     final_url TEXT,
@@ -354,6 +356,8 @@ class Storage:
         preferred_mode: str,
         output_dir: str | None,
         priority: int,
+        source_saved_file_id: int | None = None,
+        delete_saved_on_complete: bool = False,
     ) -> dict[str, Any]:
         with self._connect() as conn:
             cursor = conn.execute(
@@ -365,10 +369,21 @@ class Storage:
                     preferred_mode,
                     output_dir,
                     priority,
+                    source_saved_file_id,
+                    delete_saved_on_complete,
                     status
-                ) VALUES (?, ?, ?, ?, ?, ?, 'queued')
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')
                 """,
-                (file_id, title, detail_url, preferred_mode, output_dir, priority),
+                (
+                    file_id,
+                    title,
+                    detail_url,
+                    preferred_mode,
+                    output_dir,
+                    priority,
+                    source_saved_file_id,
+                    1 if delete_saved_on_complete else 0,
+                ),
             )
             job_id = cursor.lastrowid
 
@@ -821,6 +836,8 @@ class Storage:
             "status": row["status"],
             "priority": row["priority"],
             "attempt_count": row["attempt_count"],
+            "source_saved_file_id": row["source_saved_file_id"],
+            "delete_saved_on_complete": bool(row["delete_saved_on_complete"]),
             "save_path": row["save_path"],
             "working_path": row["working_path"],
             "final_url": row["final_url"],
@@ -851,6 +868,20 @@ class Storage:
             table="download_jobs",
             column="working_path",
             definition="TEXT",
+        )
+
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="source_saved_file_id",
+            definition="INTEGER",
+        )
+
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="delete_saved_on_complete",
+            definition="INTEGER NOT NULL DEFAULT 0",
         )
 
         self._ensure_column(

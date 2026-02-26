@@ -18,6 +18,7 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - SQLite persistence for:
   - search history
   - saved picks (upsert by file ID)
+  - saved-pick driven download jobs (optional auto-remove save on successful download)
 - Background downloader queue worker:
   - queued/running/done/failed/canceled states
   - progress tracking
@@ -74,6 +75,7 @@ docker compose up -d --build
 
 ## API endpoints
 
+- `GET /saved` (Saved Picks page)
 - `GET /api/search?query=matrix&category=video&sort=newest&language=SK&language_scope=audio&strict_dubbing=true&release_year=2003&max_results=100`
 - `GET /api/search?category=video&language=SK&language_scope=audio&release_year=2003&max_results=100` (no query)
 - `GET /api/detail?detail_url=https://sdilej.cz/15947667/scoob-2020-sk-.mkv&preflight=true`
@@ -87,6 +89,7 @@ docker compose up -d --build
 - `DELETE /api/account` (clear credentials)
 - `GET /api/downloads?limit=200&status=queued`
 - `POST /api/downloads` (enqueue download job)
+  - supports `source_saved_file_id` + `delete_saved_on_complete`
 - `POST /api/downloads/{id}/cancel`
 - `POST /api/downloads/{id}/cancel-complete`
 - `POST /api/downloads/{id}/retry`
