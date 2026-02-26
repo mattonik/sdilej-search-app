@@ -71,6 +71,30 @@ docker compose up --build
 
 Open: `http://localhost:8080`
 
+## Publish Image To GitHub (GHCR)
+
+This repo now includes workflow:
+- `.github/workflows/docker-publish.yml`
+
+It publishes multi-arch image (`linux/amd64`, `linux/arm64`) to:
+- `ghcr.io/<github-user-or-org>/<repo-name>`
+
+When it runs:
+- push to `main` or `master`
+- push tag `v*` (for example `v1.0.0`)
+- manual run from Actions (`workflow_dispatch`)
+
+Common tags:
+- `latest` (default branch)
+- branch/tag names
+- `sha-<short-commit>`
+
+Example on Raspberry Pi:
+
+```bash
+docker pull ghcr.io/<owner>/<repo>:latest
+```
+
 Persistent data is stored via Compose mounts:
 - `/config/app.db` inside container (DB + settings)
 - `/media` inside container (downloaded files + partial `.part` files)

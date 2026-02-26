@@ -3,3 +3,6 @@ __pycache__/
 *.pyo
 *.pyd
 data/*.db
+downloads/
+.tmp_auth_test/
+*.log
