@@ -622,10 +622,8 @@ class Storage:
                     started_at = NULL,
                     finished_at = NULL,
                     save_path = NULL,
-                    working_path = NULL,
                     final_url = NULL,
                     bytes_total = NULL,
-                    bytes_downloaded = 0,
                     speed_bps = NULL,
                     delete_partial_on_cancel = 0,
                     error = NULL
@@ -634,6 +632,26 @@ class Storage:
                 (job_id,),
             )
             return cursor.rowcount > 0
+
+    def recover_download_queue_after_restart(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    status = 'queued',
+                    finished_at = NULL,
+                    speed_bps = NULL,
+                    delete_partial_on_cancel = 0,
+                    error = CASE
+                        WHEN error IS NULL OR error = '' THEN 'Recovered after app restart; queued again.'
+                        ELSE error || ' | Recovered after app restart; queued again.'
+                    END,
+                    updated_at = datetime('now')
+                WHERE status = 'running'
+                """
+            )
+            return cursor.rowcount
 
     def should_delete_partial_on_cancel(self, job_id: int) -> bool:
         with self._connect() as conn:

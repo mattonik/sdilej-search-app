@@ -142,8 +142,13 @@ class DownloadWorker:
                 fallback_title=probe.title,
                 fallback_url=probe.detail_url,
             )
-            final_path = self._resolve_unique_path(output_dir / filename)
-            part_path = final_path.with_suffix(final_path.suffix + ".part")
+            working_path = str(job.get("working_path") or "").strip()
+            if working_path:
+                part_path = Path(working_path).expanduser()
+                final_path = part_path.with_suffix("")
+            else:
+                final_path = self._resolve_unique_path(output_dir / filename)
+                part_path = final_path.with_suffix(final_path.suffix + ".part")
             self.storage.set_download_working_path(job_id, str(part_path))
 
             bytes_total = self._parse_content_length(response.headers.get("Content-Length"))

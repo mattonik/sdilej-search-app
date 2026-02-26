@@ -95,6 +95,7 @@ class ClearDownloadsPayload(BaseModel):
 @app.on_event("startup")
 def on_startup() -> None:
     storage.init_db()
+    storage.recover_download_queue_after_restart()
     worker.start()
 
 

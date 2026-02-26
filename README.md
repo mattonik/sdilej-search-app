@@ -23,6 +23,7 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
   - progress tracking
   - premium-first mode with strict premium-link validation
   - partial `.part` resume support (when server supports byte ranges)
+  - startup recovery: `running` jobs are automatically re-queued after restart/rebuild
   - cancel + retry
   - queue controls: move-to-top, custom priority, clear finished jobs
   - account credentials (for subscription/premium flow)
@@ -55,7 +56,9 @@ docker compose up --build
 
 Open: `http://localhost:8080`
 
-Persistent data is stored in `./data/app.db` via Compose volume mount.
+Persistent data is stored via Compose volume mounts:
+- `./data/app.db` (queue/job DB + settings)
+- `./downloads` (downloaded files + partial `.part` files for resume)
 
 ## Raspberry Pi deployment (arm64)
 
