@@ -154,6 +154,7 @@ class TvSeasonSearchPayload(BaseModel):
     show_id: int = Field(ge=1)
     show_name: str = Field(min_length=1, max_length=200)
     seasons: list[int] = Field(default_factory=list)
+    episodes_by_season: dict[str, list[int]] = Field(default_factory=dict)
     category: Category = "video"
     language: str | None = Field(default=None, max_length=32)
     language_scope: LanguageScope = "any"
@@ -694,9 +695,37 @@ def api_tv_search(payload: TvSeasonSearchPayload):
         if not selected_seasons:
             return JSONResponse(status_code=400, content={"error": "Select at least one valid season."})
 
+        selected_episode_map: dict[int, set[int]] = {}
+        for raw_season, raw_numbers in (payload.episodes_by_season or {}).items():
+            try:
+                season_number = int(raw_season)
+            except (TypeError, ValueError):
+                continue
+            if season_number < 1:
+                continue
+            cleaned_numbers: set[int] = set()
+            for raw_number in raw_numbers or []:
+                try:
+                    episode_number = int(raw_number)
+                except (TypeError, ValueError):
+                    continue
+                if episode_number >= 1:
+                    cleaned_numbers.add(episode_number)
+            selected_episode_map[season_number] = cleaned_numbers
+
+        for season_number in selected_seasons:
+            if season_number in selected_episode_map and not selected_episode_map[season_number]:
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": f"Select at least one episode for season {season_number}."},
+                )
+
         grouped_seasons: list[dict] = []
         for season_number in selected_seasons:
             season_episodes = sorted(season_map.get(season_number, []), key=lambda ep: ep.number)
+            season_episode_filter = selected_episode_map.get(season_number)
+            if season_episode_filter is not None:
+                season_episodes = [episode for episode in season_episodes if episode.number in season_episode_filter]
             grouped_episodes: list[dict] = []
 
             for episode in season_episodes:

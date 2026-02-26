@@ -170,7 +170,7 @@ def resolve_destination_subpath(
         base_route = _normalize_route(library_paths.get(key) or _DEFAULT_LIBRARY_PATHS[key])
         series = _sanitize_segment(classification.series_name or "unknown-series")
         season_number = classification.season_number if classification.season_number is not None else 1
-        season = f"season{max(1, season_number):02d}"
+        season = f"S{max(1, season_number):02d}"
         return str(PurePosixPath(base_route) / series / season)
 
     return _normalize_route(library_paths.get("unsorted_dir") or _DEFAULT_LIBRARY_PATHS["unsorted_dir"])

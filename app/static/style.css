@@ -874,20 +874,84 @@ a {
 
 .tv-season-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 0.5rem;
+}
+
+.tv-season-select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafcfd;
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.45rem;
 }
 
 .tv-season-item {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.45rem 0.55rem;
+  padding: 0.2rem 0.15rem;
   font-size: 0.88rem;
   color: var(--text);
-  background: #fafcfd;
+}
+
+.tv-episode-mode-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tv-episode-mode-label select {
+  min-height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.84rem;
+  color: var(--text);
+  background: #fff;
+}
+
+.tv-episode-picker {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 0.45rem;
+  display: grid;
+  gap: 0.45rem;
+  background: #fff;
+}
+
+.tv-episode-picker-toolbar {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.tv-episode-picker-toolbar button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f4f7fa;
+  color: var(--text);
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.tv-episode-grid {
+  display: grid;
+  gap: 0.3rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.tv-episode-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.25;
 }
 
 .tv-actions {

@@ -8,6 +8,7 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - TV show mode:
   - lookup show metadata + season/episode list via TVmaze (no API key)
   - select seasons to search
+  - per-season mode: search all episodes or only selected episodes
   - grouped results by season/episode (`SxxExx`)
   - multi-pattern episode queries (`SxxExx`, `x`, `Season N Episode M`)
   - result ranking: language-priority first (if language set), then larger file size
@@ -36,9 +37,9 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
   - duplicate protection when queueing by `file_id`/`detail_url`
   - media-aware routing for new jobs:
     - `movie` -> `/movies`
-    - `tv` -> `/tv/{series}/seasonNN`
+    - `tv` -> `/tv/{series}/SNN`
     - `kids + movie` -> `/kids/movies`
-    - `kids + tv` -> `/kids/tv/{series}/seasonNN`
+    - `kids + tv` -> `/kids/tv/{series}/SNN`
   - uncertain title classification can require user confirmation before enqueue
   - queue controls: move-to-top, custom priority, clear finished jobs
   - account credentials (for subscription/premium flow)
@@ -76,7 +77,7 @@ Open: `http://localhost:8080`
 This repo now includes workflow:
 - `.github/workflows/docker-publish.yml`
 
-It publishes multi-arch image (`linux/amd64`, `linux/arm64`) to:
+It publishes ARM image (`linux/arm64`) to:
 - `ghcr.io/<github-user-or-org>/<repo-name>`
 
 When it runs:

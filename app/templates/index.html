@@ -619,7 +619,10 @@
       };
 
       const updateTvSearchButtonState = () => {
-        const canSearch = Boolean(tvLookupState?.show?.id) && selectedTvSeasons().length > 0;
+        const canSearch =
+          Boolean(tvLookupState?.show?.id) &&
+          selectedTvSeasons().length > 0 &&
+          tvEpisodeSelectionIsValid();
         tvSearchBtn.disabled = !canSearch;
       };
 
@@ -717,6 +720,11 @@
           setTvStatus("Select at least one season.", "error");
           return;
         }
+        if (!tvEpisodeSelectionIsValid()) {
+          setTvStatus("For seasons in 'Selected episodes' mode, choose at least one episode.", "error");
+          return;
+        }
+        const episodesBySeason = selectedTvEpisodesBySeason();
 
         setTvStatus("Searching selected seasons...", "neutral");
         tvResults.innerHTML = "";
@@ -730,6 +738,7 @@
               show_id: tvLookupState.show.id,
               show_name: tvLookupState.show.name || tvShowName.value.trim(),
               seasons,
+              episodes_by_season: episodesBySeason,
               category: categorySelect.value || "video",
               language: languageInput.value.trim() || null,
               language_scope: languageScopeSelect.value || "any",
@@ -765,6 +774,41 @@
           .map((el) => Number(el.value))
           .filter((value) => Number.isFinite(value) && value > 0);
 
+      const selectedTvEpisodesBySeason = () => {
+        const selected = {};
+        tvSeasonPicker.querySelectorAll(".tv-season-select").forEach((row) => {
+          const seasonNumber = Number(row.dataset.seasonNumber || 0);
+          if (!Number.isFinite(seasonNumber) || seasonNumber < 1) return;
+          const seasonChecked = Boolean(row.querySelector("input.tv-season-check")?.checked);
+          if (!seasonChecked) return;
+          const mode = row.querySelector("select.tv-episode-mode")?.value || "all";
+          if (mode !== "selected") return;
+          const episodes = Array.from(row.querySelectorAll("input.tv-episode-check:checked"))
+            .map((el) => Number(el.value))
+            .filter((value) => Number.isFinite(value) && value > 0)
+            .sort((a, b) => a - b);
+          selected[String(seasonNumber)] = Array.from(new Set(episodes));
+        });
+        return selected;
+      };
+
+      const tvEpisodeSelectionIsValid = () => {
+        const selectedSeasons = selectedTvSeasons();
+        if (!selectedSeasons.length) return false;
+        let valid = true;
+        tvSeasonPicker.querySelectorAll(".tv-season-select").forEach((row) => {
+          const seasonChecked = Boolean(row.querySelector("input.tv-season-check")?.checked);
+          if (!seasonChecked) return;
+          const mode = row.querySelector("select.tv-episode-mode")?.value || "all";
+          if (mode !== "selected") return;
+          const selectedEpisodeCount = row.querySelectorAll("input.tv-episode-check:checked").length;
+          if (selectedEpisodeCount < 1) {
+            valid = false;
+          }
+        });
+        return valid;
+      };
+
       const renderTvSeasonPicker = (seasons) => {
         if (!Array.isArray(seasons) || seasons.length === 0) {
           tvSeasonPicker.innerHTML = "<div class='download-empty'>No seasons found.</div>";
@@ -780,33 +824,106 @@
             ${seasons
               .map(
                 (season) => `
-                  <label class="tv-season-item">
-                    <input class="tv-season-check" type="checkbox" value="${season.season_number}" />
-                    Season ${season.season_number} (${season.episode_count} episodes)
-                  </label>
+                  <section class="tv-season-select" data-season-number="${season.season_number}">
+                    <label class="tv-season-item">
+                      <input class="tv-season-check" type="checkbox" value="${season.season_number}" />
+                      Season ${season.season_number} (${season.episode_count} episodes)
+                    </label>
+                    <label class="tv-episode-mode-label">
+                      Search mode
+                      <select class="tv-episode-mode">
+                        <option value="all" selected>All episodes in season</option>
+                        <option value="selected">Selected episodes only</option>
+                      </select>
+                    </label>
+                    <div class="tv-episode-picker hidden">
+                      <div class="tv-episode-picker-toolbar">
+                        <button type="button" class="tv-episode-select-all">All episodes</button>
+                        <button type="button" class="tv-episode-select-none">Clear</button>
+                      </div>
+                      <div class="tv-episode-grid">
+                        ${(season.episodes || [])
+                          .map(
+                            (episode) => `
+                              <label class="tv-episode-item">
+                                <input class="tv-episode-check" type="checkbox" value="${episode.number}" />
+                                ${esc(episode.episode_code || `E${String(episode.number || "").padStart(2, "0")}`)} ${esc(episode.name || "")}
+                              </label>
+                            `
+                          )
+                          .join("")}
+                      </div>
+                    </div>
+                  </section>
                 `
               )
               .join("")}
           </div>
         `;
 
+        const updateSeasonRowsState = () => {
+          tvSeasonPicker.querySelectorAll(".tv-season-select").forEach((row) => {
+            const seasonChecked = Boolean(row.querySelector("input.tv-season-check")?.checked);
+            const mode = row.querySelector("select.tv-episode-mode")?.value || "all";
+            const picker = row.querySelector(".tv-episode-picker");
+            picker?.classList.toggle("hidden", !(seasonChecked && mode === "selected"));
+          });
+        };
+
         document.getElementById("tvSelectAllSeasons")?.addEventListener("click", () => {
           tvSeasonPicker.querySelectorAll("input.tv-season-check").forEach((el) => {
             el.checked = true;
           });
+          updateSeasonRowsState();
           updateTvSearchButtonState();
         });
         document.getElementById("tvSelectNoSeasons")?.addEventListener("click", () => {
           tvSeasonPicker.querySelectorAll("input.tv-season-check").forEach((el) => {
             el.checked = false;
           });
+          updateSeasonRowsState();
           updateTvSearchButtonState();
         });
         tvSeasonPicker.querySelectorAll("input.tv-season-check").forEach((el) => {
           el.addEventListener("change", () => {
+            updateSeasonRowsState();
             updateTvSearchButtonState();
           });
         });
+        tvSeasonPicker.querySelectorAll("select.tv-episode-mode").forEach((el) => {
+          el.addEventListener("change", () => {
+            updateSeasonRowsState();
+            updateTvSearchButtonState();
+          });
+        });
+        tvSeasonPicker.querySelectorAll("input.tv-episode-check").forEach((el) => {
+          el.addEventListener("change", () => {
+            updateTvSearchButtonState();
+          });
+        });
+        tvSeasonPicker.querySelectorAll(".tv-episode-select-all").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            btn
+              .closest(".tv-episode-picker")
+              ?.querySelectorAll("input.tv-episode-check")
+              .forEach((el) => {
+                el.checked = true;
+              });
+            updateTvSearchButtonState();
+          });
+        });
+        tvSeasonPicker.querySelectorAll(".tv-episode-select-none").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            btn
+              .closest(".tv-episode-picker")
+              ?.querySelectorAll("input.tv-episode-check")
+              .forEach((el) => {
+                el.checked = false;
+              });
+            updateTvSearchButtonState();
+          });
+        });
+        updateSeasonRowsState();
         updateTvSearchButtonState();
       };
 
