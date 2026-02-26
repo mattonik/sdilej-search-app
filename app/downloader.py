@@ -144,6 +144,7 @@ class DownloadWorker:
             )
             final_path = self._resolve_unique_path(output_dir / filename)
             part_path = final_path.with_suffix(final_path.suffix + ".part")
+            self.storage.set_download_working_path(job_id, str(part_path))
 
             bytes_total = self._parse_content_length(response.headers.get("Content-Length"))
             bytes_downloaded = 0
@@ -254,11 +255,24 @@ class DownloadWorker:
             )
 
         except DownloadCanceledError as exc:
+            clear_working_path = False
+            if self.storage.should_delete_partial_on_cancel(job_id):
+                if "part_path" in locals() and part_path.exists():
+                    try:
+                        part_path.unlink()
+                    except OSError:
+                        pass
+                clear_working_path = True
+                error_text = "Job canceled completely; partial data removed."
+            else:
+                error_text = str(exc)
+
             self.storage.fail_download_job(
                 job_id,
-                error=str(exc),
+                error=error_text,
                 final_url=locals().get("final_url"),
                 status_code=locals().get("status_code"),
+                clear_working_path=clear_working_path,
             )
         except Exception as exc:  # noqa: BLE001
             self.storage.fail_download_job(

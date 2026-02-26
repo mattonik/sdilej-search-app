@@ -387,10 +387,21 @@ def api_downloads_enqueue(payload: EnqueueDownloadPayload):
 @app.post("/api/downloads/{job_id}/cancel")
 def api_downloads_cancel(job_id: int):
     try:
-        changed = storage.cancel_download_job(job_id)
+        changed = storage.cancel_download_job(job_id, complete=False)
         if not changed:
             return JSONResponse(status_code=404, content={"error": "Job not found or not cancelable."})
         return JSONResponse({"canceled": True, "job_id": job_id})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.post("/api/downloads/{job_id}/cancel-complete")
+def api_downloads_cancel_complete(job_id: int):
+    try:
+        changed = storage.cancel_download_job(job_id, complete=True)
+        if not changed:
+            return JSONResponse(status_code=404, content={"error": "Job not found or not cancelable."})
+        return JSONResponse({"canceled": True, "complete": True, "job_id": job_id})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
@@ -402,6 +413,19 @@ def api_downloads_retry(job_id: int):
         if not changed:
             return JSONResponse(status_code=404, content={"error": "Job not found or not retryable."})
         return JSONResponse({"retried": True, "job_id": job_id})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.delete("/api/downloads/{job_id}")
+def api_downloads_delete(job_id: int, with_data: bool = Query(default=False)):
+    try:
+        result = storage.delete_download_job(job_id, with_data=with_data)
+        if result is None:
+            return JSONResponse(status_code=404, content={"error": "Job not found."})
+        return JSONResponse(result)
+    except ValueError as exc:
+        return JSONResponse(status_code=409, content={"error": str(exc)})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse(status_code=500, content={"error": str(exc)})
 

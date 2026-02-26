@@ -85,7 +85,10 @@ docker compose up -d --build
 - `GET /api/downloads?limit=200&status=queued`
 - `POST /api/downloads` (enqueue download job)
 - `POST /api/downloads/{id}/cancel`
+- `POST /api/downloads/{id}/cancel-complete`
 - `POST /api/downloads/{id}/retry`
+- `DELETE /api/downloads/{id}`
+- `DELETE /api/downloads/{id}?with_data=true`
 - `POST /api/downloads/{id}/priority`
 - `POST /api/downloads/{id}/top`
 - `POST /api/downloads/clear`

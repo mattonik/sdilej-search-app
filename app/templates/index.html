@@ -368,6 +368,7 @@
             const canCancel = job.status === "queued" || job.status === "running";
             const canRetry = job.status === "failed" || job.status === "canceled";
             const canMoveTop = job.status === "queued";
+            const canRemove = job.status !== "running";
             const title = job.title || job.detail_url;
             const eta = formatEta(done, total, job.speed_bps);
             const savePath = job.save_path ? `<div><strong>Saved:</strong> <code>${esc(job.save_path)}</code></div>` : "";
@@ -394,9 +395,12 @@
                 ${error}
                 <div class="job-actions">
                   ${canCancel ? `<button data-action="cancel" data-id="${job.id}">Cancel</button>` : ""}
+                  ${canCancel ? `<button data-action="cancel_complete" data-id="${job.id}">Cancel completely</button>` : ""}
                   ${canRetry ? `<button data-action="retry" data-id="${job.id}">Retry</button>` : ""}
                   ${canMoveTop ? `<button data-action="top" data-id="${job.id}">Move top</button>` : ""}
                   ${(job.status === "queued" || job.status === "running") ? `<button data-action="priority" data-id="${job.id}" data-priority="${job.priority}">Set priority</button>` : ""}
+                  ${canRemove ? `<button data-action="remove" data-id="${job.id}">Remove job</button>` : ""}
+                  ${canRemove ? `<button data-action="remove_data" data-id="${job.id}">Remove job + data</button>` : ""}
                 </div>
               </article>
             `;
@@ -413,12 +417,32 @@
               if (action === "cancel") {
                 await fetch(`/api/downloads/${jobId}/cancel`, { method: "POST" });
                 setDownloadStatus(`Canceled job #${jobId}.`, "neutral");
+              } else if (action === "cancel_complete") {
+                await fetch(`/api/downloads/${jobId}/cancel-complete`, { method: "POST" });
+                setDownloadStatus(`Canceled job #${jobId} completely.`, "ok");
               } else if (action === "retry") {
                 await fetch(`/api/downloads/${jobId}/retry`, { method: "POST" });
                 setDownloadStatus(`Retried job #${jobId}.`, "ok");
               } else if (action === "top") {
                 await fetch(`/api/downloads/${jobId}/top`, { method: "POST" });
                 setDownloadStatus(`Moved job #${jobId} to top.`, "ok");
+              } else if (action === "remove") {
+                const res = await fetch(`/api/downloads/${jobId}`, { method: "DELETE" });
+                const data = await res.json();
+                if (!res.ok) {
+                  setDownloadStatus(data.error || "Failed to remove job.", "error");
+                  return;
+                }
+                setDownloadStatus(`Removed job #${jobId}.`, "ok");
+              } else if (action === "remove_data") {
+                const res = await fetch(`/api/downloads/${jobId}?with_data=true`, { method: "DELETE" });
+                const data = await res.json();
+                if (!res.ok) {
+                  setDownloadStatus(data.error || "Failed to remove job + data.", "error");
+                  return;
+                }
+                const deletedCount = Array.isArray(data.deleted_paths) ? data.deleted_paths.length : 0;
+                setDownloadStatus(`Removed job #${jobId} and deleted ${deletedCount} file(s).`, "ok");
               } else if (action === "priority") {
                 const current = Number(btn.dataset.priority || "0");
                 const raw = window.prompt("Set priority (-1000..1000):", String(current));

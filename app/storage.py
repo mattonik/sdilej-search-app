@@ -80,10 +80,12 @@ class Storage:
                     priority INTEGER NOT NULL DEFAULT 0,
                     attempt_count INTEGER NOT NULL DEFAULT 0,
                     save_path TEXT,
+                    working_path TEXT,
                     final_url TEXT,
                     bytes_total INTEGER,
                     bytes_downloaded INTEGER NOT NULL DEFAULT 0,
                     speed_bps REAL,
+                    delete_partial_on_cancel INTEGER NOT NULL DEFAULT 0,
                     error TEXT
                 );
 
@@ -482,6 +484,19 @@ class Storage:
                 ),
             )
 
+    def set_download_working_path(self, job_id: int, working_path: str | None) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    working_path = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (working_path, job_id),
+            )
+
     def complete_download_job(
         self,
         job_id: int,
@@ -498,10 +513,12 @@ class Storage:
                 SET
                     status = 'done',
                     save_path = ?,
+                    working_path = NULL,
                     final_url = COALESCE(?, final_url),
                     bytes_total = ?,
                     bytes_downloaded = ?,
                     speed_bps = NULL,
+                    delete_partial_on_cancel = 0,
                     finished_at = datetime('now'),
                     updated_at = datetime('now')
                 WHERE id = ?
@@ -534,6 +551,7 @@ class Storage:
         error: str,
         final_url: str | None,
         status_code: int | None,
+        clear_working_path: bool = False,
     ) -> None:
         with self._connect() as conn:
             conn.execute(
@@ -543,12 +561,20 @@ class Storage:
                     status = CASE WHEN status = 'canceled' THEN 'canceled' ELSE 'failed' END,
                     error = ?,
                     final_url = COALESCE(?, final_url),
+                    working_path = CASE WHEN ? THEN NULL ELSE working_path END,
                     speed_bps = NULL,
+                    delete_partial_on_cancel = CASE WHEN ? THEN 0 ELSE delete_partial_on_cancel END,
                     finished_at = CASE WHEN status = 'canceled' THEN finished_at ELSE datetime('now') END,
                     updated_at = datetime('now')
                 WHERE id = ?
                 """,
-                (error, final_url, job_id),
+                (
+                    error,
+                    final_url,
+                    1 if clear_working_path else 0,
+                    1 if clear_working_path else 0,
+                    job_id,
+                ),
             )
             conn.execute(
                 """
@@ -569,18 +595,19 @@ class Storage:
                 (status_code, final_url, error, job_id),
             )
 
-    def cancel_download_job(self, job_id: int) -> bool:
+    def cancel_download_job(self, job_id: int, *, complete: bool = False) -> bool:
         with self._connect() as conn:
             cursor = conn.execute(
                 """
                 UPDATE download_jobs
                 SET
                     status = 'canceled',
+                    delete_partial_on_cancel = CASE WHEN ? THEN 1 ELSE delete_partial_on_cancel END,
                     updated_at = datetime('now'),
                     finished_at = CASE WHEN status IN ('queued', 'running') THEN datetime('now') ELSE finished_at END
                 WHERE id = ? AND status IN ('queued', 'running')
                 """,
-                (job_id,),
+                (1 if complete else 0, job_id),
             )
             return cursor.rowcount > 0
 
@@ -595,16 +622,28 @@ class Storage:
                     started_at = NULL,
                     finished_at = NULL,
                     save_path = NULL,
+                    working_path = NULL,
                     final_url = NULL,
                     bytes_total = NULL,
                     bytes_downloaded = 0,
                     speed_bps = NULL,
+                    delete_partial_on_cancel = 0,
                     error = NULL
                 WHERE id = ? AND status IN ('failed', 'canceled')
                 """,
                 (job_id,),
             )
             return cursor.rowcount > 0
+
+    def should_delete_partial_on_cancel(self, job_id: int) -> bool:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT delete_partial_on_cancel FROM download_jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+        if row is None:
+            return False
+        return bool(row["delete_partial_on_cancel"])
 
     def set_download_priority(self, job_id: int, priority: int) -> bool:
         with self._connect() as conn:
@@ -663,6 +702,51 @@ class Storage:
             )
             return cursor.rowcount
 
+    def delete_download_job(self, job_id: int, *, with_data: bool = False) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM download_jobs WHERE id = ?", (job_id,)).fetchone()
+            if row is None:
+                return None
+
+            if row["status"] == "running":
+                raise ValueError("Cannot remove a running job. Cancel it first.")
+
+            conn.execute("DELETE FROM download_attempts WHERE job_id = ?", (job_id,))
+            conn.execute("DELETE FROM download_jobs WHERE id = ?", (job_id,))
+
+        deleted_paths: list[str] = []
+        missing_paths: list[str] = []
+        path_errors: list[str] = []
+
+        if with_data:
+            seen: set[str] = set()
+            for candidate in (row["save_path"], row["working_path"]):
+                if not candidate:
+                    continue
+                path_value = str(candidate)
+                if path_value in seen:
+                    continue
+                seen.add(path_value)
+
+                try:
+                    file_path = Path(path_value)
+                    if file_path.exists():
+                        file_path.unlink()
+                        deleted_paths.append(path_value)
+                    else:
+                        missing_paths.append(path_value)
+                except Exception as exc:  # noqa: BLE001
+                    path_errors.append(f"{path_value}: {exc}")
+
+        return {
+            "deleted": True,
+            "job_id": job_id,
+            "with_data": with_data,
+            "deleted_paths": deleted_paths,
+            "missing_paths": missing_paths,
+            "path_errors": path_errors,
+        }
+
     def is_job_canceled(self, job_id: int) -> bool:
         with self._connect() as conn:
             row = conn.execute("SELECT status FROM download_jobs WHERE id = ?", (job_id,)).fetchone()
@@ -720,10 +804,12 @@ class Storage:
             "priority": row["priority"],
             "attempt_count": row["attempt_count"],
             "save_path": row["save_path"],
+            "working_path": row["working_path"],
             "final_url": row["final_url"],
             "bytes_total": row["bytes_total"],
             "bytes_downloaded": row["bytes_downloaded"],
             "speed_bps": row["speed_bps"],
+            "delete_partial_on_cancel": bool(row["delete_partial_on_cancel"]),
             "error": row["error"],
         }
 
@@ -740,6 +826,20 @@ class Storage:
             table="saved_candidates",
             column="updated_at",
             definition="TEXT NOT NULL DEFAULT (datetime('now'))",
+        )
+
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="working_path",
+            definition="TEXT",
+        )
+
+        self._ensure_column(
+            conn,
+            table="download_jobs",
+            column="delete_partial_on_cancel",
+            definition="INTEGER NOT NULL DEFAULT 0",
         )
 
     def _ensure_column(
