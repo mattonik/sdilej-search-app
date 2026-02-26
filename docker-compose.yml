@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    environment:
+      - APP_DB_PATH=/config/app.db
+      - DOWNLOAD_DIR=/media
     volumes:
-      - ./data:/app/data
-      - ./downloads:/app/downloads
+      - ${SDILEJ_CONFIG_DIR:-./data}:/config
+      - ${SDILEJ_MEDIA_DIR:-./downloads}:/media

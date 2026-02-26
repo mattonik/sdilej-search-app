@@ -5,6 +5,12 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 ## Features
 
 - Search by keyword
+- TV show mode:
+  - lookup show metadata + season/episode list via TVmaze (no API key)
+  - select seasons to search
+  - grouped results by season/episode (`SxxExx`)
+  - multi-pattern episode queries (`SxxExx`, `x`, `Season N Episode M`)
+  - result ranking: language-priority first (if language set), then larger file size
 - Category filters: all, video, audio, archive, image
 - Sort options: relevance, most downloaded, newest, largest, smallest
 - Language-aware filtering with filename heuristics (e.g. `SK`, `(sk)`, `CZ EN SK`, `SKtit`, `SK dabing`)
@@ -65,9 +71,24 @@ docker compose up --build
 
 Open: `http://localhost:8080`
 
-Persistent data is stored via Compose volume mounts:
-- `./data/app.db` (queue/job DB + settings)
-- `./downloads` (downloaded files + partial `.part` files for resume)
+Persistent data is stored via Compose mounts:
+- `/config/app.db` inside container (DB + settings)
+- `/media` inside container (downloaded files + partial `.part` files)
+
+Host paths are configurable via env vars in `docker-compose.yml`:
+- `SDILEJ_CONFIG_DIR` -> mapped to `/config`
+- `SDILEJ_MEDIA_DIR` -> mapped to `/media`
+
+Defaults:
+- `SDILEJ_CONFIG_DIR=./data`
+- `SDILEJ_MEDIA_DIR=./downloads`
+
+Example for your server-style layout (`.env` file next to `docker-compose.yml`):
+
+```bash
+SDILEJ_CONFIG_DIR=/srv/appdata/sdilej-search
+SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
+```
 
 ## Raspberry Pi deployment (arm64)
 
@@ -79,6 +100,13 @@ Persistent data is stored via Compose volume mounts:
 docker compose up -d --build
 ```
 
+If you use host storage paths, set `.env` first (example):
+
+```bash
+SDILEJ_CONFIG_DIR=/srv/appdata/sdilej-search
+SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
+```
+
 4. Optional auto-start is already configured via `restart: unless-stopped`.
 
 ## API endpoints
@@ -88,6 +116,8 @@ docker compose up -d --build
 - `GET /api/search?category=video&language=SK&language_scope=audio&release_year=2003&max_results=100` (no query)
 - `GET /api/detail?detail_url=https://sdilej.cz/15947667/scoob-2020-sk-.mkv&preflight=true`
 - `GET /api/autocomplete?q=mat&limit=10`
+- `POST /api/tv/lookup` (`show_name`) returns show + seasons/episodes
+- `POST /api/tv/search` (`show_id`, `show_name`, `seasons`, optional current filters) returns grouped episode results
 - `GET /api/history?limit=50`
 - `GET /api/saved?limit=200`
 - `POST /api/saved` (upsert saved pick)

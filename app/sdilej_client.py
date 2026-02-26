@@ -337,6 +337,45 @@ class SdilejClient:
             preflight_accept_ranges=preflight_accept_ranges,
         )
 
+    def normalize_language(self, language: str | None) -> str | None:
+        return self._normalize_language_input(language)
+
+    def language_match_priority(
+        self,
+        *,
+        title: str,
+        language: str | None,
+        scope: LanguageScope = "any",
+        strict_dubbing: bool = False,
+    ) -> int:
+        normalized_language = self._normalize_language_input(language)
+        if normalized_language is None:
+            return 0
+
+        match = self._match_language(title, normalized_language)
+        if not match.matched:
+            return 0
+
+        if strict_dubbing:
+            return 30 if match.is_dub else 0
+
+        if scope == "subtitles":
+            return 30 if match.is_subtitle else 0
+
+        if scope == "audio":
+            if match.is_dub:
+                return 30
+            if not match.is_subtitle:
+                return 20
+            return 5
+
+        # any
+        if match.is_dub:
+            return 30
+        if match.is_subtitle:
+            return 15
+        return 20
+
     def _resolve_slug(self, query: str) -> str:
         response = self.session.get(
             SEARCH_ENTRYPOINT,

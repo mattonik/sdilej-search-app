@@ -188,6 +188,7 @@ class DownloadWorker:
                 content_disposition=response.headers.get("Content-Disposition"),
                 fallback_title=probe.title,
                 fallback_url=probe.detail_url,
+                job=job,
             )
             working_path = str(job.get("working_path") or "").strip()
             if working_path:
@@ -425,7 +426,9 @@ class DownloadWorker:
         content_disposition: str | None,
         fallback_title: str | None,
         fallback_url: str,
+        job: dict | None = None,
     ) -> str:
+        raw_filename: str
         if content_disposition:
             match = _FILENAME_RE.search(content_disposition)
             if match:
@@ -433,13 +436,55 @@ class DownloadWorker:
                 plain = match.group(2)
                 value = unquote(encoded) if encoded else plain
                 if value:
-                    return self._sanitize_filename(value)
+                    raw_filename = self._sanitize_filename(value)
+                    return self._normalize_tv_filename(raw_filename, fallback_title=fallback_title, job=job)
 
         if fallback_title:
-            return self._sanitize_filename(fallback_title)
+            raw_filename = self._sanitize_filename(fallback_title)
+            return self._normalize_tv_filename(raw_filename, fallback_title=fallback_title, job=job)
 
         path_name = Path(urlparse(fallback_url).path).name or "download.bin"
-        return self._sanitize_filename(path_name)
+        raw_filename = self._sanitize_filename(path_name)
+        return self._normalize_tv_filename(raw_filename, fallback_title=fallback_title, job=job)
+
+    def _normalize_tv_filename(self, raw_filename: str, *, fallback_title: str | None, job: dict | None) -> str:
+        if not job:
+            return raw_filename
+
+        media_kind = str(job.get("media_kind") or "").lower().strip()
+        if media_kind != "tv":
+            return raw_filename
+
+        series_name = str(job.get("series_name") or "").strip()
+        if not series_name:
+            return raw_filename
+
+        season_raw = job.get("season_number")
+        episode_raw = job.get("episode_number")
+        try:
+            season_number = int(season_raw) if season_raw is not None else None
+        except (TypeError, ValueError):
+            season_number = None
+        try:
+            episode_number = int(episode_raw) if episode_raw is not None else None
+        except (TypeError, ValueError):
+            episode_number = None
+
+        if season_number is None or season_number < 1:
+            return raw_filename
+
+        ext = Path(raw_filename).suffix
+        if not ext and fallback_title:
+            ext = Path(self._sanitize_filename(fallback_title)).suffix
+        if not ext:
+            ext = ".bin"
+
+        safe_series = self._sanitize_filename(series_name)
+        if episode_number is not None and episode_number > 0:
+            normalized = f"{safe_series} - S{season_number:02d}E{episode_number:02d}{ext}"
+        else:
+            normalized = f"{safe_series} - S{season_number:02d}{ext}"
+        return self._sanitize_filename(normalized)
 
     def _sanitize_filename(self, name: str) -> str:
         cleaned = re.sub(r"[\\/:*?\"<>|]+", "_", name).strip()

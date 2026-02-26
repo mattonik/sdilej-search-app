@@ -341,6 +341,48 @@ a {
   font-size: 0.82rem;
 }
 
+.search-mode-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.85rem;
+}
+
+.search-mode-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.search-mode-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem;
+  background: #f4f7fa;
+  gap: 0.25rem;
+}
+
+.search-mode-switch button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.search-mode-switch button.active {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff;
+}
+
+.search-mode-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .search-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -663,6 +705,291 @@ a {
   border-color: var(--accent-dark);
 }
 
+.tv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.tv-header h2 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.tv-panel {
+  margin-top: 0.7rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.tv-step {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+  background: #fbfdff;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.tv-step h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.tv-active-filters {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f7fafc;
+  color: var(--muted);
+  font-size: 0.84rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.tv-filter-editor {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.45rem 0.55rem;
+}
+
+.tv-filter-editor > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.tv-filter-grid {
+  margin-top: 0.55rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.tv-filter-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.tv-filter-grid input,
+.tv-filter-grid select {
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.65rem;
+  font-size: 0.92rem;
+}
+
+.tv-filter-checkbox {
+  grid-column: 1 / -1;
+}
+
+.tv-filter-checkbox span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  background: #f8fafb;
+}
+
+.tv-filter-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+.tv-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 0.7rem;
+  align-items: end;
+}
+
+.tv-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.tv-controls input,
+.tv-controls button {
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.65rem;
+  font-size: 0.92rem;
+}
+
+.tv-controls button,
+.tv-actions button {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff;
+  border-color: var(--accent-dark);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tv-lookup-info {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.tv-season-picker {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.tv-season-toolbar {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tv-season-toolbar button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f4f7fa;
+  color: var(--text);
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.tv-season-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.5rem;
+}
+
+.tv-season-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: #fafcfd;
+}
+
+.tv-actions {
+  display: flex;
+}
+
+.tv-results {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.tv-season,
+.tv-episode {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.5rem 0.65rem;
+  background: #fcfeff;
+}
+
+.tv-season > summary,
+.tv-episode > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tv-summary-count {
+  color: var(--muted);
+  margin-left: 0.45rem;
+  font-weight: 500;
+  font-size: 0.84rem;
+}
+
+.tv-season-body {
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.tv-query-list {
+  margin-top: 0.45rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tv-result-list {
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.tv-result-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  background: #fff;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.tv-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.tv-result-head a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.tv-result-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.tv-result-submeta {
+  display: flex;
+  gap: 0.7rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.tv-result-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tv-result-actions button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.3rem 0.55rem;
+  background: #f4f7fa;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
 @media (max-width: 560px) {
   .workspace-tabs {
     flex-direction: column;
@@ -715,6 +1042,23 @@ a {
 
   .search-form {
     grid-template-columns: 1fr;
+  }
+
+  .search-mode-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tv-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .tv-result-head {
+    flex-direction: column;
+  }
+
+  .tv-result-meta {
+    white-space: normal;
   }
 
   .queue-dialog-actions button {

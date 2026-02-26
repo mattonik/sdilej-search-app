@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 import os
 import re
 from pathlib import Path
@@ -21,6 +22,7 @@ from .media_routing import (
 from .models import Category, LanguageScope, SortMode
 from .sdilej_client import BASE_URL, SdilejClient, SdilejClientError
 from .storage import Storage
+from .tvmaze_client import TvEpisode, TvMazeClient, TvMazeClientError
 
 BASE_DIR = Path(__file__).resolve().parent
 _FILE_ID_RE = re.compile(r"^/(\d+)/")
@@ -30,6 +32,7 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 client = SdilejClient()
+tv_client = TvMazeClient()
 storage = Storage()
 worker = DownloadWorker(storage=storage)
 
@@ -143,6 +146,21 @@ class UpdateDownloadClassificationPayload(BaseModel):
     episode_number: int | None = Field(default=None, ge=1, le=999)
 
 
+class TvLookupPayload(BaseModel):
+    show_name: str = Field(min_length=1, max_length=200)
+
+
+class TvSeasonSearchPayload(BaseModel):
+    show_id: int = Field(ge=1)
+    show_name: str = Field(min_length=1, max_length=200)
+    seasons: list[int] = Field(default_factory=list)
+    category: Category = "video"
+    language: str | None = Field(default=None, max_length=32)
+    language_scope: LanguageScope = "any"
+    strict_dubbing: bool = False
+    max_results_per_variant: int = Field(default=120, ge=10, le=500)
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     storage.init_db()
@@ -206,6 +224,76 @@ def _normalize_optional_text(value: str | None) -> str | None:
 def _resolve_download_root() -> Path:
     configured_root = os.getenv("DOWNLOAD_DIR", "./downloads")
     return Path(configured_root).expanduser().resolve()
+
+
+def _parse_size_to_bytes(size_text: str | None) -> int:
+    if not size_text:
+        return 0
+    match = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*([KMGTP]?B)", size_text.strip(), re.IGNORECASE)
+    if not match:
+        return 0
+    number_raw = match.group(1).replace(",", ".")
+    unit = match.group(2).upper()
+    try:
+        value = float(number_raw)
+    except ValueError:
+        return 0
+    factors = {
+        "B": 1,
+        "KB": 1024,
+        "MB": 1024**2,
+        "GB": 1024**3,
+        "TB": 1024**4,
+        "PB": 1024**5,
+    }
+    return int(value * factors.get(unit, 1))
+
+
+def _episode_query_variants(show_name: str, season: int, episode: int) -> list[str]:
+    safe_name = show_name.strip()
+    if not safe_name:
+        return []
+    variants = [
+        f"{safe_name} S{season:02d}E{episode:02d}",
+        f"{safe_name} {season}x{episode:02d}",
+        f"{safe_name} Season {season} Episode {episode}",
+    ]
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for variant in variants:
+        key = variant.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(variant)
+    return deduped
+
+
+def _serialize_tv_seasons(episodes: list[TvEpisode]) -> list[dict]:
+    seasons: dict[int, list[dict]] = defaultdict(list)
+    for episode in episodes:
+        seasons[episode.season].append(
+            {
+                "id": episode.id,
+                "season": episode.season,
+                "number": episode.number,
+                "name": episode.name,
+                "airdate": episode.airdate,
+                "episode_code": f"S{episode.season:02d}E{episode.number:02d}",
+            }
+        )
+
+    ordered: list[dict] = []
+    for season_number in sorted(seasons):
+        season_episodes = sorted(seasons[season_number], key=lambda x: x["number"])
+        ordered.append(
+            {
+                "season_number": season_number,
+                "episode_count": len(season_episodes),
+                "episodes": season_episodes,
+            }
+        )
+    return ordered
 
 
 def _build_media_plan(
@@ -561,6 +649,152 @@ def api_media_classify(payload: MediaClassificationPayload):
                 "confirm_on_uncertain": plan["confirm_on_uncertain"],
             }
         )
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.post("/api/tv/lookup")
+def api_tv_lookup(payload: TvLookupPayload):
+    try:
+        show = tv_client.lookup_show(payload.show_name)
+        episodes = tv_client.get_episodes(show.id)
+        seasons = _serialize_tv_seasons(episodes)
+        if not seasons:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"No episode data found for '{show.name}'."},
+            )
+        return JSONResponse(
+            {
+                "show": show.to_dict(),
+                "seasons": seasons,
+                "season_count": len(seasons),
+                "episode_count": sum(item["episode_count"] for item in seasons),
+            }
+        )
+    except TvMazeClientError as exc:
+        return JSONResponse(status_code=404, content={"error": str(exc)})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.post("/api/tv/search")
+def api_tv_search(payload: TvSeasonSearchPayload):
+    try:
+        if not payload.seasons:
+            return JSONResponse(status_code=400, content={"error": "Select at least one season."})
+
+        normalized_language = client.normalize_language(payload.language)
+        episodes = tv_client.get_episodes(payload.show_id)
+        season_map: dict[int, list[TvEpisode]] = defaultdict(list)
+        for episode in episodes:
+            season_map[episode.season].append(episode)
+
+        selected_seasons = sorted({season for season in payload.seasons if season >= 1})
+        if not selected_seasons:
+            return JSONResponse(status_code=400, content={"error": "Select at least one valid season."})
+
+        grouped_seasons: list[dict] = []
+        for season_number in selected_seasons:
+            season_episodes = sorted(season_map.get(season_number, []), key=lambda ep: ep.number)
+            grouped_episodes: list[dict] = []
+
+            for episode in season_episodes:
+                queries = _episode_query_variants(payload.show_name, episode.season, episode.number)
+                aggregated: dict[str, dict] = {}
+                query_errors: list[str] = []
+
+                for query in queries:
+                    try:
+                        search_response = client.search(
+                            query=query,
+                            category=payload.category,
+                            sort="relevance",
+                            language=None,
+                            language_scope=payload.language_scope,
+                            strict_dubbing=False,
+                            release_year=None,
+                            max_results=payload.max_results_per_variant,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        query_errors.append(f"{query}: {exc}")
+                        continue
+
+                    for result in search_response.results:
+                        item = result.to_dict()
+                        language_priority = client.language_match_priority(
+                            title=result.title,
+                            language=normalized_language,
+                            scope=payload.language_scope,
+                            strict_dubbing=payload.strict_dubbing,
+                        )
+                        size_bytes = _parse_size_to_bytes(result.size)
+                        key = f"id:{result.file_id}" if result.file_id is not None else f"url:{result.detail_url}"
+                        if key not in aggregated:
+                            aggregated[key] = {
+                                **item,
+                                "language_priority": language_priority,
+                                "size_bytes": size_bytes,
+                                "query_hits": [query],
+                            }
+                        else:
+                            current = aggregated[key]
+                            current["language_priority"] = max(current.get("language_priority", 0), language_priority)
+                            current["size_bytes"] = max(current.get("size_bytes", 0), size_bytes)
+                            hits = set(current.get("query_hits", []))
+                            hits.add(query)
+                            current["query_hits"] = sorted(hits)
+
+                sorted_results = sorted(
+                    aggregated.values(),
+                    key=lambda item: (
+                        -int(item.get("language_priority") or 0),
+                        -int(item.get("size_bytes") or 0),
+                        str(item.get("title") or "").lower(),
+                    ),
+                )
+                grouped_episodes.append(
+                    {
+                        "episode_code": f"S{episode.season:02d}E{episode.number:02d}",
+                        "season_number": episode.season,
+                        "episode_number": episode.number,
+                        "episode_name": episode.name,
+                        "airdate": episode.airdate,
+                        "query_variants": queries,
+                        "query_errors": query_errors,
+                        "result_count": len(sorted_results),
+                        "results": sorted_results,
+                    }
+                )
+
+            grouped_seasons.append(
+                {
+                    "season_number": season_number,
+                    "episode_count": len(season_episodes),
+                    "episodes": grouped_episodes,
+                    "result_count": sum(item["result_count"] for item in grouped_episodes),
+                }
+            )
+
+        return JSONResponse(
+            {
+                "show": {
+                    "id": payload.show_id,
+                    "name": payload.show_name,
+                    "source": "tvmaze",
+                },
+                "selected_seasons": selected_seasons,
+                "language": normalized_language,
+                "language_scope": payload.language_scope,
+                "strict_dubbing": payload.strict_dubbing,
+                "category": payload.category,
+                "seasons": grouped_seasons,
+            }
+        )
+    except SdilejClientError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    except TvMazeClientError as exc:
+        return JSONResponse(status_code=404, content={"error": str(exc)})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse(status_code=500, content={"error": str(exc)})
 

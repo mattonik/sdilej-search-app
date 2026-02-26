@@ -149,97 +149,173 @@
       </section>
 
       <section class="panel tab-section tab-search">
-        <form method="get" action="/" class="search-form">
-          <label>
-            Query
-            <input
-              id="queryInput"
-              list="suggestions"
-              type="text"
-              name="query"
-              value="{{ query }}"
-              maxlength="200"
-              autocomplete="off"
-              placeholder="Type search term (optional)"
-            />
-            <datalist id="suggestions"></datalist>
-          </label>
+        <div class="search-mode-head">
+          <h2>Search</h2>
+          <div class="search-mode-switch" role="tablist" aria-label="Search mode">
+            <button id="fileSearchModeBtn" type="button" class="active">File Search</button>
+            <button id="tvSearchModeBtn" type="button">TV Show Search</button>
+          </div>
+        </div>
 
-          <label>
-            Category
-            <select name="category">
-              {% for label, value in category_options %}
-                <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </label>
+        <div id="fileSearchPanel" class="search-mode-panel">
+          <form method="get" action="/" class="search-form">
+            <label>
+              Query
+              <input
+                id="queryInput"
+                list="suggestions"
+                type="text"
+                name="query"
+                value="{{ query }}"
+                maxlength="200"
+                autocomplete="off"
+                placeholder="Type search term (optional)"
+              />
+              <datalist id="suggestions"></datalist>
+            </label>
 
-          <label>
-            Sort
-            <select name="sort">
-              {% for label, value in sort_options %}
-                <option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </label>
+            <label>
+              Category
+              <select id="categorySelect" name="category">
+                {% for label, value in category_options %}
+                  <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
 
-          <label>
-            Language
-            <input
-              type="text"
-              name="language"
-              value="{{ language }}"
-              maxlength="32"
-              placeholder="e.g. SK or Slovak"
-            />
-          </label>
+            <label>
+              Sort
+              <select id="sortSelect" name="sort">
+                {% for label, value in sort_options %}
+                  <option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
 
-          <label>
-            Language scope
-            <select name="language_scope">
-              {% for label, value in language_scope_options %}
-                <option value="{{ value }}" {% if language_scope == value %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </label>
+            <label>
+              Language
+              <input
+                id="languageInput"
+                type="text"
+                name="language"
+                value="{{ language }}"
+                maxlength="32"
+                placeholder="e.g. SK or Slovak"
+              />
+            </label>
 
-          <label class="checkbox-field">
-            Strict dubbing
-            <span>
-              <input type="checkbox" name="strict_dubbing" value="true" {% if strict_dubbing %}checked{% endif %} />
-              only explicit dub/dabing markers
-            </span>
-          </label>
+            <label>
+              Language scope
+              <select id="languageScopeSelect" name="language_scope">
+                {% for label, value in language_scope_options %}
+                  <option value="{{ value }}" {% if language_scope == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
 
-          <label>
-            Release year
-            <input
-              type="number"
-              name="release_year"
-              min="1900"
-              max="2099"
-              value="{{ release_year if release_year is not none else '' }}"
-              placeholder="e.g. 2003"
-            />
-          </label>
+            <label class="checkbox-field">
+              Strict dubbing
+              <span>
+                <input id="strictDubbingInput" type="checkbox" name="strict_dubbing" value="true" {% if strict_dubbing %}checked{% endif %} />
+                only explicit dub/dabing markers
+              </span>
+            </label>
 
-          <label>
-            Max results
-            <input type="number" name="max_results" min="1" max="500" value="{{ max_results }}" />
-          </label>
+            <label>
+              Release year
+              <input
+                id="releaseYearInput"
+                type="number"
+                name="release_year"
+                min="1900"
+                max="2099"
+                value="{{ release_year if release_year is not none else '' }}"
+                placeholder="e.g. 2003"
+              />
+            </label>
 
-          <button type="submit">Search</button>
-        </form>
+            <label>
+              Max results
+              <input id="maxResultsInput" type="number" name="max_results" min="1" max="500" value="{{ max_results }}" />
+            </label>
+
+            <button type="submit">Search files</button>
+          </form>
+        </div>
+
+        <div id="tvModePanel" class="search-mode-panel tv-panel hidden">
+          <div class="tv-step">
+            <h3>Step 1. Choose Show</h3>
+            <div class="tv-controls">
+              <label>
+                Show name
+                <input id="tvShowName" type="text" maxlength="200" placeholder="e.g. Bluey" />
+              </label>
+              <button id="tvLookupBtn" type="button">Load seasons</button>
+            </div>
+          </div>
+          <div class="tv-step">
+            <h3>Step 2. Select Seasons</h3>
+            <div id="tvLookupInfo" class="tv-lookup-info"></div>
+            <div id="tvSeasonPicker" class="tv-season-picker"></div>
+          </div>
+          <div class="tv-step">
+            <h3>Step 3. Search Episodes</h3>
+            <div id="tvActiveFilters" class="tv-active-filters"></div>
+            <details class="tv-filter-editor">
+              <summary>Edit filters for episode search</summary>
+              <div class="tv-filter-grid">
+                <label>
+                  Category
+                  <select id="tvFilterCategory">
+                    {% for label, value in category_options %}
+                      <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>
+                  Language
+                  <input id="tvFilterLanguage" type="text" maxlength="32" placeholder="e.g. SK or Slovak" value="{{ language }}" />
+                </label>
+                <label>
+                  Language scope
+                  <select id="tvFilterLanguageScope">
+                    {% for label, value in language_scope_options %}
+                      <option value="{{ value }}" {% if language_scope == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>
+                  Max results/episode query
+                  <input id="tvFilterMaxResults" type="number" min="1" max="500" value="{{ max_results }}" />
+                </label>
+                <label class="checkbox-field tv-filter-checkbox">
+                  Strict dubbing
+                  <span>
+                    <input id="tvFilterStrictDubbing" type="checkbox" {% if strict_dubbing %}checked{% endif %} />
+                    only explicit dub/dabing markers
+                  </span>
+                </label>
+              </div>
+            </details>
+            <div class="tv-actions">
+              <button id="tvSearchBtn" type="button" disabled>Search episodes</button>
+            </div>
+          </div>
+          <div id="tvStatus" class="download-status">TV mode is ready.</div>
+          <div id="tvResults" class="tv-results"></div>
+        </div>
       </section>
 
       {% if error %}
-        <section class="panel error tab-section tab-search">
+        <section class="panel error tab-section tab-search file-results-block">
           <strong>Error:</strong> {{ error }}
         </section>
       {% endif %}
 
       {% if search %}
-        <section class="panel meta tab-section tab-search">
+        <section class="panel meta tab-section tab-search file-results-block">
+          <h2 class="results-heading">File Search Results</h2>
           <div><strong>Effective query:</strong> <code>{{ search.effective_query }}</code></div>
           <div><strong>Resolved slug:</strong> <code>{{ search.slug }}</code></div>
           <div><strong>Search URL:</strong> <a href="{{ search.search_url }}" target="_blank" rel="noreferrer">{{ search.search_url }}</a></div>
@@ -249,7 +325,7 @@
           <div><strong>Parsed results:</strong> {{ search.result_count }} / {{ search.unfiltered_result_count }}</div>
         </section>
 
-        <section class="results-grid tab-section tab-search">
+        <section class="results-grid tab-section tab-search file-results-block">
           {% for item in search.results %}
             <article class="result-card">
               <a href="{{ item.detail_url }}" target="_blank" rel="noreferrer" class="thumb-wrap">
@@ -367,6 +443,31 @@
     <script>
       const input = document.getElementById("queryInput");
       const list = document.getElementById("suggestions");
+      const categorySelect = document.getElementById("categorySelect");
+      const sortSelect = document.getElementById("sortSelect");
+      const languageInput = document.getElementById("languageInput");
+      const languageScopeSelect = document.getElementById("languageScopeSelect");
+      const strictDubbingInput = document.getElementById("strictDubbingInput");
+      const releaseYearInput = document.getElementById("releaseYearInput");
+      const maxResultsInput = document.getElementById("maxResultsInput");
+      const fileSearchModeBtn = document.getElementById("fileSearchModeBtn");
+      const tvSearchModeBtn = document.getElementById("tvSearchModeBtn");
+      const fileSearchPanel = document.getElementById("fileSearchPanel");
+      const tvModePanel = document.getElementById("tvModePanel");
+      const tvShowName = document.getElementById("tvShowName");
+      const tvLookupBtn = document.getElementById("tvLookupBtn");
+      const tvStatus = document.getElementById("tvStatus");
+      const tvLookupInfo = document.getElementById("tvLookupInfo");
+      const tvSeasonPicker = document.getElementById("tvSeasonPicker");
+      const tvActiveFilters = document.getElementById("tvActiveFilters");
+      const tvFilterCategory = document.getElementById("tvFilterCategory");
+      const tvFilterLanguage = document.getElementById("tvFilterLanguage");
+      const tvFilterLanguageScope = document.getElementById("tvFilterLanguageScope");
+      const tvFilterMaxResults = document.getElementById("tvFilterMaxResults");
+      const tvFilterStrictDubbing = document.getElementById("tvFilterStrictDubbing");
+      const tvSearchBtn = document.getElementById("tvSearchBtn");
+      const tvResults = document.getElementById("tvResults");
+      const fileResultsBlocks = Array.from(document.querySelectorAll(".file-results-block"));
       const accountStatus = document.getElementById("accountStatus");
       const accountForm = document.getElementById("accountForm");
       const accountLogin = document.getElementById("accountLogin");
@@ -410,6 +511,8 @@
       const queueDialogPreview = document.getElementById("queueDialogPreview");
       let timer = null;
       let queueDialogState = null;
+      let tvLookupState = null;
+      let searchMode = "file";
 
       const esc = (value) =>
         String(value ?? "")
@@ -483,6 +586,63 @@
       })();
       setActiveTab(initialTab);
 
+      const renderTvActiveFilters = () => {
+        const languageValue = languageInput.value.trim();
+        const languageScope = languageScopeSelect.value || "any";
+        const strict = Boolean(strictDubbingInput.checked);
+        const category = categorySelect.value || "video";
+        const maxPerVariantRaw = Number(maxResultsInput.value || 120);
+        const maxPerVariant = Number.isFinite(maxPerVariantRaw) && maxPerVariantRaw > 0 ? Math.min(500, maxPerVariantRaw) : 120;
+        const languageText = languageValue ? `${languageValue} (${languageScope}${strict ? ", strict" : ""})` : "none";
+        tvActiveFilters.innerHTML = `
+          <strong>Active filters:</strong>
+          Category <code>${esc(category)}</code> |
+          Language <code>${esc(languageText)}</code> |
+          Max results/episode query <code>${esc(maxPerVariant)}</code>
+        `;
+      };
+
+      const syncFileFiltersToTvEditor = () => {
+        if (tvFilterCategory) tvFilterCategory.value = categorySelect.value || "video";
+        if (tvFilterLanguage) tvFilterLanguage.value = languageInput.value || "";
+        if (tvFilterLanguageScope) tvFilterLanguageScope.value = languageScopeSelect.value || "any";
+        if (tvFilterStrictDubbing) tvFilterStrictDubbing.checked = Boolean(strictDubbingInput.checked);
+        if (tvFilterMaxResults) tvFilterMaxResults.value = maxResultsInput.value || "120";
+      };
+
+      const syncTvEditorToFileFilters = () => {
+        if (tvFilterCategory) categorySelect.value = tvFilterCategory.value || "video";
+        if (tvFilterLanguage) languageInput.value = tvFilterLanguage.value || "";
+        if (tvFilterLanguageScope) languageScopeSelect.value = tvFilterLanguageScope.value || "any";
+        if (tvFilterStrictDubbing) strictDubbingInput.checked = Boolean(tvFilterStrictDubbing.checked);
+        if (tvFilterMaxResults) maxResultsInput.value = tvFilterMaxResults.value || "120";
+      };
+
+      const updateTvSearchButtonState = () => {
+        const canSearch = Boolean(tvLookupState?.show?.id) && selectedTvSeasons().length > 0;
+        tvSearchBtn.disabled = !canSearch;
+      };
+
+      const setSearchMode = (mode) => {
+        searchMode = mode === "tv" ? "tv" : "file";
+        const tvActive = searchMode === "tv";
+        fileSearchModeBtn.classList.toggle("active", !tvActive);
+        tvSearchModeBtn.classList.toggle("active", tvActive);
+        fileSearchPanel.classList.toggle("hidden", tvActive);
+        tvModePanel.classList.toggle("hidden", !tvActive);
+        fileResultsBlocks.forEach((node) => {
+          node.classList.toggle("hidden", tvActive);
+        });
+        if (tvActive) {
+          renderTvActiveFilters();
+          updateTvSearchButtonState();
+        }
+        window.localStorage.setItem("searchMode", searchMode);
+      };
+
+      fileSearchModeBtn.addEventListener("click", () => setSearchMode("file"));
+      tvSearchModeBtn.addEventListener("click", () => setSearchMode("tv"));
+
       input.addEventListener("input", () => {
         const q = input.value.trim();
         clearTimeout(timer);
@@ -508,9 +668,231 @@
         }, 180);
       });
 
+      tvLookupBtn.addEventListener("click", async () => {
+        const showName = tvShowName.value.trim();
+        if (!showName) {
+          setTvStatus("Show name is required.", "error");
+          return;
+        }
+        setTvStatus("Loading show metadata and seasons...", "neutral");
+        tvLookupInfo.textContent = "";
+        tvSeasonPicker.innerHTML = "";
+        tvResults.innerHTML = "";
+        tvLookupState = null;
+        updateTvSearchButtonState();
+        try {
+          const res = await fetch("/api/tv/lookup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ show_name: showName }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setTvStatus(data.error || "TV lookup failed.", "error");
+            return;
+          }
+          tvLookupState = data;
+          const show = data.show || {};
+          tvLookupInfo.innerHTML = `
+            <strong>${esc(show.name || showName)}</strong>
+            <span> (${esc(data.season_count || 0)} seasons, ${esc(data.episode_count || 0)} episodes, source: ${esc(show.source || "tvmaze")})</span>
+          `;
+          renderTvSeasonPicker(data.seasons || []);
+          setTvStatus("Seasons loaded. Select seasons and run search.", "ok");
+          updateTvSearchButtonState();
+        } catch (_) {
+          tvLookupState = null;
+          updateTvSearchButtonState();
+          setTvStatus("TV lookup failed.", "error");
+        }
+      });
+
+      tvSearchBtn.addEventListener("click", async () => {
+        if (!tvLookupState || !tvLookupState.show) {
+          setTvStatus("Load a TV show first.", "error");
+          return;
+        }
+        const seasons = selectedTvSeasons();
+        if (!seasons.length) {
+          setTvStatus("Select at least one season.", "error");
+          return;
+        }
+
+        setTvStatus("Searching selected seasons...", "neutral");
+        tvResults.innerHTML = "";
+        const maxPerVariantRaw = Number(maxResultsInput.value || 120);
+        const maxPerVariant = Number.isFinite(maxPerVariantRaw) && maxPerVariantRaw > 0 ? Math.min(500, maxPerVariantRaw) : 120;
+        try {
+          const res = await fetch("/api/tv/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              show_id: tvLookupState.show.id,
+              show_name: tvLookupState.show.name || tvShowName.value.trim(),
+              seasons,
+              category: categorySelect.value || "video",
+              language: languageInput.value.trim() || null,
+              language_scope: languageScopeSelect.value || "any",
+              strict_dubbing: Boolean(strictDubbingInput.checked),
+              max_results_per_variant: maxPerVariant,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setTvStatus(data.error || "TV search failed.", "error");
+            return;
+          }
+          renderTvResults(data);
+          const seasonCount = Array.isArray(data.seasons) ? data.seasons.length : 0;
+          setTvStatus(`TV search complete for ${seasonCount} season(s).`, "ok");
+        } catch (_) {
+          setTvStatus("TV search failed.", "error");
+        }
+      });
+
       const setDownloadStatus = (text, mode = "neutral") => {
         downloadStatus.textContent = text;
         downloadStatus.dataset.mode = mode;
+      };
+
+      const setTvStatus = (text, mode = "neutral") => {
+        tvStatus.textContent = text;
+        tvStatus.dataset.mode = mode;
+      };
+
+      const selectedTvSeasons = () =>
+        Array.from(tvSeasonPicker.querySelectorAll("input.tv-season-check:checked"))
+          .map((el) => Number(el.value))
+          .filter((value) => Number.isFinite(value) && value > 0);
+
+      const renderTvSeasonPicker = (seasons) => {
+        if (!Array.isArray(seasons) || seasons.length === 0) {
+          tvSeasonPicker.innerHTML = "<div class='download-empty'>No seasons found.</div>";
+          updateTvSearchButtonState();
+          return;
+        }
+        tvSeasonPicker.innerHTML = `
+          <div class="tv-season-toolbar">
+            <button type="button" id="tvSelectAllSeasons">Select all</button>
+            <button type="button" id="tvSelectNoSeasons">Clear</button>
+          </div>
+          <div class="tv-season-grid">
+            ${seasons
+              .map(
+                (season) => `
+                  <label class="tv-season-item">
+                    <input class="tv-season-check" type="checkbox" value="${season.season_number}" />
+                    Season ${season.season_number} (${season.episode_count} episodes)
+                  </label>
+                `
+              )
+              .join("")}
+          </div>
+        `;
+
+        document.getElementById("tvSelectAllSeasons")?.addEventListener("click", () => {
+          tvSeasonPicker.querySelectorAll("input.tv-season-check").forEach((el) => {
+            el.checked = true;
+          });
+          updateTvSearchButtonState();
+        });
+        document.getElementById("tvSelectNoSeasons")?.addEventListener("click", () => {
+          tvSeasonPicker.querySelectorAll("input.tv-season-check").forEach((el) => {
+            el.checked = false;
+          });
+          updateTvSearchButtonState();
+        });
+        tvSeasonPicker.querySelectorAll("input.tv-season-check").forEach((el) => {
+          el.addEventListener("change", () => {
+            updateTvSearchButtonState();
+          });
+        });
+        updateTvSearchButtonState();
+      };
+
+      const bindTvQueueButtons = () => {
+        tvResults.querySelectorAll("button.tv-queue-btn").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            await openQueueDialog({
+              intent: "enqueue",
+              detailUrl: btn.dataset.detailUrl,
+              fileId: btn.dataset.fileId ? Number(btn.dataset.fileId) : null,
+              title: btn.dataset.title || "",
+              preferredMode: "premium",
+              mediaKind: "tv",
+              seriesName: btn.dataset.seriesName || null,
+              seasonNumber: btn.dataset.seasonNumber ? Number(btn.dataset.seasonNumber) : null,
+              episodeNumber: btn.dataset.episodeNumber ? Number(btn.dataset.episodeNumber) : null,
+            });
+          });
+        });
+      };
+
+      const renderTvResults = (payload) => {
+        const seasons = payload?.seasons || [];
+        if (!Array.isArray(seasons) || seasons.length === 0) {
+          tvResults.innerHTML = "<div class='download-empty'>No results found for selected seasons.</div>";
+          return;
+        }
+
+        tvResults.innerHTML = seasons
+          .map((season) => {
+            const seasonRows = season.episodes
+              .map((episode) => {
+                const resultRows = (episode.results || [])
+                  .map(
+                    (item) => `
+                      <article class="tv-result-item">
+                        <div class="tv-result-head">
+                          <a href="${esc(item.detail_url)}" target="_blank" rel="noreferrer">${esc(item.title)}</a>
+                          <span class="tv-result-meta">Lang score: ${esc(item.language_priority ?? 0)} | ${esc(item.size || "n/a")}</span>
+                        </div>
+                        <div class="tv-result-submeta">
+                          <span>Ext: ${esc(item.extension || "n/a")}</span>
+                          <span>Year: ${esc(item.primary_year ?? "n/a")}</span>
+                        </div>
+                        <div class="tv-result-actions">
+                          <button
+                            type="button"
+                            class="tv-queue-btn"
+                            data-file-id="${esc(item.file_id ?? "")}"
+                            data-title="${esc(item.title)}"
+                            data-detail-url="${esc(item.detail_url)}"
+                            data-series-name="${esc(payload?.show?.name || "")}"
+                            data-season-number="${esc(episode.season_number ?? season.season_number ?? "")}"
+                            data-episode-number="${esc(episode.episode_number ?? "")}"
+                          >
+                            Add to queue...
+                          </button>
+                        </div>
+                      </article>
+                    `
+                  )
+                  .join("");
+                return `
+                  <details class="tv-episode">
+                    <summary>
+                      ${esc(episode.episode_code)} ${esc(episode.episode_name || "")}
+                      <span class="tv-summary-count">${esc(episode.result_count)} results</span>
+                    </summary>
+                    <div class="tv-query-list">Queries: ${(episode.query_variants || []).map((x) => `<code>${esc(x)}</code>`).join(" ")}</div>
+                    ${episode.query_errors && episode.query_errors.length ? `<div class="job-error">${esc(episode.query_errors.join(" | "))}</div>` : ""}
+                    <div class="tv-result-list">${resultRows || "<div class='download-empty'>No files found for this episode.</div>"}</div>
+                  </details>
+                `;
+              })
+              .join("");
+
+            return `
+              <details class="tv-season">
+                <summary>Season ${esc(season.season_number)} <span class="tv-summary-count">${esc(season.result_count)} results</span></summary>
+                <div class="tv-season-body">${seasonRows || "<div class='download-empty'>No episode metadata for this season.</div>"}</div>
+              </details>
+            `;
+          })
+          .join("");
+
+        bindTvQueueButtons();
       };
 
       const renderDownloadJobs = (jobs) => {
@@ -559,7 +941,7 @@
                 <div class="job-actions">
                   ${canCancel ? `<button data-action="cancel" data-id="${job.id}">Cancel</button>` : ""}
                   ${canCancel ? `<button data-action="cancel_complete" data-id="${job.id}">Cancel completely</button>` : ""}
-                  ${job.status === "queued" ? `<button data-action="classify" data-id="${job.id}" data-title="${esc(title)}" data-detail-url="${esc(job.detail_url)}" data-mode="${esc(job.preferred_mode)}" data-media-kind="${esc(job.media_kind || "")}" data-is-kids="${job.is_kids ? "1" : "0"}" data-series-name="${esc(job.series_name || "")}" data-season-number="${esc(job.season_number ?? "")}" data-chunk-count="${esc(job.chunk_count ?? "")}" data-priority="${esc(job.priority)}">Category</button>` : ""}
+                  ${job.status === "queued" ? `<button data-action="classify" data-id="${job.id}" data-title="${esc(title)}" data-detail-url="${esc(job.detail_url)}" data-mode="${esc(job.preferred_mode)}" data-media-kind="${esc(job.media_kind || "")}" data-is-kids="${job.is_kids ? "1" : "0"}" data-series-name="${esc(job.series_name || "")}" data-season-number="${esc(job.season_number ?? "")}" data-episode-number="${esc(job.episode_number ?? "")}" data-chunk-count="${esc(job.chunk_count ?? "")}" data-priority="${esc(job.priority)}">Category</button>` : ""}
                   ${canRetry ? `<button data-action="retry" data-id="${job.id}">Retry</button>` : ""}
                   ${canMoveTop ? `<button data-action="top" data-id="${job.id}">Move top</button>` : ""}
                   ${(job.status === "queued" || job.status === "running") ? `<button data-action="priority" data-id="${job.id}" data-priority="${job.priority}">Set priority</button>` : ""}
@@ -595,6 +977,7 @@
                   isKids: btn.dataset.isKids === "1",
                   seriesName: btn.dataset.seriesName || null,
                   seasonNumber: btn.dataset.seasonNumber ? Number(btn.dataset.seasonNumber) : null,
+                  episodeNumber: btn.dataset.episodeNumber ? Number(btn.dataset.episodeNumber) : null,
                   chunkCount: btn.dataset.chunkCount ? Number(btn.dataset.chunkCount) : Number(downloadChunkCount.value || 1),
                   priority: btn.dataset.priority ? Number(btn.dataset.priority) : Number(downloadPriority.value || 0),
                 });
@@ -743,11 +1126,13 @@
         const mediaKind = queueDialogMediaKind.value === "auto" ? null : queueDialogMediaKind.value;
         const isKids = resolveKidsValue(queueDialogKidsTag.value);
         const seasonValue = Number(queueDialogSeasonNumber.value || 0);
+        const episodeValue = Number(queueDialogState?.episodeNumber || 0);
         return {
           media_kind: mediaKind,
           is_kids: isKids,
           series_name: mediaKind === "tv" ? (queueDialogSeriesName.value.trim() || null) : null,
           season_number: mediaKind === "tv" && Number.isFinite(seasonValue) && seasonValue > 0 ? seasonValue : null,
+          episode_number: mediaKind === "tv" && Number.isFinite(episodeValue) && episodeValue > 0 ? episodeValue : null,
         };
       };
 
@@ -1092,6 +1477,43 @@
           setAccountStatus("Failed to clear credentials.", "error");
         }
       });
+
+      [categorySelect, languageInput, languageScopeSelect, strictDubbingInput, maxResultsInput].forEach((el) => {
+        el?.addEventListener("change", () => {
+          syncFileFiltersToTvEditor();
+          renderTvActiveFilters();
+        });
+      });
+      languageInput?.addEventListener("input", () => {
+        syncFileFiltersToTvEditor();
+        renderTvActiveFilters();
+      });
+      maxResultsInput?.addEventListener("input", () => {
+        syncFileFiltersToTvEditor();
+        renderTvActiveFilters();
+      });
+      [tvFilterCategory, tvFilterLanguage, tvFilterLanguageScope, tvFilterStrictDubbing, tvFilterMaxResults].forEach((el) => {
+        el?.addEventListener("change", () => {
+          syncTvEditorToFileFilters();
+          renderTvActiveFilters();
+        });
+      });
+      tvFilterLanguage?.addEventListener("input", () => {
+        syncTvEditorToFileFilters();
+        renderTvActiveFilters();
+      });
+      tvFilterMaxResults?.addEventListener("input", () => {
+        syncTvEditorToFileFilters();
+        renderTvActiveFilters();
+      });
+
+      const initialMode = (() => {
+        const saved = window.localStorage.getItem("searchMode");
+        return saved === "tv" ? "tv" : "file";
+      })();
+      syncFileFiltersToTvEditor();
+      renderTvActiveFilters();
+      setSearchMode(initialMode);
 
       refreshAccountStatus();
       refreshDownloadSettings();
