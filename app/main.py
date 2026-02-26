@@ -84,6 +84,14 @@ class EnqueueDownloadPayload(BaseModel):
     priority: int = Field(default=0, ge=-100, le=100)
 
 
+class UpdatePriorityPayload(BaseModel):
+    priority: int = Field(default=0, ge=-1000, le=1000)
+
+
+class ClearDownloadsPayload(BaseModel):
+    statuses: list[Literal["done", "failed", "canceled"]] = Field(default_factory=lambda: ["done", "failed", "canceled"])
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     storage.init_db()
@@ -394,6 +402,37 @@ def api_downloads_retry(job_id: int):
         if not changed:
             return JSONResponse(status_code=404, content={"error": "Job not found or not retryable."})
         return JSONResponse({"retried": True, "job_id": job_id})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.post("/api/downloads/{job_id}/priority")
+def api_downloads_priority(job_id: int, payload: UpdatePriorityPayload):
+    try:
+        changed = storage.set_download_priority(job_id, payload.priority)
+        if not changed:
+            return JSONResponse(status_code=404, content={"error": "Job not found or priority cannot be changed."})
+        return JSONResponse({"updated": True, "job_id": job_id, "priority": payload.priority})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.post("/api/downloads/{job_id}/top")
+def api_downloads_move_top(job_id: int):
+    try:
+        changed = storage.move_download_job_to_top(job_id)
+        if not changed:
+            return JSONResponse(status_code=404, content={"error": "Job not found or not queued."})
+        return JSONResponse({"moved_to_top": True, "job_id": job_id})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.post("/api/downloads/clear")
+def api_downloads_clear(payload: ClearDownloadsPayload):
+    try:
+        deleted = storage.delete_download_jobs(statuses=payload.statuses)
+        return JSONResponse({"deleted": deleted, "statuses": payload.statuses})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse(status_code=500, content={"error": str(exc)})
 

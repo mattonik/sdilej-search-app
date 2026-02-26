@@ -11,8 +11,11 @@ from .sdilej_client import SdilejClient, SdilejClientError
 from .storage import Storage
 
 DEFAULT_DOWNLOAD_DIR = "./downloads"
+DOWNLOAD_TIMEOUT_SECONDS = 120
+DOWNLOAD_CHUNK_SIZE = 1024 * 256
 
 _FILENAME_RE = re.compile(r"filename\*=UTF-8''([^;]+)|filename=\"?([^\";]+)\"?")
+_CONTENT_RANGE_TOTAL_RE = re.compile(r"^bytes\s+\d+-\d+/(\d+)$", re.IGNORECASE)
 
 
 class DownloadCanceledError(RuntimeError):
@@ -53,11 +56,22 @@ class DownloadWorker:
         detail_url = str(job["detail_url"])
         preferred_mode = str(job.get("preferred_mode") or "auto")
 
-        client = SdilejClient(timeout_seconds=45)
         credentials = self.storage.get_account_credentials()
+        if preferred_mode == "premium" and not credentials:
+            self.storage.fail_download_job(
+                job_id,
+                error="Premium mode requested but no account credentials are configured.",
+                final_url=None,
+                status_code=None,
+            )
+            return
+
+        client = SdilejClient(timeout_seconds=45)
+        login_message = None
 
         if credentials:
             login_ok, login_msg = client.login(credentials[0], credentials[1])
+            login_message = login_msg
             if not login_ok:
                 if preferred_mode == "premium":
                     self.storage.fail_download_job(
@@ -72,27 +86,53 @@ class DownloadWorker:
             probe = client.probe_detail(detail_url=detail_url, run_preflight=False)
             target_url = self._pick_download_url(preferred_mode, probe.download_fast_url, probe.download_slow_url)
             if not target_url:
+                if preferred_mode == "premium":
+                    raise SdilejClientError("Premium direct link is not available for this file.")
                 raise SdilejClientError("No download URL found on detail page.")
 
             response = client.session.get(
                 target_url,
                 stream=True,
                 allow_redirects=True,
-                timeout=120,
+                timeout=DOWNLOAD_TIMEOUT_SECONDS,
             )
             status_code = response.status_code
             final_url = response.url
 
-            content_type = (response.headers.get("Content-Type") or "").lower()
-            if "text/html" in content_type:
+            if self._is_html_response(response):
                 response.close()
-                raise SdilejClientError(
-                    "Download target returned HTML instead of file data. "
-                    "This usually means auth/wait-page is still required."
-                )
+                # Session/link refresh path for premium-capable modes.
+                if credentials and preferred_mode != "free":
+                    login_ok, login_msg = client.login(credentials[0], credentials[1])
+                    login_message = login_msg
+                    if not login_ok and preferred_mode == "premium":
+                        raise SdilejClientError(f"Premium login refresh failed: {login_msg}")
 
-            total_header = response.headers.get("Content-Length")
-            bytes_total = int(total_header) if total_header and total_header.isdigit() else None
+                    probe = client.probe_detail(detail_url=detail_url, run_preflight=False)
+                    target_url = self._pick_download_url(preferred_mode, probe.download_fast_url, probe.download_slow_url)
+                    if not target_url:
+                        if preferred_mode == "premium":
+                            raise SdilejClientError("Premium direct link is not available after login refresh.")
+                        raise SdilejClientError("No download URL found on detail page after refresh.")
+
+                    response = client.session.get(
+                        target_url,
+                        stream=True,
+                        allow_redirects=True,
+                        timeout=DOWNLOAD_TIMEOUT_SECONDS,
+                    )
+                    status_code = response.status_code
+                    final_url = response.url
+
+            if self._is_html_response(response):
+                response.close()
+                hint = (
+                    "Download target returned HTML instead of file data. "
+                    "The premium session/link may be invalid or temporarily blocked."
+                )
+                if login_message:
+                    hint = f"{hint} Login: {login_message}"
+                raise SdilejClientError(hint)
 
             output_dir = self._resolve_output_dir(job.get("output_dir"))
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -105,14 +145,83 @@ class DownloadWorker:
             final_path = self._resolve_unique_path(output_dir / filename)
             part_path = final_path.with_suffix(final_path.suffix + ".part")
 
+            bytes_total = self._parse_content_length(response.headers.get("Content-Length"))
             bytes_downloaded = 0
+            append_mode = "wb"
+
+            existing_size = part_path.stat().st_size if part_path.exists() else 0
+            if existing_size > 0:
+                if bytes_total is not None and existing_size >= bytes_total:
+                    response.close()
+                    os.replace(part_path, final_path)
+                    self.storage.complete_download_job(
+                        job_id,
+                        save_path=str(final_path),
+                        final_url=final_url,
+                        bytes_total=existing_size,
+                        status_code=status_code,
+                    )
+                    return
+
+                if self._supports_resume(response):
+                    response.close()
+                    response = client.session.get(
+                        target_url,
+                        headers={"Range": f"bytes={existing_size}-"},
+                        stream=True,
+                        allow_redirects=True,
+                        timeout=DOWNLOAD_TIMEOUT_SECONDS,
+                    )
+                    status_code = response.status_code
+                    final_url = response.url
+
+                    if self._is_html_response(response):
+                        response.close()
+                        raise SdilejClientError("Resume request returned HTML; premium link is no longer valid.")
+
+                    if response.status_code == 206:
+                        append_mode = "ab"
+                        bytes_downloaded = existing_size
+                        total_from_range = self._extract_total_from_content_range(response.headers.get("Content-Range"))
+                        if total_from_range is not None:
+                            bytes_total = total_from_range
+                        elif bytes_total is None:
+                            remaining = self._parse_content_length(response.headers.get("Content-Length"))
+                            if remaining is not None:
+                                bytes_total = existing_size + remaining
+                    else:
+                        if part_path.exists():
+                            part_path.unlink()
+                        bytes_total = self._parse_content_length(response.headers.get("Content-Length"))
+                        bytes_downloaded = 0
+                        append_mode = "wb"
+                else:
+                    response.close()
+                    if part_path.exists():
+                        part_path.unlink()
+                    response = client.session.get(
+                        target_url,
+                        stream=True,
+                        allow_redirects=True,
+                        timeout=DOWNLOAD_TIMEOUT_SECONDS,
+                    )
+                    status_code = response.status_code
+                    final_url = response.url
+                    if self._is_html_response(response):
+                        response.close()
+                        raise SdilejClientError("Restart download request returned HTML instead of file data.")
+                    bytes_total = self._parse_content_length(response.headers.get("Content-Length"))
+                    bytes_downloaded = 0
+                    append_mode = "wb"
+
             started_at = time.time()
+            base_downloaded = bytes_downloaded
             last_progress_push = 0.0
 
-            with open(part_path, "wb") as handle:
-                for chunk in response.iter_content(chunk_size=1024 * 256):
+            with open(part_path, append_mode) as handle:
+                for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                     if self._stop_event.is_set() or self.storage.is_job_canceled(job_id):
-                        raise DownloadCanceledError("Job canceled.")
+                        raise DownloadCanceledError("Job canceled. Partial file kept for resume.")
 
                     if not chunk:
                         continue
@@ -122,7 +231,7 @@ class DownloadWorker:
                     now = time.time()
                     if now - last_progress_push >= 1.0:
                         elapsed = max(now - started_at, 0.001)
-                        speed = bytes_downloaded / elapsed
+                        speed = max(bytes_downloaded - base_downloaded, 0) / elapsed
                         self.storage.update_download_progress(
                             job_id,
                             bytes_downloaded=bytes_downloaded,
@@ -135,7 +244,7 @@ class DownloadWorker:
             response.close()
             os.replace(part_path, final_path)
 
-            final_total = bytes_downloaded if bytes_total is None else bytes_total
+            final_total = bytes_downloaded if bytes_total is None else max(bytes_total, bytes_downloaded)
             self.storage.complete_download_job(
                 job_id,
                 save_path=str(final_path),
@@ -145,11 +254,6 @@ class DownloadWorker:
             )
 
         except DownloadCanceledError as exc:
-            try:
-                if "part_path" in locals() and part_path.exists():
-                    part_path.unlink()
-            except OSError:
-                pass
             self.storage.fail_download_job(
                 job_id,
                 error=str(exc),
@@ -157,11 +261,6 @@ class DownloadWorker:
                 status_code=locals().get("status_code"),
             )
         except Exception as exc:  # noqa: BLE001
-            try:
-                if "part_path" in locals() and part_path.exists():
-                    part_path.unlink()
-            except OSError:
-                pass
             self.storage.fail_download_job(
                 job_id,
                 error=str(exc),
@@ -173,7 +272,7 @@ class DownloadWorker:
         if preferred_mode == "premium":
             if fast_url and not fast_url.rstrip("/").endswith("/cenik"):
                 return fast_url
-            return slow_url
+            return None
 
         if preferred_mode == "free":
             return slow_url or fast_url
@@ -182,6 +281,29 @@ class DownloadWorker:
         if fast_url and not fast_url.rstrip("/").endswith("/cenik"):
             return fast_url
         return slow_url or fast_url
+
+    def _is_html_response(self, response) -> bool:
+        content_type = (response.headers.get("Content-Type") or "").lower()
+        return "text/html" in content_type
+
+    def _parse_content_length(self, value: str | None) -> int | None:
+        if not value:
+            return None
+        if not value.isdigit():
+            return None
+        return int(value)
+
+    def _supports_resume(self, response) -> bool:
+        accept_ranges = (response.headers.get("Accept-Ranges") or "").lower()
+        return "bytes" in accept_ranges
+
+    def _extract_total_from_content_range(self, value: str | None) -> int | None:
+        if not value:
+            return None
+        match = _CONTENT_RANGE_TOTAL_RE.match(value.strip())
+        if not match:
+            return None
+        return int(match.group(1))
 
     def _resolve_output_dir(self, configured_output_dir: str | None) -> Path:
         if configured_output_dir and configured_output_dir.strip():

@@ -606,6 +606,63 @@ class Storage:
             )
             return cursor.rowcount > 0
 
+    def set_download_priority(self, job_id: int, priority: int) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    priority = ?,
+                    updated_at = datetime('now')
+                WHERE id = ? AND status IN ('queued', 'running')
+                """,
+                (priority, job_id),
+            )
+            return cursor.rowcount > 0
+
+    def move_download_job_to_top(self, job_id: int) -> bool:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, status FROM download_jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+            if row is None or row["status"] != "queued":
+                return False
+
+            max_row = conn.execute(
+                "SELECT COALESCE(MAX(priority), 0) AS max_priority FROM download_jobs WHERE status = 'queued'"
+            ).fetchone()
+            max_priority = int(max_row["max_priority"]) if max_row else 0
+
+            cursor = conn.execute(
+                """
+                UPDATE download_jobs
+                SET
+                    priority = ?,
+                    updated_at = datetime('now')
+                WHERE id = ? AND status = 'queued'
+                """,
+                (max_priority + 1, job_id),
+            )
+            return cursor.rowcount > 0
+
+    def delete_download_jobs(self, statuses: list[str]) -> int:
+        valid_statuses = [status for status in statuses if status in {"done", "failed", "canceled"}]
+        if not valid_statuses:
+            return 0
+
+        placeholders = ",".join(["?"] * len(valid_statuses))
+        with self._connect() as conn:
+            conn.execute(
+                f"DELETE FROM download_attempts WHERE job_id IN (SELECT id FROM download_jobs WHERE status IN ({placeholders}))",
+                tuple(valid_statuses),
+            )
+            cursor = conn.execute(
+                f"DELETE FROM download_jobs WHERE status IN ({placeholders})",
+                tuple(valid_statuses),
+            )
+            return cursor.rowcount
+
     def is_job_canceled(self, job_id: int) -> bool:
         with self._connect() as conn:
             row = conn.execute("SELECT status FROM download_jobs WHERE id = ?", (job_id,)).fetchone()

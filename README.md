@@ -21,7 +21,10 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - Background downloader queue worker:
   - queued/running/done/failed/canceled states
   - progress tracking
+  - premium-first mode with strict premium-link validation
+  - partial `.part` resume support (when server supports byte ranges)
   - cancel + retry
+  - queue controls: move-to-top, custom priority, clear finished jobs
   - account credentials (for subscription/premium flow)
 - JSON API endpoints for future download-manager integration
 
@@ -83,6 +86,9 @@ docker compose up -d --build
 - `POST /api/downloads` (enqueue download job)
 - `POST /api/downloads/{id}/cancel`
 - `POST /api/downloads/{id}/retry`
+- `POST /api/downloads/{id}/priority`
+- `POST /api/downloads/{id}/top`
+- `POST /api/downloads/clear`
 - `GET /healthz`
 
 ## Subscription credentials

@@ -45,6 +45,57 @@
         </form>
       </section>
 
+      <section class="panel downloader-panel">
+        <div class="downloader-header">
+          <h2>Premium Download Manager</h2>
+          <div class="downloader-meta">
+            <span id="downloadWorkerState">Worker: checking...</span>
+            <span id="downloadSummary">Queue: checking...</span>
+          </div>
+        </div>
+
+        <form id="downloadForm" class="download-form">
+          <label>
+            Detail URL
+            <input
+              id="downloadDetailUrl"
+              type="text"
+              placeholder="https://sdilej.cz/123456/file-name.mkv"
+              autocomplete="off"
+              required
+            />
+          </label>
+
+          <label>
+            Mode
+            <select id="downloadMode">
+              <option value="premium" selected>Premium</option>
+              <option value="auto">Auto</option>
+              <option value="free">Free</option>
+            </select>
+          </label>
+
+          <label>
+            Output dir (optional)
+            <input id="downloadOutputDir" type="text" placeholder="/downloads/movies" autocomplete="off" />
+          </label>
+
+          <label>
+            Priority
+            <input id="downloadPriority" type="number" min="-100" max="100" value="0" />
+          </label>
+
+          <div class="download-actions">
+            <button type="submit">Enqueue download</button>
+            <button id="refreshDownloadsBtn" type="button" class="secondary-btn">Refresh queue</button>
+            <button id="clearFinishedBtn" type="button" class="secondary-btn">Clear finished</button>
+          </div>
+        </form>
+
+        <div id="downloadStatus" class="download-status">Queue idle.</div>
+        <div id="downloadJobs" class="download-jobs"></div>
+      </section>
+
       <section class="panel">
         <form method="get" action="/" class="search-form">
           <label>
@@ -190,6 +241,15 @@
                   <button type="button" class="probe-btn" data-detail-url="{{ item.detail_url }}">
                     Probe detail
                   </button>
+                  <button
+                    type="button"
+                    class="queue-premium-btn"
+                    data-file-id="{{ item.file_id if item.file_id is not none else '' }}"
+                    data-title="{{ item.title }}"
+                    data-detail-url="{{ item.detail_url }}"
+                  >
+                    Queue premium
+                  </button>
                 </div>
               </div>
             </article>
@@ -201,13 +261,68 @@
     <script>
       const input = document.getElementById("queryInput");
       const list = document.getElementById("suggestions");
-      let timer = null;
       const accountStatus = document.getElementById("accountStatus");
       const accountForm = document.getElementById("accountForm");
       const accountLogin = document.getElementById("accountLogin");
       const accountPassword = document.getElementById("accountPassword");
       const accountVerify = document.getElementById("accountVerify");
       const accountClearBtn = document.getElementById("accountClearBtn");
+      const downloadForm = document.getElementById("downloadForm");
+      const downloadDetailUrl = document.getElementById("downloadDetailUrl");
+      const downloadMode = document.getElementById("downloadMode");
+      const downloadOutputDir = document.getElementById("downloadOutputDir");
+      const downloadPriority = document.getElementById("downloadPriority");
+      const downloadStatus = document.getElementById("downloadStatus");
+      const downloadJobsEl = document.getElementById("downloadJobs");
+      const refreshDownloadsBtn = document.getElementById("refreshDownloadsBtn");
+      const clearFinishedBtn = document.getElementById("clearFinishedBtn");
+      const downloadSummary = document.getElementById("downloadSummary");
+      const downloadWorkerState = document.getElementById("downloadWorkerState");
+      let timer = null;
+
+      const esc = (value) =>
+        String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+
+      const formatBytes = (value) => {
+        if (value == null || Number.isNaN(Number(value))) return "n/a";
+        const num = Number(value);
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        let idx = 0;
+        let current = num;
+        while (current >= 1024 && idx < units.length - 1) {
+          current /= 1024;
+          idx += 1;
+        }
+        const precision = current >= 10 || idx === 0 ? 0 : 1;
+        return `${current.toFixed(precision)} ${units[idx]}`;
+      };
+
+      const formatSpeed = (value) => {
+        if (value == null || Number.isNaN(Number(value)) || Number(value) <= 0) return "n/a";
+        return `${formatBytes(value)}/s`;
+      };
+
+      const formatEta = (bytesDownloaded, bytesTotal, speedBps) => {
+        const done = Number(bytesDownloaded);
+        const total = Number(bytesTotal);
+        const speed = Number(speedBps);
+        if (!Number.isFinite(done) || !Number.isFinite(total) || !Number.isFinite(speed) || speed <= 0 || done >= total) {
+          return "n/a";
+        }
+        const seconds = Math.floor((total - done) / speed);
+        if (!Number.isFinite(seconds) || seconds < 0) return "n/a";
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        if (h > 0) return `${h}h ${m}m`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+      };
 
       input.addEventListener("input", () => {
         const q = input.value.trim();
@@ -233,6 +348,143 @@
           }
         }, 180);
       });
+
+      const setDownloadStatus = (text, mode = "neutral") => {
+        downloadStatus.textContent = text;
+        downloadStatus.dataset.mode = mode;
+      };
+
+      const renderDownloadJobs = (jobs) => {
+        if (!Array.isArray(jobs) || jobs.length === 0) {
+          downloadJobsEl.innerHTML = `<div class="download-empty">No jobs yet.</div>`;
+          return;
+        }
+
+        downloadJobsEl.innerHTML = jobs
+          .map((job) => {
+            const total = job.bytes_total;
+            const done = job.bytes_downloaded ?? 0;
+            const pct = total && total > 0 ? Math.max(0, Math.min(100, (done / total) * 100)) : 0;
+            const canCancel = job.status === "queued" || job.status === "running";
+            const canRetry = job.status === "failed" || job.status === "canceled";
+            const canMoveTop = job.status === "queued";
+            const title = job.title || job.detail_url;
+            const eta = formatEta(done, total, job.speed_bps);
+            const savePath = job.save_path ? `<div><strong>Saved:</strong> <code>${esc(job.save_path)}</code></div>` : "";
+            const error = job.error ? `<div class="job-error"><strong>Error:</strong> ${esc(job.error)}</div>` : "";
+            return `
+              <article class="download-job">
+                <div class="job-head">
+                  <a href="${esc(job.detail_url)}" target="_blank" rel="noreferrer">${esc(title)}</a>
+                  <span class="job-status status-${esc(job.status)}">${esc(job.status)}</span>
+                </div>
+                <div class="job-progress-wrap">
+                  <div class="job-progress"><span style="width: ${pct.toFixed(1)}%"></span></div>
+                </div>
+                <div class="job-meta">
+                  <span><strong>ID:</strong> ${esc(job.id)}</span>
+                  <span><strong>Mode:</strong> ${esc(job.preferred_mode)}</span>
+                  <span><strong>Priority:</strong> ${esc(job.priority)}</span>
+                  <span><strong>Attempt:</strong> ${esc(job.attempt_count)}</span>
+                  <span><strong>Progress:</strong> ${formatBytes(done)} / ${formatBytes(total)}</span>
+                  <span><strong>Speed:</strong> ${formatSpeed(job.speed_bps)}</span>
+                  <span><strong>ETA:</strong> ${esc(eta)}</span>
+                </div>
+                ${savePath}
+                ${error}
+                <div class="job-actions">
+                  ${canCancel ? `<button data-action="cancel" data-id="${job.id}">Cancel</button>` : ""}
+                  ${canRetry ? `<button data-action="retry" data-id="${job.id}">Retry</button>` : ""}
+                  ${canMoveTop ? `<button data-action="top" data-id="${job.id}">Move top</button>` : ""}
+                  ${(job.status === "queued" || job.status === "running") ? `<button data-action="priority" data-id="${job.id}" data-priority="${job.priority}">Set priority</button>` : ""}
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+
+        downloadJobsEl.querySelectorAll("button[data-action]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const action = btn.dataset.action;
+            const jobId = Number(btn.dataset.id);
+            if (!jobId) return;
+
+            try {
+              if (action === "cancel") {
+                await fetch(`/api/downloads/${jobId}/cancel`, { method: "POST" });
+                setDownloadStatus(`Canceled job #${jobId}.`, "neutral");
+              } else if (action === "retry") {
+                await fetch(`/api/downloads/${jobId}/retry`, { method: "POST" });
+                setDownloadStatus(`Retried job #${jobId}.`, "ok");
+              } else if (action === "top") {
+                await fetch(`/api/downloads/${jobId}/top`, { method: "POST" });
+                setDownloadStatus(`Moved job #${jobId} to top.`, "ok");
+              } else if (action === "priority") {
+                const current = Number(btn.dataset.priority || "0");
+                const raw = window.prompt("Set priority (-1000..1000):", String(current));
+                if (raw == null) return;
+                const next = Number(raw);
+                if (!Number.isFinite(next)) {
+                  setDownloadStatus("Priority must be a number.", "error");
+                  return;
+                }
+                const res = await fetch(`/api/downloads/${jobId}/priority`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ priority: next }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                  setDownloadStatus(data.error || "Failed to set priority.", "error");
+                  return;
+                }
+                setDownloadStatus(`Priority updated for job #${jobId}.`, "ok");
+              }
+            } catch (_) {
+              setDownloadStatus(`Action failed for job #${jobId}.`, "error");
+            } finally {
+              await refreshDownloads();
+            }
+          });
+        });
+      };
+
+      const refreshDownloads = async () => {
+        try {
+          const res = await fetch("/api/downloads?limit=200");
+          const data = await res.json();
+          if (!res.ok) {
+            setDownloadStatus(data.error || "Failed to refresh download queue.", "error");
+            return;
+          }
+          const summary = data.summary || {};
+          downloadWorkerState.textContent = data.worker_alive ? "Worker: online" : "Worker: offline";
+          downloadSummary.textContent = `Queue: ${summary.queued || 0} queued, ${summary.running || 0} running, ${summary.done || 0} done, ${summary.failed || 0} failed, ${summary.canceled || 0} canceled`;
+          renderDownloadJobs(data.items || []);
+        } catch (_) {
+          setDownloadStatus("Queue status unavailable.", "error");
+        }
+      };
+
+      const enqueueDownload = async (payload) => {
+        try {
+          const res = await fetch("/api/downloads", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setDownloadStatus(data.error || "Failed to enqueue job.", "error");
+            return false;
+          }
+          setDownloadStatus(`Queued #${data.id}: ${data.title || data.detail_url}`, "ok");
+          return true;
+        } catch (_) {
+          setDownloadStatus("Failed to enqueue job.", "error");
+          return false;
+        }
+      };
 
       document.querySelectorAll(".save-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
@@ -275,6 +527,23 @@
         });
       });
 
+      document.querySelectorAll(".queue-premium-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const payload = {
+            detail_url: btn.dataset.detailUrl,
+            file_id: btn.dataset.fileId ? Number(btn.dataset.fileId) : null,
+            title: btn.dataset.title || null,
+            preferred_mode: "premium",
+            output_dir: downloadOutputDir.value.trim() || null,
+            priority: Number(downloadPriority.value || 0),
+          };
+          const ok = await enqueueDownload(payload);
+          if (ok) {
+            await refreshDownloads();
+          }
+        });
+      });
+
       const setAccountStatus = (text, mode = "neutral") => {
         accountStatus.textContent = text;
         accountStatus.dataset.mode = mode;
@@ -299,6 +568,53 @@
           setAccountStatus("Status unavailable", "error");
         }
       };
+
+      downloadForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const detailUrl = downloadDetailUrl.value.trim();
+        if (!detailUrl) {
+          setDownloadStatus("Detail URL is required.", "error");
+          return;
+        }
+
+        const payload = {
+          detail_url: detailUrl,
+          preferred_mode: downloadMode.value || "premium",
+          output_dir: downloadOutputDir.value.trim() || null,
+          priority: Number(downloadPriority.value || 0),
+        };
+
+        const ok = await enqueueDownload(payload);
+        if (ok) {
+          downloadDetailUrl.value = "";
+          await refreshDownloads();
+        }
+      });
+
+      refreshDownloadsBtn.addEventListener("click", async () => {
+        setDownloadStatus("Refreshing queue...", "neutral");
+        await refreshDownloads();
+      });
+
+      clearFinishedBtn.addEventListener("click", async () => {
+        setDownloadStatus("Clearing finished jobs...", "neutral");
+        try {
+          const res = await fetch("/api/downloads/clear", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ statuses: ["done", "failed", "canceled"] }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setDownloadStatus(data.error || "Failed to clear jobs.", "error");
+            return;
+          }
+          setDownloadStatus(`Cleared ${data.deleted} finished jobs.`, "ok");
+          await refreshDownloads();
+        } catch (_) {
+          setDownloadStatus("Failed to clear finished jobs.", "error");
+        }
+      });
 
       accountForm.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -356,6 +672,8 @@
       });
 
       refreshAccountStatus();
+      refreshDownloads();
+      setInterval(refreshDownloads, 2500);
     </script>
   </body>
 </html>
