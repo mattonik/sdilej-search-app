@@ -2,7 +2,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-data/*.db
-downloads/
 .tmp_auth_test/
 *.log
+# local runtime data
+data/
+downloads/
+*.part
