@@ -110,11 +110,6 @@
           </label>
 
           <label>
-            Output dir (optional)
-            <input id="downloadOutputDir" type="text" placeholder="/downloads/movies" autocomplete="off" />
-          </label>
-
-          <label>
             Chunk count
             <input id="downloadChunkCount" type="number" min="1" max="8" value="1" />
           </label>
@@ -359,10 +354,6 @@
               Priority
               <input id="queueDialogPriority" type="number" min="-1000" max="1000" value="0" />
             </label>
-            <label>
-              Output dir (optional)
-              <input id="queueDialogOutputDir" type="text" placeholder="/downloads/movies" autocomplete="off" />
-            </label>
             <div id="queueDialogPreview" class="queue-dialog-preview"></div>
             <div class="queue-dialog-actions">
               <button type="button" id="queueDialogCancel" class="secondary-btn">Cancel</button>
@@ -389,7 +380,6 @@
       const downloadKidsTag = document.getElementById("downloadKidsTag");
       const downloadSeriesName = document.getElementById("downloadSeriesName");
       const downloadSeasonNumber = document.getElementById("downloadSeasonNumber");
-      const downloadOutputDir = document.getElementById("downloadOutputDir");
       const downloadChunkCount = document.getElementById("downloadChunkCount");
       const downloadPriority = document.getElementById("downloadPriority");
       const downloadSettingsForm = document.getElementById("downloadSettingsForm");
@@ -417,7 +407,6 @@
       const queueDialogSeasonNumber = document.getElementById("queueDialogSeasonNumber");
       const queueDialogChunkCount = document.getElementById("queueDialogChunkCount");
       const queueDialogPriority = document.getElementById("queueDialogPriority");
-      const queueDialogOutputDir = document.getElementById("queueDialogOutputDir");
       const queueDialogPreview = document.getElementById("queueDialogPreview");
       let timer = null;
       let queueDialogState = null;
@@ -570,7 +559,7 @@
                 <div class="job-actions">
                   ${canCancel ? `<button data-action="cancel" data-id="${job.id}">Cancel</button>` : ""}
                   ${canCancel ? `<button data-action="cancel_complete" data-id="${job.id}">Cancel completely</button>` : ""}
-                  ${job.status === "queued" ? `<button data-action="classify" data-id="${job.id}" data-title="${esc(title)}" data-detail-url="${esc(job.detail_url)}" data-mode="${esc(job.preferred_mode)}" data-media-kind="${esc(job.media_kind || "")}" data-is-kids="${job.is_kids ? "1" : "0"}" data-series-name="${esc(job.series_name || "")}" data-season-number="${esc(job.season_number ?? "")}" data-output-dir="${esc(job.output_dir || "")}" data-chunk-count="${esc(job.chunk_count ?? "")}" data-priority="${esc(job.priority)}">Category</button>` : ""}
+                  ${job.status === "queued" ? `<button data-action="classify" data-id="${job.id}" data-title="${esc(title)}" data-detail-url="${esc(job.detail_url)}" data-mode="${esc(job.preferred_mode)}" data-media-kind="${esc(job.media_kind || "")}" data-is-kids="${job.is_kids ? "1" : "0"}" data-series-name="${esc(job.series_name || "")}" data-season-number="${esc(job.season_number ?? "")}" data-chunk-count="${esc(job.chunk_count ?? "")}" data-priority="${esc(job.priority)}">Category</button>` : ""}
                   ${canRetry ? `<button data-action="retry" data-id="${job.id}">Retry</button>` : ""}
                   ${canMoveTop ? `<button data-action="top" data-id="${job.id}">Move top</button>` : ""}
                   ${(job.status === "queued" || job.status === "running") ? `<button data-action="priority" data-id="${job.id}" data-priority="${job.priority}">Set priority</button>` : ""}
@@ -606,7 +595,6 @@
                   isKids: btn.dataset.isKids === "1",
                   seriesName: btn.dataset.seriesName || null,
                   seasonNumber: btn.dataset.seasonNumber ? Number(btn.dataset.seasonNumber) : null,
-                  outputDir: btn.dataset.outputDir || "",
                   chunkCount: btn.dataset.chunkCount ? Number(btn.dataset.chunkCount) : Number(downloadChunkCount.value || 1),
                   priority: btn.dataset.priority ? Number(btn.dataset.priority) : Number(downloadPriority.value || 0),
                 });
@@ -828,13 +816,11 @@
         queueDialogSeasonNumber.value = config.seasonNumber ? String(config.seasonNumber) : "";
         queueDialogChunkCount.value = String(config.chunkCount || Number(downloadChunkCount.value || 1) || 1);
         queueDialogPriority.value = String(config.priority || Number(downloadPriority.value || 0) || 0);
-        queueDialogOutputDir.value = config.outputDir || downloadOutputDir.value || "";
 
         const editMode = config.intent === "edit";
         queueDialogMode.disabled = editMode;
         queueDialogChunkCount.disabled = editMode;
         queueDialogPriority.disabled = editMode;
-        queueDialogOutputDir.disabled = editMode;
         updateQueueDialogMode();
 
         queueDialogBackdrop.classList.remove("hidden");
@@ -891,7 +877,6 @@
           file_id: queueDialogState.fileId,
           title: queueDialogState.title || null,
           preferred_mode: queueDialogMode.value || "premium",
-          output_dir: queueDialogOutputDir.value.trim() || null,
           chunk_count: Number(queueDialogChunkCount.value || 1),
           priority: Number(queueDialogPriority.value || 0),
           ...mediaPayload,
@@ -984,7 +969,6 @@
         const payload = {
           detail_url: detailUrl,
           preferred_mode: downloadMode.value || "premium",
-          output_dir: downloadOutputDir.value.trim() || null,
           chunk_count: Number(downloadChunkCount.value || 1),
           priority: Number(downloadPriority.value || 0),
           ...buildMediaRoutingPayload(),

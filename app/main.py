@@ -581,15 +581,25 @@ def api_downloads_enqueue(payload: EnqueueDownloadPayload):
         if payload.source_saved_file_id is not None:
             saved_candidate = storage.get_saved_candidate(payload.source_saved_file_id)
 
+        requested_media_kind = payload.media_kind or (saved_candidate.get("media_kind") if saved_candidate else None)
+        if requested_media_kind == "movie":
+            fallback_series_name = None
+            fallback_season_number = None
+            fallback_episode_number = None
+        else:
+            fallback_series_name = saved_candidate.get("series_name") if saved_candidate else None
+            fallback_season_number = saved_candidate.get("season_number") if saved_candidate else None
+            fallback_episode_number = saved_candidate.get("episode_number") if saved_candidate else None
+
         media_plan = _build_media_plan(
             title=title or detail_url.rsplit("/", 1)[-1],
-            media_kind=payload.media_kind or (saved_candidate.get("media_kind") if saved_candidate else None),
+            media_kind=requested_media_kind,
             is_kids=(
                 payload.is_kids if payload.is_kids is not None else (saved_candidate.get("is_kids") if saved_candidate else None)
             ),
-            series_name=payload.series_name or (saved_candidate.get("series_name") if saved_candidate else None),
-            season_number=payload.season_number or (saved_candidate.get("season_number") if saved_candidate else None),
-            episode_number=payload.episode_number or (saved_candidate.get("episode_number") if saved_candidate else None),
+            series_name=payload.series_name if payload.series_name is not None else fallback_series_name,
+            season_number=payload.season_number if payload.season_number is not None else fallback_season_number,
+            episode_number=payload.episode_number if payload.episode_number is not None else fallback_episode_number,
         )
         media = media_plan["classification"]
 
@@ -626,12 +636,8 @@ def api_downloads_enqueue(payload: EnqueueDownloadPayload):
 
         settings = storage.get_download_settings()
         effective_chunk_count = payload.chunk_count or settings["default_chunk_count"]
-        manual_output_dir = _normalize_optional_text(payload.output_dir)
-        destination_subpath = None
-        resolved_output_dir = manual_output_dir
-        if resolved_output_dir is None:
-            destination_subpath = media_plan["destination_subpath"]
-            resolved_output_dir = media_plan["resolved_output_dir"]
+        destination_subpath = media_plan["destination_subpath"]
+        resolved_output_dir = media_plan["resolved_output_dir"]
 
         job = storage.enqueue_download_job(
             detail_url=detail_url,

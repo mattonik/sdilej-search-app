@@ -22,10 +22,6 @@
       <section class="panel">
         <form id="savedQueueDefaults" class="download-form">
           <label>
-            Output dir (optional)
-            <input id="savedOutputDir" type="text" placeholder="/downloads/movies" autocomplete="off" />
-          </label>
-          <label>
             Chunk count
             <input id="savedChunkCount" type="number" min="1" max="8" value="1" />
           </label>
@@ -124,7 +120,6 @@
 
     <script>
       const savedStatus = document.getElementById("savedStatus");
-      const savedOutputDir = document.getElementById("savedOutputDir");
       const savedChunkCount = document.getElementById("savedChunkCount");
       const savedPriority = document.getElementById("savedPriority");
       const resolveKidsValue = (rawValue) => {
@@ -172,7 +167,6 @@
             title,
             file_id: fileId,
             preferred_mode: "premium",
-            output_dir: savedOutputDir.value.trim() || null,
             chunk_count: Number(savedChunkCount.value || 1),
             priority: Number(savedPriority.value || 0),
             media_kind: mediaKind,

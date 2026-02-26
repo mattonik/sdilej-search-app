@@ -164,6 +164,8 @@ def resolve_destination_subpath(
         return _normalize_route(library_paths.get(key) or _DEFAULT_LIBRARY_PATHS[key])
 
     if classification.media_kind == "tv":
+        if not classification.series_name or classification.season_number is None:
+            return _normalize_route(library_paths.get("unsorted_dir") or _DEFAULT_LIBRARY_PATHS["unsorted_dir"])
         key = "kids_tv_dir" if classification.is_kids else "tv_dir"
         base_route = _normalize_route(library_paths.get(key) or _DEFAULT_LIBRARY_PATHS[key])
         series = _sanitize_segment(classification.series_name or "unknown-series")
