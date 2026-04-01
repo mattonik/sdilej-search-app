@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.venv/
 .DS_Store
 .tmp_auth_test/
 /.tmp_*

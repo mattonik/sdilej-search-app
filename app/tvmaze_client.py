@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import requests
+
+from .dataclass_compat import dataclass
 
 TVMAZE_BASE_URL = "https://api.tvmaze.com"
 
@@ -121,6 +121,30 @@ class TvMazeClient:
 
         episodes.sort(key=lambda ep: (ep.season, ep.number, ep.id))
         return episodes
+
+    def get_akas(self, show_id: int) -> list[str]:
+        response = self.session.get(
+            f"{TVMAZE_BASE_URL}/shows/{show_id}/akas",
+            timeout=self.timeout_seconds,
+        )
+        if response.status_code == 404:
+            raise TvMazeClientError("Show was not found on TVmaze.")
+        response.raise_for_status()
+
+        raw_items = response.json()
+        if not isinstance(raw_items, list):
+            raise TvMazeClientError("Unexpected TVmaze AKA response.")
+
+        aliases: list[str] = []
+        seen: set[str] = set()
+        for item in raw_items:
+            name = str((item or {}).get("name") or "").strip()
+            key = name.lower()
+            if not name or key in seen:
+                continue
+            seen.add(key)
+            aliases.append(name)
+        return aliases
 
     def _pick_best_match(self, query: str, items: list[dict]) -> dict:
         query_norm = query.strip().lower()

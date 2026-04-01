@@ -64,6 +64,35 @@ uvicorn app.main:app --reload --port 8080
 
 Open: `http://localhost:8080`
 
+## Tests
+
+Install dev dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
+Run the default mocked suite:
+
+```bash
+pytest -m "not live"
+```
+
+Run opt-in live smoke tests against real external services:
+
+```bash
+RUN_LIVE_SMOKE=1 pytest -m live
+```
+
+Recommended local release gate before pushing or building for the server:
+
+```bash
+pytest -m "not live"
+docker build -t sdilej-search:test .
+```
+
 ## Run with Docker
 
 ```bash
@@ -142,7 +171,12 @@ SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
 - `GET /api/detail?detail_url=https://sdilej.cz/15947667/scoob-2020-sk-.mkv&preflight=true`
 - `GET /api/autocomplete?q=mat&limit=10`
 - `POST /api/tv/lookup` (`show_name`) returns show + seasons/episodes
+- `POST /api/movie/lookup` (`title`, optional `year`) returns localized title metadata + aliases
 - `POST /api/tv/search` (`show_id`, `show_name`, `seasons`, optional current filters) returns grouped episode results
+- `POST /api/tv/search-jobs` creates a persisted background TV search job
+- `GET /api/tv/search-jobs?limit=50&status=running`
+- `GET /api/tv/search-jobs/{id}`
+- `POST /api/tv/search-jobs/{id}/cancel`
 - `GET /api/history?limit=50`
 - `GET /api/saved?limit=200`
 - `POST /api/saved` (upsert saved pick)

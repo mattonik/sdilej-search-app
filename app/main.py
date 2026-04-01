@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urljoin, urlparse
 
-from fastapi import FastAPI, Query, Request
+from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -19,22 +19,32 @@ from .media_routing import (
     requires_classification_confirmation,
     resolve_destination_subpath,
 )
-from .models import Category, LanguageScope, SortMode
+from .models import Category, LanguageScope, SearchResponse, SortMode
 from .sdilej_client import BASE_URL, SdilejClient, SdilejClientError
+from .search_utils import (
+    aggregate_query_results,
+    build_episode_query_variants,
+    build_tv_episode_result_matcher,
+    build_tv_search_aliases,
+    strip_internal_result_fields,
+)
 from .storage import Storage
-from .tvmaze_client import TvEpisode, TvMazeClient, TvMazeClientError
+from .title_metadata import TitleMetadataResolver, normalize_alias_key, parse_year
+from .tv_search_worker import TvSearchWorker
+from .tvmaze_client import TvEpisode, TvMazeClient, TvMazeClientError, TvShowSummary
 
 BASE_DIR = Path(__file__).resolve().parent
 _FILE_ID_RE = re.compile(r"^/(\d+)/")
 
-app = FastAPI(title="Sdilej Search Proxy", version="0.1.0")
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+router = APIRouter()
 
 client = SdilejClient()
 tv_client = TvMazeClient()
 storage = Storage()
 worker = DownloadWorker(storage=storage)
+metadata_resolver = TitleMetadataResolver(storage=storage, tv_client=tv_client)
+tv_search_worker = TvSearchWorker(storage=storage)
 
 DEFAULT_CATEGORY: Category = "all"
 DEFAULT_SORT: SortMode = "relevance"
@@ -149,11 +159,18 @@ class TvLookupPayload(BaseModel):
     show_name: str = Field(min_length=1, max_length=200)
 
 
+class MovieLookupPayload(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    year: int | None = Field(default=None, ge=1900, le=2099)
+
+
 class TvSeasonSearchPayload(BaseModel):
     show_id: int = Field(ge=1)
     show_name: str = Field(min_length=1, max_length=200)
     seasons: list[int] = Field(default_factory=list)
     episodes_by_season: dict[str, list[int]] = Field(default_factory=dict)
+    aliases: list[str] = Field(default_factory=list)
+    title_metadata: dict | None = None
     category: Category = "video"
     language: str | None = Field(default=None, max_length=32)
     language_scope: LanguageScope = "any"
@@ -161,22 +178,79 @@ class TvSeasonSearchPayload(BaseModel):
     max_results_per_variant: int = Field(default=120, ge=1, le=500)
 
 
-@app.on_event("startup")
-def on_startup() -> None:
-    storage.init_db()
-    storage.recover_download_queue_after_restart()
-    settings = storage.get_download_settings()
-    worker.configure(
-        max_concurrent_jobs=settings["max_concurrent_jobs"],
-        default_chunk_count=settings["default_chunk_count"],
-        bandwidth_limit_kbps=settings["bandwidth_limit_kbps"],
+def _set_services(
+    *,
+    client_instance: SdilejClient,
+    tv_client_instance: TvMazeClient,
+    storage_instance: Storage,
+    worker_instance: DownloadWorker,
+    metadata_resolver_instance: TitleMetadataResolver,
+    tv_search_worker_instance: TvSearchWorker,
+) -> None:
+    global client, tv_client, storage, worker, metadata_resolver, tv_search_worker
+    client = client_instance
+    tv_client = tv_client_instance
+    storage = storage_instance
+    worker = worker_instance
+    metadata_resolver = metadata_resolver_instance
+    tv_search_worker = tv_search_worker_instance
+
+
+def create_app(
+    *,
+    client_instance: SdilejClient | None = None,
+    tv_client_instance: TvMazeClient | None = None,
+    storage_instance: Storage | None = None,
+    worker_instance: DownloadWorker | None = None,
+    metadata_resolver_instance: TitleMetadataResolver | None = None,
+    tv_search_worker_instance: TvSearchWorker | None = None,
+    start_workers: bool = True,
+) -> FastAPI:
+    resolved_storage = storage_instance or Storage()
+    resolved_client = client_instance or SdilejClient()
+    resolved_tv_client = tv_client_instance or TvMazeClient()
+    resolved_worker = worker_instance or DownloadWorker(storage=resolved_storage)
+    resolved_metadata_resolver = metadata_resolver_instance or TitleMetadataResolver(
+        storage=resolved_storage,
+        tv_client=resolved_tv_client,
     )
-    worker.start()
+    resolved_tv_search_worker = tv_search_worker_instance or TvSearchWorker(storage=resolved_storage)
 
+    _set_services(
+        client_instance=resolved_client,
+        tv_client_instance=resolved_tv_client,
+        storage_instance=resolved_storage,
+        worker_instance=resolved_worker,
+        metadata_resolver_instance=resolved_metadata_resolver,
+        tv_search_worker_instance=resolved_tv_search_worker,
+    )
 
-@app.on_event("shutdown")
-def on_shutdown() -> None:
-    worker.stop()
+    app = FastAPI(title="Sdilej Search Proxy", version="0.1.0")
+    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+    app.include_router(router)
+
+    def on_startup() -> None:
+        resolved_storage.init_db()
+        resolved_storage.recover_download_queue_after_restart()
+        resolved_storage.recover_tv_search_queue_after_restart()
+        settings = resolved_storage.get_download_settings()
+        resolved_worker.configure(
+            max_concurrent_jobs=settings["max_concurrent_jobs"],
+            default_chunk_count=settings["default_chunk_count"],
+            bandwidth_limit_kbps=settings["bandwidth_limit_kbps"],
+        )
+        if start_workers:
+            resolved_worker.start()
+            resolved_tv_search_worker.start()
+
+    def on_shutdown() -> None:
+        if start_workers:
+            resolved_worker.stop()
+            resolved_tv_search_worker.stop()
+
+    app.add_event_handler("startup", on_startup)
+    app.add_event_handler("shutdown", on_shutdown)
+    return app
 
 
 def _parse_optional_year(raw_value: str | None) -> int | None:
@@ -226,47 +300,190 @@ def _resolve_download_root() -> Path:
     return Path(configured_root).expanduser().resolve()
 
 
-def _parse_size_to_bytes(size_text: str | None) -> int:
-    if not size_text:
-        return 0
-    match = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*([KMGTP]?B)", size_text.strip(), re.IGNORECASE)
-    if not match:
-        return 0
-    number_raw = match.group(1).replace(",", ".")
-    unit = match.group(2).upper()
-    try:
-        value = float(number_raw)
-    except ValueError:
-        return 0
-    factors = {
-        "B": 1,
-        "KB": 1024,
-        "MB": 1024**2,
-        "GB": 1024**3,
-        "TB": 1024**4,
-        "PB": 1024**5,
-    }
-    return int(value * factors.get(unit, 1))
+def _resolve_library_root(subpath: str | None) -> Path:
+    safe_subpath = (subpath or "").strip().lstrip("/")
+    return _resolve_download_root() / Path(safe_subpath)
 
 
-def _episode_query_variants(show_name: str, season: int, episode: int) -> list[str]:
-    safe_name = show_name.strip()
-    if not safe_name:
-        return []
-    variants = [
-        f"{safe_name} S{season:02d}E{episode:02d}",
-        f"{safe_name} {season}x{episode:02d}",
-        f"{safe_name} Season {season} Episode {episode}",
-    ]
-    deduped: list[str] = []
-    seen: set[str] = set()
-    for variant in variants:
-        key = variant.strip().lower()
-        if key in seen:
+def _resolve_video_metadata(query: str, release_year: int | None):
+    movie_metadata = metadata_resolver.resolve_movie(query, release_year)
+    tv_metadata = metadata_resolver.resolve_tv(query, year=release_year)
+
+    movie_score = len(movie_metadata.aliases)
+    tv_score = len(tv_metadata.aliases)
+    if release_year is not None and movie_metadata.year == release_year:
+        movie_score += 2
+    if movie_metadata.canonical_title.strip().lower() == query.strip().lower():
+        movie_score += 1
+    if tv_metadata.canonical_title.strip().lower() == query.strip().lower():
+        tv_score += 1
+
+    return tv_metadata if tv_score > movie_score else movie_metadata
+
+
+def _search_files(
+    *,
+    query: str,
+    category: Category,
+    sort: SortMode,
+    language: str,
+    language_scope: LanguageScope,
+    strict_dubbing: bool,
+    release_year: int | None,
+    max_results: int,
+) -> SearchResponse:
+    normalized_query = query.strip()
+    if category != "video" or not normalized_query:
+        return client.search(
+            query=query,
+            category=category,
+            sort=sort,
+            language=language,
+            language_scope=language_scope,
+            strict_dubbing=strict_dubbing,
+            release_year=release_year,
+            max_results=max_results,
+        )
+
+    title_metadata = _resolve_video_metadata(normalized_query, release_year)
+    aggregated = aggregate_query_results(
+        client=client,
+        queries=title_metadata.aliases or [normalized_query],
+        category=category,
+        sort=sort,
+        language=language,
+        language_scope=language_scope,
+        strict_dubbing=strict_dubbing,
+        release_year=release_year,
+        max_results_per_query=max_results,
+        max_results_total=max_results,
+    )
+    return SearchResponse(
+        query=normalized_query,
+        effective_query=aggregated["effective_query"] or normalized_query,
+        slug=aggregated["slug"],
+        category=category,
+        sort=sort,
+        language=client.normalize_language(language),
+        language_scope=language_scope,
+        strict_dubbing=strict_dubbing,
+        release_year=release_year,
+        search_url=aggregated["search_url"],
+        unfiltered_result_count=aggregated["unfiltered_result_count"],
+        result_count=len(aggregated["items"]),
+        results=[strip_internal_result_fields(item) for item in aggregated["items"]],
+        expanded_queries=aggregated["expanded_queries"],
+        title_metadata=title_metadata,
+    )
+
+
+def _existing_tv_series_folder_name(series_name: str, *, is_kids: bool, aliases: list[str]) -> str | None:
+    library_paths = storage.get_library_paths()
+    tv_root_key = "kids_tv_dir" if is_kids else "tv_dir"
+    series_root = _resolve_library_root(str(library_paths.get(tv_root_key) or "tv"))
+    if not series_root.exists() or not series_root.is_dir():
+        return None
+
+    alias_keys = {normalize_alias_key(value) for value in [series_name, *aliases] if normalize_alias_key(value)}
+    if not alias_keys:
+        return None
+
+    for child in sorted(series_root.iterdir(), key=lambda path: path.name.lower()):
+        if not child.is_dir():
             continue
-        seen.add(key)
-        deduped.append(variant)
-    return deduped
+        if normalize_alias_key(child.name) in alias_keys:
+            return child.name
+    return None
+
+
+def _build_tv_lookup_payload(show_name: str) -> tuple[dict, list[dict], dict]:
+    show = tv_client.lookup_show(show_name)
+    episodes = tv_client.get_episodes(show.id)
+    seasons = _serialize_tv_seasons(episodes)
+    if not seasons:
+        raise TvMazeClientError(f"No episode data found for '{show.name}'.")
+
+    title_metadata = metadata_resolver.resolve_tv(
+        show_name,
+        show=show,
+        year=parse_year(show.premiered),
+    )
+    return show.to_dict(), seasons, title_metadata.to_dict()
+
+
+def _resolve_tv_search_alias_context(
+    *,
+    show_name: str,
+    title_metadata: dict | None,
+) -> tuple[list[str], list[str]]:
+    raw_aliases = list((title_metadata or {}).get("aliases") or [])
+    if not raw_aliases:
+        raw_aliases = [show_name]
+    search_aliases = build_tv_search_aliases(
+        show_name=show_name,
+        request_query=raw_aliases[0] if raw_aliases else show_name,
+        title_metadata=title_metadata,
+    )
+    if not search_aliases:
+        search_aliases = [show_name]
+    return raw_aliases, search_aliases
+
+
+def _selected_tv_search_items(payload: TvSeasonSearchPayload, episodes: list[TvEpisode]) -> tuple[list[int], dict[int, set[int]], list[dict]]:
+    if not payload.seasons:
+        raise SdilejClientError("Select at least one season.")
+
+    season_map: dict[int, list[TvEpisode]] = defaultdict(list)
+    for episode in episodes:
+        season_map[episode.season].append(episode)
+
+    selected_seasons = sorted({season for season in payload.seasons if season >= 1})
+    if not selected_seasons:
+        raise SdilejClientError("Select at least one valid season.")
+
+    selected_episode_map: dict[int, set[int]] = {}
+    for raw_season, raw_numbers in (payload.episodes_by_season or {}).items():
+        try:
+            season_number = int(raw_season)
+        except (TypeError, ValueError):
+            continue
+        if season_number < 1:
+            continue
+        cleaned_numbers: set[int] = set()
+        for raw_number in raw_numbers or []:
+            try:
+                episode_number = int(raw_number)
+            except (TypeError, ValueError):
+                continue
+            if episode_number >= 1:
+                cleaned_numbers.add(episode_number)
+        selected_episode_map[season_number] = cleaned_numbers
+
+    for season_number in selected_seasons:
+        if season_number in selected_episode_map and not selected_episode_map[season_number]:
+            raise SdilejClientError(f"Select at least one episode for season {season_number}.")
+
+    selected_items: list[dict] = []
+    for season_number in selected_seasons:
+        season_episodes = sorted(season_map.get(season_number, []), key=lambda ep: ep.number)
+        selected_numbers = selected_episode_map.get(season_number)
+        if selected_numbers is not None:
+            season_episodes = [episode for episode in season_episodes if episode.number in selected_numbers]
+        for episode in season_episodes:
+            selected_items.append(
+                {
+                    "season_number": episode.season,
+                    "episode_number": episode.number,
+                    "episode_name": episode.name,
+                    "airdate": episode.airdate,
+                    "episode_code": f"S{episode.season:02d}E{episode.number:02d}",
+                }
+            )
+
+    if not selected_items:
+        raise SdilejClientError("No matching episodes were found for the selected seasons.")
+
+    return selected_seasons, selected_episode_map, selected_items
 
 
 def _serialize_tv_seasons(episodes: list[TvEpisode]) -> list[dict]:
@@ -314,6 +531,18 @@ def _build_media_plan(
         season_number_override=season_number,
         episode_number_override=episode_number,
     )
+    if media.media_kind == "tv" and media.series_name:
+        try:
+            metadata = metadata_resolver.resolve_tv(media.series_name)
+            existing_series_name = _existing_tv_series_folder_name(
+                media.series_name,
+                is_kids=media.is_kids,
+                aliases=metadata.aliases,
+            )
+            if existing_series_name:
+                media.series_name = existing_series_name
+        except Exception:
+            pass
     destination_subpath = resolve_destination_subpath(media, library_paths=library_paths)
     resolved_output_dir = str(_resolve_download_root() / Path(destination_subpath))
     requires_confirmation = bool(
@@ -328,7 +557,7 @@ def _build_media_plan(
     }
 
 
-@app.get("/")
+@router.get("/")
 def index(
     request: Request,
     query: str = Query(default="", max_length=200),
@@ -346,7 +575,7 @@ def index(
     if query.strip() or language.strip() or release_year.strip() or strict_dubbing:
         try:
             parsed_release_year = _parse_optional_year(release_year)
-            search_response = client.search(
+            search_response = _search_files(
                 query=query,
                 category=category,
                 sort=sort,
@@ -383,7 +612,7 @@ def index(
     )
 
 
-@app.get("/saved")
+@router.get("/saved")
 def saved_page(
     request: Request,
     limit: int = Query(default=500, ge=1, le=5000),
@@ -399,7 +628,7 @@ def saved_page(
     )
 
 
-@app.get("/api/search")
+@router.get("/api/search")
 def api_search(
     query: str = Query(default="", max_length=200),
     category: Category = Query(default=DEFAULT_CATEGORY),
@@ -412,7 +641,7 @@ def api_search(
 ):
     try:
         parsed_release_year = _parse_optional_year(release_year)
-        result = client.search(
+        result = _search_files(
             query=query,
             category=category,
             sort=sort,
@@ -430,7 +659,7 @@ def api_search(
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.get("/api/detail")
+@router.get("/api/detail")
 def api_detail(
     detail_url: str = Query(..., min_length=1, max_length=500),
     preflight: bool = Query(default=True),
@@ -444,7 +673,7 @@ def api_detail(
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.get("/api/history")
+@router.get("/api/history")
 def api_history(limit: int = Query(default=50, ge=1, le=500)):
     try:
         return JSONResponse({"items": storage.list_search_history(limit=limit)})
@@ -452,7 +681,7 @@ def api_history(limit: int = Query(default=50, ge=1, le=500)):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.get("/api/saved")
+@router.get("/api/saved")
 def api_saved_list(limit: int = Query(default=200, ge=1, le=1000)):
     try:
         return JSONResponse({"items": storage.list_saved_candidates(limit=limit)})
@@ -460,7 +689,7 @@ def api_saved_list(limit: int = Query(default=200, ge=1, le=1000)):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/saved")
+@router.post("/api/saved")
 def api_saved_upsert(payload: SaveCandidatePayload):
     try:
         detail_url = _normalize_detail_url(payload.detail_url)
@@ -508,7 +737,7 @@ def api_saved_upsert(payload: SaveCandidatePayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.delete("/api/saved/{file_id}")
+@router.delete("/api/saved/{file_id}")
 def api_saved_delete(file_id: int):
     try:
         deleted = storage.delete_saved_candidate(file_id=file_id)
@@ -519,7 +748,7 @@ def api_saved_delete(file_id: int):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.get("/api/account")
+@router.get("/api/account")
 def api_account_get():
     credentials = storage.get_account_credentials()
     if not credentials:
@@ -527,7 +756,7 @@ def api_account_get():
     return JSONResponse({"configured": True, "login": credentials[0]})
 
 
-@app.post("/api/account")
+@router.post("/api/account")
 def api_account_set(payload: AccountPayload):
     try:
         login_value = payload.login.strip()
@@ -560,13 +789,13 @@ def api_account_set(payload: AccountPayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.delete("/api/account")
+@router.delete("/api/account")
 def api_account_delete():
     storage.clear_account_credentials()
     return JSONResponse({"cleared": True})
 
 
-@app.get("/api/downloads")
+@router.get("/api/downloads")
 def api_downloads_list(
     limit: int = Query(default=200, ge=1, le=1000),
     status: str | None = Query(default=None),
@@ -578,7 +807,7 @@ def api_downloads_list(
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.get("/api/downloads/settings")
+@router.get("/api/downloads/settings")
 def api_download_settings_get():
     try:
         settings = storage.get_download_settings()
@@ -587,7 +816,7 @@ def api_download_settings_get():
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads/settings")
+@router.post("/api/downloads/settings")
 def api_download_settings_set(payload: DownloadSettingsPayload):
     try:
         settings = storage.set_download_settings(
@@ -605,7 +834,7 @@ def api_download_settings_set(payload: DownloadSettingsPayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.get("/api/downloads/library-paths")
+@router.get("/api/downloads/library-paths")
 def api_library_paths_get():
     try:
         return JSONResponse(storage.get_library_paths())
@@ -613,7 +842,7 @@ def api_library_paths_get():
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads/library-paths")
+@router.post("/api/downloads/library-paths")
 def api_library_paths_set(payload: LibraryPathsPayload):
     try:
         paths = storage.set_library_paths(
@@ -629,7 +858,7 @@ def api_library_paths_set(payload: LibraryPathsPayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/media/classify")
+@router.post("/api/media/classify")
 def api_media_classify(payload: MediaClassificationPayload):
     try:
         plan = _build_media_plan(
@@ -653,20 +882,35 @@ def api_media_classify(payload: MediaClassificationPayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/tv/lookup")
-def api_tv_lookup(payload: TvLookupPayload):
+@router.post("/api/movie/lookup")
+def api_movie_lookup(payload: MovieLookupPayload):
     try:
-        show = tv_client.lookup_show(payload.show_name)
-        episodes = tv_client.get_episodes(show.id)
-        seasons = _serialize_tv_seasons(episodes)
-        if not seasons:
-            return JSONResponse(
-                status_code=404,
-                content={"error": f"No episode data found for '{show.name}'."},
-            )
+        metadata = metadata_resolver.resolve_movie(payload.title, payload.year)
         return JSONResponse(
             {
-                "show": show.to_dict(),
+                "query": payload.title.strip(),
+                "title_metadata": metadata.to_dict(),
+                "aliases": metadata.aliases,
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@router.post("/api/tv/lookup")
+def api_tv_lookup(payload: TvLookupPayload):
+    try:
+        show, seasons, title_metadata = _build_tv_lookup_payload(payload.show_name)
+        aliases, search_aliases = _resolve_tv_search_alias_context(
+            show_name=str(show.get("name") or payload.show_name),
+            title_metadata=title_metadata,
+        )
+        return JSONResponse(
+            {
+                "show": show,
+                "title_metadata": title_metadata,
+                "aliases": aliases,
+                "search_aliases": search_aliases,
                 "seasons": seasons,
                 "season_count": len(seasons),
                 "episode_count": sum(item["episode_count"] for item in seasons),
@@ -678,127 +922,75 @@ def api_tv_lookup(payload: TvLookupPayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/tv/search")
+@router.post("/api/tv/search")
 def api_tv_search(payload: TvSeasonSearchPayload):
     try:
-        if not payload.seasons:
-            return JSONResponse(status_code=400, content={"error": "Select at least one season."})
-
-        normalized_language = client.normalize_language(payload.language)
         episodes = tv_client.get_episodes(payload.show_id)
-        season_map: dict[int, list[TvEpisode]] = defaultdict(list)
-        for episode in episodes:
-            season_map[episode.season].append(episode)
-
-        selected_seasons = sorted({season for season in payload.seasons if season >= 1})
-        if not selected_seasons:
-            return JSONResponse(status_code=400, content={"error": "Select at least one valid season."})
-
-        selected_episode_map: dict[int, set[int]] = {}
-        for raw_season, raw_numbers in (payload.episodes_by_season or {}).items():
-            try:
-                season_number = int(raw_season)
-            except (TypeError, ValueError):
-                continue
-            if season_number < 1:
-                continue
-            cleaned_numbers: set[int] = set()
-            for raw_number in raw_numbers or []:
-                try:
-                    episode_number = int(raw_number)
-                except (TypeError, ValueError):
-                    continue
-                if episode_number >= 1:
-                    cleaned_numbers.add(episode_number)
-            selected_episode_map[season_number] = cleaned_numbers
-
-        for season_number in selected_seasons:
-            if season_number in selected_episode_map and not selected_episode_map[season_number]:
-                return JSONResponse(
-                    status_code=400,
-                    content={"error": f"Select at least one episode for season {season_number}."},
-                )
-
+        selected_seasons, _selected_episode_map, selected_items = _selected_tv_search_items(payload, episodes)
+        show_summary = TvShowSummary(
+            id=payload.show_id,
+            name=payload.show_name,
+            premiered=None,
+            language=None,
+        )
+        title_metadata = payload.title_metadata or metadata_resolver.resolve_tv(
+            payload.show_name,
+            show=show_summary,
+        ).to_dict()
+        aliases, search_aliases = _resolve_tv_search_alias_context(
+            show_name=payload.show_name,
+            title_metadata=title_metadata,
+        )
         grouped_seasons: list[dict] = []
         for season_number in selected_seasons:
-            season_episodes = sorted(season_map.get(season_number, []), key=lambda ep: ep.number)
-            season_episode_filter = selected_episode_map.get(season_number)
-            if season_episode_filter is not None:
-                season_episodes = [episode for episode in season_episodes if episode.number in season_episode_filter]
+            season_items = [item for item in selected_items if int(item["season_number"]) == season_number]
             grouped_episodes: list[dict] = []
 
-            for episode in season_episodes:
-                queries = _episode_query_variants(payload.show_name, episode.season, episode.number)
-                aggregated: dict[str, dict] = {}
-                query_errors: list[str] = []
-
-                for query in queries:
-                    try:
-                        search_response = client.search(
-                            query=query,
-                            category=payload.category,
-                            sort="relevance",
-                            language=None,
-                            language_scope=payload.language_scope,
-                            strict_dubbing=False,
-                            release_year=None,
-                            max_results=payload.max_results_per_variant,
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        query_errors.append(f"{query}: {exc}")
-                        continue
-
-                    for result in search_response.results:
-                        item = result.to_dict()
-                        language_priority = client.language_match_priority(
-                            title=result.title,
-                            language=normalized_language,
-                            scope=payload.language_scope,
-                            strict_dubbing=payload.strict_dubbing,
-                        )
-                        size_bytes = _parse_size_to_bytes(result.size)
-                        key = f"id:{result.file_id}" if result.file_id is not None else f"url:{result.detail_url}"
-                        if key not in aggregated:
-                            aggregated[key] = {
-                                **item,
-                                "language_priority": language_priority,
-                                "size_bytes": size_bytes,
-                                "query_hits": [query],
-                            }
-                        else:
-                            current = aggregated[key]
-                            current["language_priority"] = max(current.get("language_priority", 0), language_priority)
-                            current["size_bytes"] = max(current.get("size_bytes", 0), size_bytes)
-                            hits = set(current.get("query_hits", []))
-                            hits.add(query)
-                            current["query_hits"] = sorted(hits)
-
-                sorted_results = sorted(
-                    aggregated.values(),
-                    key=lambda item: (
-                        -int(item.get("language_priority") or 0),
-                        -int(item.get("size_bytes") or 0),
-                        str(item.get("title") or "").lower(),
-                    ),
+            for episode in season_items:
+                result_matcher = build_tv_episode_result_matcher(
+                    show_name=payload.show_name,
+                    request_query=aliases[0] if aliases else payload.show_name,
+                    title_metadata=title_metadata,
+                    season=int(episode["season_number"]),
+                    episode=int(episode["episode_number"]),
+                )
+                queries = build_episode_query_variants(
+                    search_aliases,
+                    int(episode["season_number"]),
+                    int(episode["episode_number"]),
+                )
+                aggregated = aggregate_query_results(
+                    client=client,
+                    queries=queries,
+                    category=payload.category,
+                    sort="relevance",
+                    language=payload.language,
+                    language_scope=payload.language_scope,
+                    strict_dubbing=payload.strict_dubbing,
+                    release_year=None,
+                    max_results_per_query=payload.max_results_per_variant,
+                    result_filter=result_matcher,
                 )
                 grouped_episodes.append(
                     {
-                        "episode_code": f"S{episode.season:02d}E{episode.number:02d}",
-                        "season_number": episode.season,
-                        "episode_number": episode.number,
-                        "episode_name": episode.name,
-                        "airdate": episode.airdate,
+                        "episode_code": episode["episode_code"],
+                        "season_number": episode["season_number"],
+                        "episode_number": episode["episode_number"],
+                        "episode_name": episode["episode_name"],
+                        "airdate": episode["airdate"],
+                        "status": "done",
                         "query_variants": queries,
-                        "query_errors": query_errors,
-                        "result_count": len(sorted_results),
-                        "results": sorted_results,
+                        "query_errors": aggregated["query_errors"],
+                        "result_count": len(aggregated["items"]),
+                        "results": aggregated["items"],
                     }
                 )
 
             grouped_seasons.append(
                 {
                     "season_number": season_number,
-                    "episode_count": len(season_episodes),
+                    "episode_count": len(season_items),
+                    "completed_episodes": len(season_items),
                     "episodes": grouped_episodes,
                     "result_count": sum(item["result_count"] for item in grouped_episodes),
                 }
@@ -811,11 +1003,18 @@ def api_tv_search(payload: TvSeasonSearchPayload):
                     "name": payload.show_name,
                     "source": "tvmaze",
                 },
+                "title_metadata": title_metadata,
+                "aliases": aliases,
+                "search_aliases": search_aliases,
                 "selected_seasons": selected_seasons,
-                "language": normalized_language,
+                "language": client.normalize_language(payload.language),
                 "language_scope": payload.language_scope,
                 "strict_dubbing": payload.strict_dubbing,
                 "category": payload.category,
+                "status": "done",
+                "total_episodes": len(selected_items),
+                "completed_episodes": len(selected_items),
+                "result_count": sum(item["result_count"] for item in grouped_seasons),
                 "seasons": grouped_seasons,
             }
         )
@@ -827,7 +1026,86 @@ def api_tv_search(payload: TvSeasonSearchPayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads")
+@router.post("/api/tv/search-jobs")
+def api_tv_search_jobs_create(payload: TvSeasonSearchPayload):
+    try:
+        episodes = tv_client.get_episodes(payload.show_id)
+        selected_seasons, _selected_episode_map, selected_items = _selected_tv_search_items(payload, episodes)
+        show_summary = TvShowSummary(
+            id=payload.show_id,
+            name=payload.show_name,
+            premiered=None,
+            language=None,
+        )
+        title_metadata = payload.title_metadata or metadata_resolver.resolve_tv(
+            payload.show_name,
+            show=show_summary,
+        ).to_dict()
+        aliases, search_aliases = _resolve_tv_search_alias_context(
+            show_name=payload.show_name,
+            title_metadata=title_metadata,
+        )
+        job = storage.enqueue_tv_search_job(
+            show={
+                "id": payload.show_id,
+                "name": payload.show_name,
+                "source": "tvmaze",
+            },
+            title_metadata=title_metadata,
+            aliases=aliases,
+            search_aliases=search_aliases,
+            selected_seasons=selected_seasons,
+            episodes_by_season=payload.episodes_by_season,
+            category=payload.category,
+            language=client.normalize_language(payload.language),
+            language_scope=payload.language_scope,
+            strict_dubbing=payload.strict_dubbing,
+            max_results_per_variant=payload.max_results_per_variant,
+            episodes=selected_items,
+        )
+        return JSONResponse(job)
+    except SdilejClientError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    except TvMazeClientError as exc:
+        return JSONResponse(status_code=404, content={"error": str(exc)})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@router.get("/api/tv/search-jobs")
+def api_tv_search_jobs_list(
+    limit: int = Query(default=50, ge=1, le=200),
+    status: str | None = Query(default=None),
+):
+    try:
+        return JSONResponse({"items": storage.list_tv_search_jobs(limit=limit, status=status)})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@router.get("/api/tv/search-jobs/{job_id}")
+def api_tv_search_jobs_get(job_id: int):
+    try:
+        job = storage.get_tv_search_job(job_id)
+        if job is None:
+            return JSONResponse(status_code=404, content={"error": "TV search job not found."})
+        return JSONResponse(job)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@router.post("/api/tv/search-jobs/{job_id}/cancel")
+def api_tv_search_jobs_cancel(job_id: int):
+    try:
+        changed = storage.cancel_tv_search_job(job_id)
+        if not changed:
+            return JSONResponse(status_code=404, content={"error": "TV search job not found or not cancelable."})
+        return JSONResponse({"canceled": True, "job_id": job_id})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@router.post("/api/downloads")
 def api_downloads_enqueue(payload: EnqueueDownloadPayload):
     try:
         detail_url = _normalize_detail_url(payload.detail_url)
@@ -925,7 +1203,7 @@ def api_downloads_enqueue(payload: EnqueueDownloadPayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads/{job_id}/classification")
+@router.post("/api/downloads/{job_id}/classification")
 def api_downloads_update_classification(job_id: int, payload: UpdateDownloadClassificationPayload):
     try:
         job = storage.get_download_job(job_id)
@@ -982,7 +1260,7 @@ def api_downloads_update_classification(job_id: int, payload: UpdateDownloadClas
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads/{job_id}/cancel")
+@router.post("/api/downloads/{job_id}/cancel")
 def api_downloads_cancel(job_id: int):
     try:
         changed = storage.cancel_download_job(job_id, complete=False)
@@ -993,7 +1271,7 @@ def api_downloads_cancel(job_id: int):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads/{job_id}/cancel-complete")
+@router.post("/api/downloads/{job_id}/cancel-complete")
 def api_downloads_cancel_complete(job_id: int):
     try:
         changed = storage.cancel_download_job(job_id, complete=True)
@@ -1004,7 +1282,7 @@ def api_downloads_cancel_complete(job_id: int):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads/{job_id}/retry")
+@router.post("/api/downloads/{job_id}/retry")
 def api_downloads_retry(job_id: int):
     try:
         changed = storage.retry_download_job(job_id)
@@ -1015,7 +1293,7 @@ def api_downloads_retry(job_id: int):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.delete("/api/downloads/{job_id}")
+@router.delete("/api/downloads/{job_id}")
 def api_downloads_delete(job_id: int, with_data: bool = Query(default=False)):
     try:
         result = storage.delete_download_job(job_id, with_data=with_data)
@@ -1028,7 +1306,7 @@ def api_downloads_delete(job_id: int, with_data: bool = Query(default=False)):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads/{job_id}/priority")
+@router.post("/api/downloads/{job_id}/priority")
 def api_downloads_priority(job_id: int, payload: UpdatePriorityPayload):
     try:
         changed = storage.set_download_priority(job_id, payload.priority)
@@ -1039,7 +1317,7 @@ def api_downloads_priority(job_id: int, payload: UpdatePriorityPayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads/{job_id}/top")
+@router.post("/api/downloads/{job_id}/top")
 def api_downloads_move_top(job_id: int):
     try:
         changed = storage.move_download_job_to_top(job_id)
@@ -1050,7 +1328,7 @@ def api_downloads_move_top(job_id: int):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.post("/api/downloads/clear")
+@router.post("/api/downloads/clear")
 def api_downloads_clear(payload: ClearDownloadsPayload):
     try:
         deleted = storage.delete_download_jobs(statuses=payload.statuses)
@@ -1059,7 +1337,7 @@ def api_downloads_clear(payload: ClearDownloadsPayload):
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.get("/api/autocomplete")
+@router.get("/api/autocomplete")
 def api_autocomplete(
     q: str = Query(..., min_length=1, max_length=200),
     limit: int = Query(default=10, ge=1, le=30),
@@ -1071,6 +1349,13 @@ def api_autocomplete(
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
-@app.get("/healthz")
+@router.get("/healthz")
 def healthcheck():
-    return {"status": "ok", "worker_alive": worker.is_alive()}
+    return {
+        "status": "ok",
+        "worker_alive": worker.is_alive(),
+        "tv_search_worker_alive": tv_search_worker.is_alive(),
+    }
+
+
+app = create_app()

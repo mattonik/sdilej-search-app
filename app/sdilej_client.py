@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
+from .dataclass_compat import dataclass
 from .models import Category, DetailProbeResponse, LanguageScope, SearchResponse, SearchResult, SortMode
 
 BASE_URL = "https://sdilej.cz"

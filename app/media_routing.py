@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import PurePosixPath
 from typing import Literal
+
+from .dataclass_compat import dataclass
 
 MediaKind = Literal["movie", "tv", "unknown"]
 ClassificationConfidence = Literal["strict", "loose", "unknown", "manual"]

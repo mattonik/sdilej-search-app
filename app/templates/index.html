@@ -323,6 +323,12 @@
           <div><strong>Strict dubbing:</strong> {{ "enabled" if search.strict_dubbing else "disabled" }}</div>
           <div><strong>Year filter:</strong> {{ search.release_year if search.release_year is not none else "none" }}</div>
           <div><strong>Parsed results:</strong> {{ search.result_count }} / {{ search.unfiltered_result_count }}</div>
+          {% if search.expanded_queries %}
+            <div><strong>Expanded queries:</strong> {{ search.expanded_queries | join(" | ") }}</div>
+          {% endif %}
+          {% if search.title_metadata %}
+            <div><strong>Resolved title:</strong> {{ search.title_metadata.canonical_title }}{% if search.title_metadata.original_title %} / {{ search.title_metadata.original_title }}{% endif %}</div>
+          {% endif %}
         </section>
 
         <section class="results-grid tab-section tab-search file-results-block">
@@ -348,6 +354,7 @@
                   <li><strong>Languages:</strong> {{ item.detected_languages | join(", ") if item.detected_languages else "n/a" }}</li>
                   <li><strong>Dub hint:</strong> {{ "yes" if item.has_dub_hint else "no" }}</li>
                   <li><strong>Subtitle hint:</strong> {{ "yes" if item.has_subtitle_hint else "no" }}</li>
+                  <li><strong>Query hits:</strong> {{ item.query_hits | join(", ") if item.query_hits else "n/a" }}</li>
                 </ul>
                 <div class="card-actions">
                   <button
@@ -509,10 +516,13 @@
       const queueDialogChunkCount = document.getElementById("queueDialogChunkCount");
       const queueDialogPriority = document.getElementById("queueDialogPriority");
       const queueDialogPreview = document.getElementById("queueDialogPreview");
+      const TV_ACTIVE_JOB_KEY = "activeTvSearchJobId";
       let timer = null;
       let queueDialogState = null;
       let tvLookupState = null;
       let searchMode = "file";
+      let activeTvSearchJobId = window.localStorage.getItem(TV_ACTIVE_JOB_KEY);
+      let tvJobPollInFlight = false;
 
       const esc = (value) =>
         String(value ?? "")
@@ -602,6 +612,16 @@
         `;
       };
 
+      const formatTvAliasSummary = (knownAliases, searchAliases) => {
+        const knownCount = Array.isArray(knownAliases) ? knownAliases.length : 0;
+        const searchCount = Array.isArray(searchAliases) ? searchAliases.length : 0;
+        if (searchCount > 0 && knownCount > 0 && searchCount !== knownCount) {
+          return `using ${searchCount} safe search aliases from ${knownCount} known aliases`;
+        }
+        const count = searchCount || knownCount;
+        return `${count} aliases`;
+      };
+
       const syncFileFiltersToTvEditor = () => {
         if (tvFilterCategory) tvFilterCategory.value = categorySelect.value || "video";
         if (tvFilterLanguage) tvFilterLanguage.value = languageInput.value || "";
@@ -677,6 +697,7 @@
           setTvStatus("Show name is required.", "error");
           return;
         }
+        setActiveTvSearchJobId(null);
         setTvStatus("Loading show metadata and seasons...", "neutral");
         tvLookupInfo.textContent = "";
         tvSeasonPicker.innerHTML = "";
@@ -698,7 +719,7 @@
           const show = data.show || {};
           tvLookupInfo.innerHTML = `
             <strong>${esc(show.name || showName)}</strong>
-            <span> (${esc(data.season_count || 0)} seasons, ${esc(data.episode_count || 0)} episodes, source: ${esc(show.source || "tvmaze")})</span>
+            <span> (${esc(data.season_count || 0)} seasons, ${esc(data.episode_count || 0)} episodes, ${esc(formatTvAliasSummary(data.aliases || [], data.search_aliases || []))}, source: ${esc(show.source || "tvmaze")})</span>
           `;
           renderTvSeasonPicker(data.seasons || []);
           setTvStatus("Seasons loaded. Select seasons and run search.", "ok");
@@ -726,12 +747,12 @@
         }
         const episodesBySeason = selectedTvEpisodesBySeason();
 
-        setTvStatus("Searching selected seasons...", "neutral");
+        setTvStatus("Starting background TV search...", "neutral");
         tvResults.innerHTML = "";
         const maxPerVariantRaw = Number(maxResultsInput.value || 120);
         const maxPerVariant = Number.isFinite(maxPerVariantRaw) && maxPerVariantRaw > 0 ? Math.min(500, maxPerVariantRaw) : 120;
         try {
-          const res = await fetch("/api/tv/search", {
+          const res = await fetch("/api/tv/search-jobs", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -739,6 +760,8 @@
               show_name: tvLookupState.show.name || tvShowName.value.trim(),
               seasons,
               episodes_by_season: episodesBySeason,
+              aliases: tvLookupState.aliases || [],
+              title_metadata: tvLookupState.title_metadata || null,
               category: categorySelect.value || "video",
               language: languageInput.value.trim() || null,
               language_scope: languageScopeSelect.value || "any",
@@ -751,9 +774,10 @@
             setTvStatus(data.error || "TV search failed.", "error");
             return;
           }
+          setActiveTvSearchJobId(data.id);
           renderTvResults(data);
-          const seasonCount = Array.isArray(data.seasons) ? data.seasons.length : 0;
-          setTvStatus(`TV search complete for ${seasonCount} season(s).`, "ok");
+          setTvStatus(`TV search job #${data.id} queued in the background.`, "ok");
+          await refreshActiveTvSearchJob({ force: true });
         } catch (_) {
           setTvStatus("TV search failed.", "error");
         }
@@ -767,6 +791,15 @@
       const setTvStatus = (text, mode = "neutral") => {
         tvStatus.textContent = text;
         tvStatus.dataset.mode = mode;
+      };
+
+      const setActiveTvSearchJobId = (jobId) => {
+        activeTvSearchJobId = jobId ? String(jobId) : null;
+        if (activeTvSearchJobId) {
+          window.localStorage.setItem(TV_ACTIVE_JOB_KEY, activeTvSearchJobId);
+        } else {
+          window.localStorage.removeItem(TV_ACTIVE_JOB_KEY);
+        }
       };
 
       const selectedTvSeasons = () =>
@@ -807,6 +840,112 @@
           }
         });
         return valid;
+      };
+
+      const refreshActiveTvSearchJob = async ({ force = false } = {}) => {
+        if (!activeTvSearchJobId || tvJobPollInFlight) return;
+        if (!force && document.visibilityState === "hidden") return;
+
+        tvJobPollInFlight = true;
+        try {
+          const res = await fetch(`/api/tv/search-jobs/${encodeURIComponent(activeTvSearchJobId)}`);
+          const data = await res.json();
+          if (!res.ok) {
+            if (res.status === 404) {
+              setActiveTvSearchJobId(null);
+            }
+            setTvStatus(data.error || "TV search job is unavailable.", "error");
+            return;
+          }
+
+          tvLookupState = {
+            show: data.show || tvLookupState?.show || null,
+            title_metadata: data.title_metadata || tvLookupState?.title_metadata || null,
+            aliases: data.aliases || tvLookupState?.aliases || [],
+            search_aliases: data.search_aliases || tvLookupState?.search_aliases || [],
+            seasons: data.seasons || tvLookupState?.seasons || [],
+          };
+          if (tvLookupState.show) {
+            tvLookupInfo.innerHTML = `
+              <strong>${esc(tvLookupState.show.name || "")}</strong>
+              <span> (${esc(Number(data.total_episodes || 0))} selected episodes, ${esc(formatTvAliasSummary(data.aliases || [], data.search_aliases || []))})</span>
+            `;
+          }
+          renderTvResults(data);
+
+          const completed = Number(data.completed_episodes || 0);
+          const total = Number(data.total_episodes || 0);
+          if (data.status === "done") {
+            setTvStatus(`TV search complete: ${completed}/${total} episodes processed.`, "ok");
+            setActiveTvSearchJobId(null);
+          } else if (data.status === "failed") {
+            setTvStatus(data.error || "TV search failed.", "error");
+            setActiveTvSearchJobId(null);
+          } else if (data.status === "canceled") {
+            setTvStatus("TV search canceled.", "neutral");
+            setActiveTvSearchJobId(null);
+          } else {
+            setTvStatus(`TV search running: ${completed}/${total} episodes processed.`, "neutral");
+          }
+        } catch (_) {
+          setTvStatus("TV search job refresh failed.", "error");
+        } finally {
+          tvJobPollInFlight = false;
+        }
+      };
+
+      const captureTvResultsUiState = () => {
+        const openSeasonKeys = new Set(
+          Array.from(tvResults.querySelectorAll("details.tv-season[open]"))
+            .map((node) => String(node.dataset.seasonKey || ""))
+            .filter(Boolean)
+        );
+        const openEpisodeKeys = new Set(
+          Array.from(tvResults.querySelectorAll("details.tv-episode[open]"))
+            .map((node) => String(node.dataset.episodeKey || ""))
+            .filter(Boolean)
+        );
+
+        let scrollAnchor = null;
+        const anchorCandidates = Array.from(
+          tvResults.querySelectorAll("details.tv-episode[data-episode-key], details.tv-season[data-season-key]")
+        );
+        for (const node of anchorCandidates) {
+          const rect = node.getBoundingClientRect();
+          if (rect.bottom <= 0) continue;
+          scrollAnchor = node.dataset.episodeKey
+            ? { kind: "episode", key: String(node.dataset.episodeKey), top: rect.top }
+            : { kind: "season", key: String(node.dataset.seasonKey), top: rect.top };
+          break;
+        }
+
+        return { openSeasonKeys, openEpisodeKeys, scrollAnchor };
+      };
+
+      const restoreTvResultsUiState = (state) => {
+        if (!state) return;
+
+        tvResults.querySelectorAll("details.tv-season[data-season-key]").forEach((node) => {
+          node.open = state.openSeasonKeys.has(String(node.dataset.seasonKey || ""));
+        });
+        tvResults.querySelectorAll("details.tv-episode[data-episode-key]").forEach((node) => {
+          node.open = state.openEpisodeKeys.has(String(node.dataset.episodeKey || ""));
+        });
+
+        if (!state.scrollAnchor) return;
+
+        const anchorSelector =
+          state.scrollAnchor.kind === "episode"
+            ? `details.tv-episode[data-episode-key="${state.scrollAnchor.key}"]`
+            : `details.tv-season[data-season-key="${state.scrollAnchor.key}"]`;
+        const anchorNode = tvResults.querySelector(anchorSelector);
+        if (!anchorNode) return;
+
+        const rect = anchorNode.getBoundingClientRect();
+        const delta = rect.top - state.scrollAnchor.top;
+        if (Math.abs(delta) > 1) {
+          window.scrollBy(0, delta);
+        }
       };
 
       const renderTvSeasonPicker = (seasons) => {
@@ -947,12 +1086,36 @@
 
       const renderTvResults = (payload) => {
         const seasons = payload?.seasons || [];
+        const completed = Number(payload?.completed_episodes || 0);
+        const total = Number(payload?.total_episodes || 0);
+        const resultCount = Number(payload?.result_count || 0);
+        const status = String(payload?.status || "");
+        const bannerMessage =
+          status === "done"
+            ? `Search complete. ${completed}/${total} episodes processed, ${resultCount} files found. No more results are coming.`
+            : status === "failed"
+              ? `Search failed after ${completed}/${total} episodes. ${payload?.error || "Check the status above for details."}`
+              : status === "canceled"
+                ? `Search canceled at ${completed}/${total} processed episodes. No more results are coming.`
+                : status === "running"
+                  ? `Search running in the background. ${completed}/${total} episodes processed, ${resultCount} files found so far.`
+                  : status === "queued"
+                    ? `Search queued in the background. ${completed}/${total} episodes processed so far.`
+                    : "";
+        const bannerHtml = bannerMessage
+          ? `<div class="tv-results-banner" data-mode="${esc(status || "neutral")}" aria-live="polite">${esc(bannerMessage)}</div>`
+          : "";
+
         if (!Array.isArray(seasons) || seasons.length === 0) {
-          tvResults.innerHTML = "<div class='download-empty'>No results found for selected seasons.</div>";
+          tvResults.innerHTML = `
+            ${bannerHtml}
+            <div class='download-empty'>No results found for selected seasons.</div>
+          `;
           return;
         }
 
-        tvResults.innerHTML = seasons
+        const uiState = captureTvResultsUiState();
+        const seasonHtml = seasons
           .map((season) => {
             const seasonRows = season.episodes
               .map((episode) => {
@@ -967,6 +1130,7 @@
                         <div class="tv-result-submeta">
                           <span>Ext: ${esc(item.extension || "n/a")}</span>
                           <span>Year: ${esc(item.primary_year ?? "n/a")}</span>
+                          <span>Queries: ${esc((item.query_hits || []).join(", ") || "n/a")}</span>
                         </div>
                         <div class="tv-result-actions">
                           <button
@@ -987,28 +1151,41 @@
                   )
                   .join("");
                 return `
-                  <details class="tv-episode">
+                  <details class="tv-episode" data-episode-key="${esc(`${episode.season_number ?? season.season_number ?? ""}:${episode.episode_number ?? ""}`)}">
                     <summary>
                       ${esc(episode.episode_code)} ${esc(episode.episode_name || "")}
-                      <span class="tv-summary-count">${esc(episode.result_count)} results</span>
+                      <span class="tv-summary-count">${esc(episode.status || "pending")} | ${esc(episode.result_count)} results</span>
                     </summary>
-                    <div class="tv-query-list">Queries: ${(episode.query_variants || []).map((x) => `<code>${esc(x)}</code>`).join(" ")}</div>
+                    ${
+                      episode.query_variants && episode.query_variants.length
+                        ? `<div class="tv-query-list">Queries: ${(episode.query_variants || []).map((x) => `<code>${esc(x)}</code>`).join(" ")}</div>`
+                        : ""
+                    }
                     ${episode.query_errors && episode.query_errors.length ? `<div class="job-error">${esc(episode.query_errors.join(" | "))}</div>` : ""}
-                    <div class="tv-result-list">${resultRows || "<div class='download-empty'>No files found for this episode.</div>"}</div>
+                    <div class="tv-result-list">${
+                      resultRows ||
+                      (episode.status === "running"
+                        ? "<div class='download-empty'>Episode search is running...</div>"
+                        : episode.status === "pending"
+                          ? "<div class='download-empty'>Waiting in background queue...</div>"
+                          : "<div class='download-empty'>No files found for this episode.</div>")
+                    }</div>
                   </details>
                 `;
               })
               .join("");
 
             return `
-              <details class="tv-season">
-                <summary>Season ${esc(season.season_number)} <span class="tv-summary-count">${esc(season.result_count)} results</span></summary>
+              <details class="tv-season" data-season-key="${esc(season.season_number)}">
+                <summary>Season ${esc(season.season_number)} <span class="tv-summary-count">${esc(season.completed_episodes ?? 0)}/${esc(season.episode_count ?? 0)} episodes | ${esc(season.result_count)} results</span></summary>
                 <div class="tv-season-body">${seasonRows || "<div class='download-empty'>No episode metadata for this season.</div>"}</div>
               </details>
             `;
           })
           .join("");
+        tvResults.innerHTML = `${bannerHtml}${seasonHtml}`;
 
+        restoreTvResultsUiState(uiState);
         bindTvQueueButtons();
       };
 
@@ -1635,7 +1812,18 @@
       refreshAccountStatus();
       refreshDownloadSettings();
       refreshDownloads();
+      if (activeTvSearchJobId) {
+        refreshActiveTvSearchJob({ force: true });
+      }
       setInterval(refreshDownloads, 2500);
+      setInterval(() => {
+        refreshActiveTvSearchJob();
+      }, 2500);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          refreshActiveTvSearchJob({ force: true });
+        }
+      });
     </script>
   </body>
 </html>

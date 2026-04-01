@@ -963,6 +963,43 @@ a {
   gap: 0.7rem;
 }
 
+.tv-results-banner {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 2;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  background: #f8fafc;
+  color: var(--muted);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 0.06);
+}
+
+.tv-results-banner[data-mode="queued"],
+.tv-results-banner[data-mode="running"] {
+  background: #ecfeff;
+  color: #155e75;
+  border-color: #a5f3fc;
+}
+
+.tv-results-banner[data-mode="done"] {
+  background: #ecfdf5;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.tv-results-banner[data-mode="failed"] {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.tv-results-banner[data-mode="canceled"] {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
 .tv-season,
 .tv-episode {
   border: 1px solid var(--border);

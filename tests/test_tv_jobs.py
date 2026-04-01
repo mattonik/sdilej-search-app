@@ -1,0 +1,420 @@
+from __future__ import annotations
+
+from fastapi.testclient import TestClient
+
+from app.main import create_app
+from app.models import TitleMetadata
+from app.tv_search_worker import TvSearchWorker
+from tests.conftest import (
+    FakeTvMazeClient,
+    StaticMetadataResolver,
+    StaticSearchClientFactory,
+    build_search_result,
+)
+
+
+def test_tv_media_classification_reuses_existing_alias_folder(app_factory, media_root) -> None:
+    existing = media_root / "tv" / "Vesela farma"
+    existing.mkdir(parents=True)
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Ovecka Shaun",
+        original_title="Shaun the Sheep",
+        local_titles=["Ovecka Shaun", "Vesela farma"],
+        aliases=["Shaun the Sheep", "Vesela farma"],
+        year=2007,
+        source="czdb",
+        source_ids={},
+    )
+    resolver = StaticMetadataResolver(metadata)
+    app = app_factory(metadata_resolver_instance=resolver)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/media/classify",
+            json={
+                "title": "Shaun the Sheep S01E01",
+                "media_kind": "tv",
+                "series_name": "Shaun the Sheep",
+                "season_number": 1,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["classification"]["series_name"] == "Vesela farma"
+    assert payload["destination_subpath"].endswith("tv/Vesela farma/S01")
+
+
+def test_tv_search_job_worker_processes_and_finalizes_job(app_factory, storage) -> None:
+    search_factory = StaticSearchClientFactory(
+        {
+            "Shaun the Sheep S01E01": [build_search_result(file_id=1, title="Shaun the Sheep S01E01 SK DAB")],
+            "Shaun the Sheep S01E02": [build_search_result(file_id=2, title="Shaun the Sheep S01E02 SK DAB")],
+        }
+    )
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Shaun the Sheep",
+        original_title="Shaun the Sheep",
+        local_titles=["Vesela farma"],
+        aliases=["Shaun the Sheep"],
+        year=2007,
+        source="fallback",
+        source_ids={},
+    )
+    app = app_factory(
+        tv_client_instance=FakeTvMazeClient(),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/tv/search-jobs",
+            json={
+                "show_id": 321,
+                "show_name": "Shaun the Sheep",
+                "seasons": [1],
+                "episodes_by_season": {"1": [1, 2]},
+                "aliases": ["Shaun the Sheep"],
+                "title_metadata": metadata.to_dict(),
+            },
+        )
+        assert created.status_code == 200
+        job_id = created.json()["id"]
+
+    worker = TvSearchWorker(storage=storage, client_factory=search_factory)
+    claimed = storage.claim_next_tv_search_job()
+    assert claimed is not None
+    assert claimed["id"] == job_id
+    worker._process_job(claimed)
+
+    job = storage.get_tv_search_job(job_id)
+    assert job is not None
+    assert job["status"] == "done"
+    assert job["search_aliases"] == ["Shaun the Sheep", "Vesela farma"]
+    assert job["completed_episodes"] == 2
+    assert job["result_count"] == 2
+    assert all(episode["status"] == "done" for season in job["seasons"] for episode in season["episodes"])
+
+
+def test_tv_search_job_partial_progress_is_visible(app_factory, storage) -> None:
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Shaun the Sheep",
+        original_title="Shaun the Sheep",
+        local_titles=["Vesela farma"],
+        aliases=["Shaun the Sheep"],
+        year=2007,
+        source="fallback",
+        source_ids={},
+    )
+    app = app_factory(
+        tv_client_instance=FakeTvMazeClient(),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/tv/search-jobs",
+            json={
+                "show_id": 321,
+                "show_name": "Shaun the Sheep",
+                "seasons": [1],
+                "episodes_by_season": {"1": [1, 2]},
+                "aliases": ["Shaun the Sheep"],
+                "title_metadata": metadata.to_dict(),
+            },
+        )
+        job_id = created.json()["id"]
+
+        claimed = storage.claim_next_tv_search_job()
+        assert claimed is not None
+        storage.mark_tv_search_episode_running(job_id, 1, 1)
+        storage.complete_tv_search_episode(
+            job_id,
+            season_number=1,
+            episode_number=1,
+            query_variants=["Shaun the Sheep S01E01"],
+            query_errors=[],
+            results=[build_search_result(file_id=1, title="Shaun the Sheep S01E01 SK DAB").to_dict()],
+        )
+        job = client.get(f"/api/tv/search-jobs/{job_id}").json()
+
+    assert job["status"] == "running"
+    assert job["search_aliases"] == ["Shaun the Sheep", "Vesela farma"]
+    assert job["completed_episodes"] == 1
+    first_episode = job["seasons"][0]["episodes"][0]
+    assert first_episode["status"] == "done"
+
+
+def test_canceling_tv_search_job_marks_pending_work_canceled(app_factory, storage) -> None:
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Shaun the Sheep",
+        original_title="Shaun the Sheep",
+        local_titles=["Vesela farma"],
+        aliases=["Shaun the Sheep"],
+        year=2007,
+        source="fallback",
+        source_ids={},
+    )
+    app = app_factory(
+        tv_client_instance=FakeTvMazeClient(),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/tv/search-jobs",
+            json={
+                "show_id": 321,
+                "show_name": "Shaun the Sheep",
+                "seasons": [1],
+                "episodes_by_season": {"1": [1, 2]},
+                "aliases": ["Shaun the Sheep"],
+                "title_metadata": metadata.to_dict(),
+            },
+        )
+        job_id = created.json()["id"]
+        storage.claim_next_tv_search_job()
+        canceled = client.post(f"/api/tv/search-jobs/{job_id}/cancel")
+
+    assert canceled.status_code == 200
+    job = storage.get_tv_search_job(job_id)
+    assert job is not None
+    assert job["status"] == "canceled"
+    assert all(episode["status"] == "canceled" for season in job["seasons"] for episode in season["episodes"])
+
+
+def test_recover_tv_search_queue_preserves_done_episodes(storage) -> None:
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Shaun the Sheep",
+        original_title="Shaun the Sheep",
+        local_titles=["Vesela farma"],
+        aliases=["Shaun the Sheep"],
+        year=2007,
+        source="fallback",
+        source_ids={},
+    )
+    job = storage.enqueue_tv_search_job(
+        show={"id": 321, "name": "Shaun the Sheep", "source": "tvmaze"},
+        title_metadata=metadata.to_dict(),
+        aliases=["Shaun the Sheep"],
+        search_aliases=["Shaun the Sheep"],
+        selected_seasons=[1],
+        episodes_by_season={"1": [1, 2]},
+        category="video",
+        language="SK",
+        language_scope="any",
+        strict_dubbing=False,
+        max_results_per_variant=120,
+        episodes=[
+            {"season_number": 1, "episode_number": 1, "episode_name": "Off the Baa!", "airdate": "2007-03-05", "episode_code": "S01E01"},
+            {"season_number": 1, "episode_number": 2, "episode_name": "Fetching", "airdate": "2007-03-06", "episode_code": "S01E02"},
+        ],
+    )
+    job_id = job["id"]
+    storage.claim_next_tv_search_job()
+    storage.mark_tv_search_episode_running(job_id, 1, 1)
+    storage.complete_tv_search_episode(
+        job_id,
+        season_number=1,
+        episode_number=1,
+        query_variants=["Shaun the Sheep S01E01"],
+        query_errors=[],
+        results=[build_search_result(file_id=1, title="Shaun the Sheep S01E01 SK DAB").to_dict()],
+    )
+    storage.mark_tv_search_episode_running(job_id, 1, 2)
+
+    recovered = storage.recover_tv_search_queue_after_restart()
+
+    assert recovered == 1
+    refreshed = storage.get_tv_search_job(job_id)
+    assert refreshed is not None
+    assert refreshed["status"] == "queued"
+    episode_statuses = [episode["status"] for season in refreshed["seasons"] for episode in season["episodes"]]
+    assert episode_statuses == ["done", "pending"]
+
+
+def test_legacy_sync_tv_search_uses_aliases(app_factory) -> None:
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Shaun the Sheep",
+        original_title="Shaun the Sheep",
+        local_titles=["Vesela farma"],
+        aliases=["Shaun the Sheep", "Vesela farma"],
+        year=2007,
+        source="fallback",
+        source_ids={},
+    )
+    fake_client = StaticSearchClientFactory(
+        {
+            "Shaun the Sheep S01E01": [build_search_result(file_id=1, title="Shaun the Sheep S01E01 SK DAB")],
+            "Vesela farma S01E01": [build_search_result(file_id=2, title="Vesela farma S01E01 SK DAB")],
+        }
+    )(timeout_seconds=30)
+    app = app_factory(
+        client_instance=fake_client,
+        tv_client_instance=FakeTvMazeClient(episodes=[FakeTvMazeClient().episodes[0]]),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/tv/search",
+            json={
+                "show_id": 321,
+                "show_name": "Shaun the Sheep",
+                "seasons": [1],
+                "episodes_by_season": {"1": [1]},
+                "aliases": ["Shaun the Sheep", "Vesela farma"],
+                "title_metadata": metadata.to_dict(),
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "done"
+    assert payload["aliases"] == ["Shaun the Sheep", "Vesela farma"]
+    assert payload["search_aliases"] == ["Shaun the Sheep", "Vesela farma"]
+    assert payload["seasons"][0]["episodes"][0]["result_count"] == 2
+
+
+def test_sync_tv_search_filters_unrelated_results_from_risky_aliases(app_factory) -> None:
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Blue",
+        original_title="Bluey",
+        local_titles=["Blue"],
+        aliases=["Bluey", "Blue"],
+        year=2018,
+        source="czdb",
+        source_ids={"czdb": 28067},
+    )
+    fake_client = StaticSearchClientFactory(
+        {
+            "Bluey S01E01": [
+                build_search_result(file_id=1, title="Bluey S01E01 Magic Xylophone", size="900 MB"),
+                build_search_result(file_id=2, title="Blue S01E01 SK TIT MKV"),
+                build_search_result(file_id=3, title="Blue Bloods S01E01 mkv"),
+                build_search_result(file_id=4, title="Blue Lights S01E01 (2024) sk tit mkv"),
+                build_search_result(file_id=5, title="Project Blue Book S01E01 HD CZ dabing mkv"),
+            ],
+            "Bluey 1x01": [
+                build_search_result(file_id=1, title="Bluey S01E01 Magic Xylophone", size="900 MB"),
+                build_search_result(file_id=2, title="Blue S01E01 SK TIT MKV"),
+            ],
+            "Bluey Season 1 Episode 1": [
+                build_search_result(file_id=1, title="Bluey S01E01 Magic Xylophone", size="900 MB"),
+            ],
+        }
+    )(timeout_seconds=30)
+    app = app_factory(
+        client_instance=fake_client,
+        tv_client_instance=FakeTvMazeClient(
+            show=FakeTvMazeClient().show,
+            episodes=[FakeTvMazeClient().episodes[0]],
+            akas=["Blue"],
+        ),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/tv/search",
+            json={
+                "show_id": 321,
+                "show_name": "Bluey",
+                "seasons": [1],
+                "episodes_by_season": {"1": [1]},
+                "aliases": ["Bluey", "Blue"],
+                "title_metadata": metadata.to_dict(),
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["search_aliases"] == ["Bluey"]
+    assert fake_client.calls == ["Bluey S01E01", "Bluey 1x01", "Bluey Season 1 Episode 1"]
+    results = payload["seasons"][0]["episodes"][0]["results"]
+    assert [item["title"] for item in results] == [
+        "Bluey S01E01 Magic Xylophone",
+        "Blue S01E01 SK TIT MKV",
+    ]
+
+
+def test_background_tv_search_job_filters_unrelated_results_from_risky_aliases(app_factory, storage) -> None:
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Blue",
+        original_title="Bluey",
+        local_titles=["Blue"],
+        aliases=["Bluey", "Blue"],
+        year=2018,
+        source="czdb",
+        source_ids={"czdb": 28067},
+    )
+    search_factory = StaticSearchClientFactory(
+        {
+            "Bluey S01E01": [
+                build_search_result(file_id=1, title="Bluey S01E01 Magic Xylophone", size="900 MB"),
+                build_search_result(file_id=2, title="Blue S01E01 SK TIT MKV"),
+                build_search_result(file_id=3, title="Blue Bloods S01E01 mkv"),
+            ],
+            "Bluey 1x01": [
+                build_search_result(file_id=1, title="Bluey S01E01 Magic Xylophone", size="900 MB"),
+            ],
+            "Bluey Season 1 Episode 1": [
+                build_search_result(file_id=1, title="Bluey S01E01 Magic Xylophone", size="900 MB"),
+            ],
+        }
+    )
+    app = app_factory(
+        tv_client_instance=FakeTvMazeClient(episodes=[FakeTvMazeClient().episodes[0]], akas=["Blue"]),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/tv/search-jobs",
+            json={
+                "show_id": 321,
+                "show_name": "Bluey",
+                "seasons": [1],
+                "episodes_by_season": {"1": [1]},
+                "aliases": ["Bluey", "Blue"],
+                "title_metadata": metadata.to_dict(),
+            },
+        )
+        assert created.status_code == 200
+        job_id = created.json()["id"]
+
+    worker = TvSearchWorker(storage=storage, client_factory=search_factory)
+    claimed = storage.claim_next_tv_search_job()
+    assert claimed is not None
+    worker._process_job(claimed)
+
+    job = storage.get_tv_search_job(job_id)
+    assert job is not None
+    assert job["status"] == "done"
+    assert job["search_aliases"] == ["Bluey"]
+    assert search_factory.instances[0].calls == ["Bluey S01E01", "Bluey 1x01", "Bluey Season 1 Episode 1"]
+    results = job["seasons"][0]["episodes"][0]["results"]
+    assert [item["title"] for item in results] == [
+        "Bluey S01E01 Magic Xylophone",
+        "Blue S01E01 SK TIT MKV",
+    ]
+
+
+def test_healthz_reports_both_worker_flags(app_factory) -> None:
+    app = app_factory()
+    with TestClient(app) as client:
+        response = client.get("/healthz")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert "worker_alive" in payload
+    assert "tv_search_worker_alive" in payload

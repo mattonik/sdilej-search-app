@@ -116,6 +116,63 @@ class Storage:
                     error TEXT,
                     FOREIGN KEY(job_id) REFERENCES download_jobs(id)
                 );
+
+                CREATE TABLE IF NOT EXISTS title_metadata_cache (
+                    lookup_kind TEXT NOT NULL,
+                    lookup_key TEXT NOT NULL,
+                    lookup_year_key TEXT NOT NULL DEFAULT '',
+                    lookup_year INTEGER,
+                    payload_json TEXT NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'fallback',
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    PRIMARY KEY (lookup_kind, lookup_key, lookup_year_key)
+                );
+
+                CREATE TABLE IF NOT EXISTS tv_search_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    started_at TEXT,
+                    finished_at TEXT,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    priority INTEGER NOT NULL DEFAULT 0,
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    show_id INTEGER NOT NULL,
+                    show_name TEXT NOT NULL,
+                    show_json TEXT NOT NULL,
+                    title_metadata_json TEXT,
+                    aliases_json TEXT NOT NULL DEFAULT '[]',
+                    search_aliases_json TEXT NOT NULL DEFAULT '[]',
+                    selected_seasons_json TEXT NOT NULL DEFAULT '[]',
+                    episodes_by_season_json TEXT NOT NULL DEFAULT '{}',
+                    category TEXT NOT NULL DEFAULT 'video',
+                    language TEXT,
+                    language_scope TEXT NOT NULL DEFAULT 'any',
+                    strict_dubbing INTEGER NOT NULL DEFAULT 0,
+                    max_results_per_variant INTEGER NOT NULL DEFAULT 120,
+                    total_episodes INTEGER NOT NULL DEFAULT 0,
+                    completed_episodes INTEGER NOT NULL DEFAULT 0,
+                    result_count INTEGER NOT NULL DEFAULT 0,
+                    error TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS tv_search_job_episodes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id INTEGER NOT NULL,
+                    season_number INTEGER NOT NULL,
+                    episode_number INTEGER NOT NULL,
+                    episode_name TEXT,
+                    airdate TEXT,
+                    episode_code TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    result_count INTEGER NOT NULL DEFAULT 0,
+                    query_variants_json TEXT NOT NULL DEFAULT '[]',
+                    query_errors_json TEXT NOT NULL DEFAULT '[]',
+                    results_json TEXT NOT NULL DEFAULT '[]',
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    UNIQUE(job_id, season_number, episode_number),
+                    FOREIGN KEY(job_id) REFERENCES tv_search_jobs(id)
+                );
                 """
             )
             self._migrate_schema(conn)
@@ -431,6 +488,421 @@ class Storage:
         if not login or not password:
             return None
         return login, password
+
+    def get_title_metadata_cache(
+        self,
+        lookup_kind: str,
+        lookup_key: str,
+        lookup_year: int | None,
+    ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload_json
+                FROM title_metadata_cache
+                WHERE lookup_kind = ? AND lookup_key = ? AND lookup_year_key = ?
+                """,
+                (lookup_kind, lookup_key, self._year_key(lookup_year)),
+            ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row["payload_json"])
+
+    def set_title_metadata_cache(
+        self,
+        lookup_kind: str,
+        lookup_key: str,
+        lookup_year: int | None,
+        payload: dict[str, Any],
+        source: str,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO title_metadata_cache (
+                    lookup_kind,
+                    lookup_key,
+                    lookup_year_key,
+                    lookup_year,
+                    payload_json,
+                    source,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(lookup_kind, lookup_key, lookup_year_key) DO UPDATE SET
+                    lookup_year=excluded.lookup_year,
+                    payload_json=excluded.payload_json,
+                    source=excluded.source,
+                    updated_at=datetime('now')
+                """,
+                (
+                    lookup_kind,
+                    lookup_key,
+                    self._year_key(lookup_year),
+                    lookup_year,
+                    json.dumps(payload),
+                    source,
+                ),
+            )
+
+    def enqueue_tv_search_job(
+        self,
+        *,
+        show: dict[str, Any],
+        title_metadata: dict[str, Any] | None,
+        aliases: list[str],
+        search_aliases: list[str],
+        selected_seasons: list[int],
+        episodes_by_season: dict[str, list[int]],
+        category: str,
+        language: str | None,
+        language_scope: str,
+        strict_dubbing: bool,
+        max_results_per_variant: int,
+        episodes: list[dict[str, Any]],
+        priority: int = 0,
+    ) -> dict[str, Any]:
+        selected_seasons_json = json.dumps(selected_seasons)
+        episodes_by_season_json = json.dumps(episodes_by_season)
+        aliases_json = json.dumps(aliases)
+        search_aliases_json = json.dumps(search_aliases)
+        title_metadata_json = json.dumps(title_metadata) if title_metadata is not None else None
+        show_json = json.dumps(show)
+
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.execute(
+                """
+                INSERT INTO tv_search_jobs (
+                    status,
+                    priority,
+                    show_id,
+                    show_name,
+                    show_json,
+                    title_metadata_json,
+                    aliases_json,
+                    search_aliases_json,
+                    selected_seasons_json,
+                    episodes_by_season_json,
+                    category,
+                    language,
+                    language_scope,
+                    strict_dubbing,
+                    max_results_per_variant,
+                    total_episodes
+                ) VALUES ('queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    priority,
+                    int(show.get("id")),
+                    str(show.get("name") or ""),
+                    show_json,
+                    title_metadata_json,
+                    aliases_json,
+                    search_aliases_json,
+                    selected_seasons_json,
+                    episodes_by_season_json,
+                    category,
+                    language,
+                    language_scope,
+                    1 if strict_dubbing else 0,
+                    max_results_per_variant,
+                    len(episodes),
+                ),
+            )
+            job_id = int(cursor.lastrowid)
+
+            for episode in episodes:
+                conn.execute(
+                    """
+                    INSERT INTO tv_search_job_episodes (
+                        job_id,
+                        season_number,
+                        episode_number,
+                        episode_name,
+                        airdate,
+                        episode_code,
+                        status
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'pending')
+                    """,
+                    (
+                        job_id,
+                        int(episode["season_number"]),
+                        int(episode["episode_number"]),
+                        episode.get("episode_name"),
+                        episode.get("airdate"),
+                        episode.get("episode_code"),
+                    ),
+                )
+
+            conn.commit()
+        finally:
+            conn.close()
+
+        return self.get_tv_search_job(job_id)
+
+    def list_tv_search_jobs(self, limit: int = 50, status: str | None = None) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(limit, 200))
+        with self._connect() as conn:
+            if status:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM tv_search_jobs
+                    WHERE status = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (status, safe_limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM tv_search_jobs
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (safe_limit,),
+                ).fetchall()
+        return [self._row_to_tv_search_job(row, include_episodes=False) for row in rows]
+
+    def get_tv_search_job(self, job_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM tv_search_jobs WHERE id = ?", (job_id,)).fetchone()
+            if row is None:
+                return None
+            episode_rows = conn.execute(
+                """
+                SELECT *
+                FROM tv_search_job_episodes
+                WHERE job_id = ?
+                ORDER BY season_number ASC, episode_number ASC
+                """,
+                (job_id,),
+            ).fetchall()
+        return self._row_to_tv_search_job(row, episode_rows=episode_rows, include_episodes=True)
+
+    def claim_next_tv_search_job(self) -> dict[str, Any] | None:
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """
+                SELECT id
+                FROM tv_search_jobs
+                WHERE status = 'queued'
+                ORDER BY priority DESC, id ASC
+                LIMIT 1
+                """
+            ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
+
+            job_id = int(row["id"])
+            updated = conn.execute(
+                """
+                UPDATE tv_search_jobs
+                SET
+                    status = 'running',
+                    started_at = COALESCE(started_at, datetime('now')),
+                    updated_at = datetime('now'),
+                    attempt_count = attempt_count + 1,
+                    error = NULL
+                WHERE id = ? AND status = 'queued'
+                """,
+                (job_id,),
+            )
+            if updated.rowcount != 1:
+                conn.rollback()
+                return None
+
+            conn.commit()
+        finally:
+            conn.close()
+
+        return self.get_tv_search_job(job_id)
+
+    def list_pending_tv_search_episodes(self, job_id: int) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM tv_search_job_episodes
+                WHERE job_id = ? AND status = 'pending'
+                ORDER BY season_number ASC, episode_number ASC
+                """,
+                (job_id,),
+            ).fetchall()
+        return [self._row_to_tv_search_episode(row) for row in rows]
+
+    def mark_tv_search_episode_running(self, job_id: int, season_number: int, episode_number: int) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE tv_search_job_episodes
+                SET
+                    status = 'running',
+                    updated_at = datetime('now')
+                WHERE job_id = ? AND season_number = ? AND episode_number = ? AND status = 'pending'
+                """,
+                (job_id, season_number, episode_number),
+            )
+            return cursor.rowcount > 0
+
+    def complete_tv_search_episode(
+        self,
+        job_id: int,
+        *,
+        season_number: int,
+        episode_number: int,
+        query_variants: list[str],
+        query_errors: list[str],
+        results: list[dict[str, Any]],
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE tv_search_job_episodes
+                SET
+                    status = 'done',
+                    result_count = ?,
+                    query_variants_json = ?,
+                    query_errors_json = ?,
+                    results_json = ?,
+                    updated_at = datetime('now')
+                WHERE job_id = ? AND season_number = ? AND episode_number = ?
+                """,
+                (
+                    len(results),
+                    json.dumps(query_variants),
+                    json.dumps(query_errors),
+                    json.dumps(results),
+                    job_id,
+                    season_number,
+                    episode_number,
+                ),
+            )
+            self._refresh_tv_search_job_counts(conn, job_id)
+
+    def fail_tv_search_job(self, job_id: int, *, error: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE tv_search_jobs
+                SET
+                    status = CASE WHEN status = 'canceled' THEN 'canceled' ELSE 'failed' END,
+                    error = ?,
+                    finished_at = CASE WHEN status = 'canceled' THEN finished_at ELSE datetime('now') END,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (error, job_id),
+            )
+
+    def finalize_tv_search_job(self, job_id: int) -> None:
+        with self._connect() as conn:
+            self._refresh_tv_search_job_counts(conn, job_id)
+            row = conn.execute(
+                """
+                SELECT
+                    total_episodes,
+                    completed_episodes,
+                    status,
+                    (
+                        SELECT COUNT(*)
+                        FROM tv_search_job_episodes
+                        WHERE job_id = ? AND status = 'running'
+                    ) AS running_count,
+                    (
+                        SELECT COUNT(*)
+                        FROM tv_search_job_episodes
+                        WHERE job_id = ? AND status = 'pending'
+                    ) AS pending_count
+                FROM tv_search_jobs
+                WHERE id = ?
+                """,
+                (job_id, job_id, job_id),
+            ).fetchone()
+            if row is None:
+                return
+            if row["status"] == "canceled":
+                return
+            if int(row["running_count"] or 0) > 0 or int(row["pending_count"] or 0) > 0:
+                return
+            conn.execute(
+                """
+                UPDATE tv_search_jobs
+                SET
+                    status = 'done',
+                    finished_at = datetime('now'),
+                    updated_at = datetime('now')
+                WHERE id = ? AND status = 'running'
+                """,
+                (job_id,),
+            )
+
+    def cancel_tv_search_job(self, job_id: int) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE tv_search_jobs
+                SET
+                    status = 'canceled',
+                    finished_at = CASE WHEN status IN ('queued', 'running') THEN datetime('now') ELSE finished_at END,
+                    updated_at = datetime('now')
+                WHERE id = ? AND status IN ('queued', 'running')
+                """,
+                (job_id,),
+            )
+            if cursor.rowcount < 1:
+                return False
+            conn.execute(
+                """
+                UPDATE tv_search_job_episodes
+                SET
+                    status = 'canceled',
+                    updated_at = datetime('now')
+                WHERE job_id = ? AND status IN ('pending', 'running')
+                """,
+                (job_id,),
+            )
+            return True
+
+    def is_tv_search_job_canceled(self, job_id: int) -> bool:
+        with self._connect() as conn:
+            row = conn.execute("SELECT status FROM tv_search_jobs WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            return True
+        return row["status"] == "canceled"
+
+    def recover_tv_search_queue_after_restart(self) -> int:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE tv_search_job_episodes
+                SET
+                    status = 'pending',
+                    updated_at = datetime('now')
+                WHERE status = 'running'
+                """
+            )
+            cursor = conn.execute(
+                """
+                UPDATE tv_search_jobs
+                SET
+                    status = 'queued',
+                    finished_at = NULL,
+                    error = CASE
+                        WHEN error IS NULL OR error = '' THEN 'Recovered after app restart; queued again.'
+                        ELSE error || ' | Recovered after app restart; queued again.'
+                    END,
+                    updated_at = datetime('now')
+                WHERE status = 'running'
+                """
+            )
+            return cursor.rowcount
 
     def enqueue_download_job(
         self,
@@ -1195,6 +1667,106 @@ class Storage:
             "error": row["error"],
         }
 
+    def _row_to_tv_search_episode(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": row["id"],
+            "job_id": row["job_id"],
+            "season_number": row["season_number"],
+            "episode_number": row["episode_number"],
+            "episode_name": row["episode_name"],
+            "airdate": row["airdate"],
+            "episode_code": row["episode_code"],
+            "status": row["status"],
+            "result_count": row["result_count"],
+            "query_variants": json.loads(row["query_variants_json"] or "[]"),
+            "query_errors": json.loads(row["query_errors_json"] or "[]"),
+            "results": json.loads(row["results_json"] or "[]"),
+            "updated_at": row["updated_at"],
+        }
+
+    def _row_to_tv_search_job(
+        self,
+        row: sqlite3.Row,
+        *,
+        episode_rows: list[sqlite3.Row] | None = None,
+        include_episodes: bool = True,
+    ) -> dict[str, Any]:
+        payload = {
+            "id": row["id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "started_at": row["started_at"],
+            "finished_at": row["finished_at"],
+            "status": row["status"],
+            "priority": row["priority"],
+            "attempt_count": row["attempt_count"],
+            "show": json.loads(row["show_json"] or "{}"),
+            "title_metadata": json.loads(row["title_metadata_json"] or "null"),
+            "aliases": json.loads(row["aliases_json"] or "[]"),
+            "search_aliases": json.loads(row["search_aliases_json"] or "[]"),
+            "selected_seasons": json.loads(row["selected_seasons_json"] or "[]"),
+            "episodes_by_season": json.loads(row["episodes_by_season_json"] or "{}"),
+            "category": row["category"],
+            "language": row["language"],
+            "language_scope": row["language_scope"],
+            "strict_dubbing": bool(row["strict_dubbing"]),
+            "max_results_per_variant": row["max_results_per_variant"],
+            "total_episodes": row["total_episodes"],
+            "completed_episodes": row["completed_episodes"],
+            "result_count": row["result_count"],
+            "error": row["error"],
+        }
+        if not include_episodes:
+            return payload
+
+        episode_items = [self._row_to_tv_search_episode(item) for item in (episode_rows or [])]
+        seasons_map: dict[int, list[dict[str, Any]]] = {}
+        for episode in episode_items:
+            seasons_map.setdefault(int(episode["season_number"]), []).append(episode)
+
+        seasons: list[dict[str, Any]] = []
+        for season_number in sorted(seasons_map):
+            items = sorted(seasons_map[season_number], key=lambda item: (item["episode_number"], item["id"]))
+            seasons.append(
+                {
+                    "season_number": season_number,
+                    "episode_count": len(items),
+                    "completed_episodes": sum(1 for item in items if item["status"] == "done"),
+                    "result_count": sum(int(item.get("result_count") or 0) for item in items),
+                    "episodes": items,
+                }
+            )
+        payload["seasons"] = seasons
+        return payload
+
+    def _refresh_tv_search_job_counts(self, conn: sqlite3.Connection, job_id: int) -> None:
+        summary = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0) AS completed_episodes,
+                COALESCE(SUM(result_count), 0) AS total_results
+            FROM tv_search_job_episodes
+            WHERE job_id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        completed = int(summary["completed_episodes"]) if summary is not None else 0
+        total_results = int(summary["total_results"]) if summary is not None else 0
+        conn.execute(
+            """
+            UPDATE tv_search_jobs
+            SET
+                completed_episodes = ?,
+                result_count = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (completed, total_results, job_id),
+        )
+
+    def _year_key(self, value: int | None) -> str:
+        return "" if value is None else str(int(value))
+
     def _migrate_schema(self, conn: sqlite3.Connection) -> None:
         self._ensure_column(
             conn,
@@ -1315,6 +1887,13 @@ class Storage:
             table="download_jobs",
             column="delete_partial_on_cancel",
             definition="INTEGER NOT NULL DEFAULT 0",
+        )
+
+        self._ensure_column(
+            conn,
+            table="tv_search_jobs",
+            column="search_aliases_json",
+            definition="TEXT NOT NULL DEFAULT '[]'",
         )
 
     def _ensure_column(
