@@ -2,7 +2,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.DS_Store
 .tmp_auth_test/
+/.tmp_*
 *.log
 # local runtime data
 data/

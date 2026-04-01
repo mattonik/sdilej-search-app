@@ -94,7 +94,6 @@ class EnqueueDownloadPayload(BaseModel):
     file_id: int | None = None
     title: str | None = None
     preferred_mode: Literal["auto", "premium", "free"] = "auto"
-    output_dir: str | None = None
     priority: int = Field(default=0, ge=-100, le=100)
     chunk_count: int | None = Field(default=None, ge=1, le=8)
     media_kind: Literal["movie", "tv"] | None = None
@@ -159,7 +158,7 @@ class TvSeasonSearchPayload(BaseModel):
     language: str | None = Field(default=None, max_length=32)
     language_scope: LanguageScope = "any"
     strict_dubbing: bool = False
-    max_results_per_variant: int = Field(default=120, ge=10, le=500)
+    max_results_per_variant: int = Field(default=120, ge=1, le=500)
 
 
 @app.on_event("startup")
