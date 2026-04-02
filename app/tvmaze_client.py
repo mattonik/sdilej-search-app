@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import field
+
 import requests
 
 from .dataclass_compat import dataclass
@@ -35,6 +37,10 @@ class TvShowSummary:
     name: str
     premiered: str | None
     language: str | None
+    image_url: str | None = None
+    type: str | None = None
+    genres: list[str] = field(default_factory=list)
+    summary: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -42,6 +48,10 @@ class TvShowSummary:
             "name": self.name,
             "premiered": self.premiered,
             "language": self.language,
+            "image_url": self.image_url,
+            "type": self.type,
+            "genres": list(self.genres),
+            "summary": self.summary,
             "source": "tvmaze",
         }
 
@@ -79,6 +89,10 @@ class TvMazeClient:
             name=name,
             premiered=show.get("premiered"),
             language=show.get("language"),
+            image_url=self._extract_image_url(show.get("image")),
+            type=(show.get("type") or None),
+            genres=[str(item).strip() for item in (show.get("genres") or []) if str(item).strip()],
+            summary=(show.get("summary") or None),
         )
 
     def get_episodes(self, show_id: int) -> list[TvEpisode]:
@@ -159,3 +173,12 @@ class TvMazeClient:
             return (exact + starts, score, name_norm)
 
         return max(items, key=sort_key)
+
+    def _extract_image_url(self, raw_image: object) -> str | None:
+        if not isinstance(raw_image, dict):
+            return None
+        for key in ("original", "medium"):
+            value = str(raw_image.get(key) or "").strip()
+            if value:
+                return value
+        return None

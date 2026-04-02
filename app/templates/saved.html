@@ -14,9 +14,9 @@
       </header>
 
       <nav class="workspace-tabs">
-        <a href="/#search" class="workspace-tab-link">Search</a>
-        <a href="/#downloads" class="workspace-tab-link">Account + Downloads</a>
-        <span class="workspace-tab active">Saved Picks</span>
+        <a href="/#search" class="workspace-tab-link btn btn-pill">Search</a>
+        <a href="/#downloads" class="workspace-tab-link btn btn-pill">Account + Downloads</a>
+        <span class="workspace-tab btn btn-pill active">Saved Picks</span>
       </nav>
 
       <section class="panel">
@@ -82,7 +82,7 @@
               <div class="saved-actions">
                 <button
                   type="button"
-                  class="saved-download-btn"
+                  class="saved-download-btn btn btn-primary"
                   data-file-id="{{ item.file_id }}"
                   data-title="{{ item.title }}"
                   data-detail-url="{{ item.detail_url }}"
@@ -92,7 +92,7 @@
                 </button>
                 <button
                   type="button"
-                  class="saved-download-btn"
+                  class="saved-download-btn btn btn-secondary"
                   data-file-id="{{ item.file_id }}"
                   data-title="{{ item.title }}"
                   data-detail-url="{{ item.detail_url }}"
@@ -102,7 +102,7 @@
                 </button>
                 <button
                   type="button"
-                  class="saved-delete-btn"
+                  class="saved-delete-btn btn btn-danger"
                   data-file-id="{{ item.file_id }}"
                 >
                   Delete Save

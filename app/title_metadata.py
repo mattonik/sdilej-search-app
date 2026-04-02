@@ -11,7 +11,10 @@ from .storage import Storage
 from .tvmaze_client import TvMazeClient, TvShowSummary
 
 CZDB_SEARCH_URL = "https://api.czdb.cz/search"
+CZDB_DETAIL_URL = CZDB_SEARCH_URL
 MAX_ALIAS_COUNT = 12
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_SUMMARY_SPACE_RE = re.compile(r"\s+")
 
 
 def normalize_alias_key(value: str | None) -> str:
@@ -95,7 +98,14 @@ class TitleMetadataResolver:
         cache_key = normalize_alias_key(query)
         cached = self.storage.get_title_metadata_cache("movie", cache_key, year)
         if cached:
-            return self._metadata_from_dict(cached)
+            cached_metadata = self._metadata_from_dict(cached)
+            if self._metadata_has_audience_hints(cached_metadata):
+                return cached_metadata
+            refreshed = self._resolve_from_czdb(kind="movie", query=query, year=year)
+            if refreshed is not None:
+                self.storage.set_title_metadata_cache("movie", cache_key, year, refreshed.to_dict(), refreshed.source)
+                return refreshed
+            return cached_metadata
 
         metadata = self._resolve_from_czdb(kind="movie", query=query, year=year)
         if metadata is None:
@@ -105,6 +115,9 @@ class TitleMetadataResolver:
                 original_title=None,
                 local_titles=[query],
                 aliases=[query],
+                genres=[],
+                summary=None,
+                content_type=None,
                 year=year,
                 source="fallback",
                 source_ids={},
@@ -129,6 +142,17 @@ class TitleMetadataResolver:
         cached = self.storage.get_title_metadata_cache("tv", cache_key, effective_year)
         if cached:
             cached_metadata = self._metadata_from_dict(cached)
+            if not self._metadata_has_audience_hints(cached_metadata):
+                refreshed = self._resolve_from_czdb(kind="tv", query=query, year=effective_year)
+                if refreshed is not None:
+                    cached_metadata = refreshed
+                    self.storage.set_title_metadata_cache(
+                        "tv",
+                        cache_key,
+                        effective_year,
+                        cached_metadata.to_dict(),
+                        cached_metadata.source,
+                    )
             if show is None:
                 return cached_metadata
             # Refresh TVMaze aliases when we have a concrete show id.
@@ -142,6 +166,9 @@ class TitleMetadataResolver:
                 max_aliases=self.max_alias_count,
             )
             cached_metadata.aliases = merged_aliases
+            cached_metadata.genres = self._merge_genres(cached_metadata.genres, list(show.genres))
+            cached_metadata.summary = self._clean_summary_text(cached_metadata.summary or show.summary)
+            cached_metadata.content_type = self._clean_optional_text(cached_metadata.content_type or show.type)
             if show.id and "tvmaze" not in cached_metadata.source_ids:
                 cached_metadata.source_ids["tvmaze"] = show.id
             return cached_metadata
@@ -180,6 +207,16 @@ class TitleMetadataResolver:
                 aliases=aliases,
                 max_aliases=self.max_alias_count,
             ),
+            genres=self._merge_genres(
+                metadata.genres if metadata else [],
+                list(show.genres) if show else [],
+            ),
+            summary=self._clean_summary_text(
+                (metadata.summary if metadata else None) or (show.summary if show else None)
+            ),
+            content_type=self._clean_optional_text(
+                (metadata.content_type if metadata else None) or (show.type if show else None)
+            ),
             year=effective_year,
             source=source,
             source_ids=source_ids,
@@ -187,6 +224,39 @@ class TitleMetadataResolver:
 
         self.storage.set_title_metadata_cache("tv", cache_key, effective_year, merged.to_dict(), merged.source)
         return merged
+
+    def resolve_movie_info_links(self, title: str, year: int | None = None) -> dict[str, Any]:
+        metadata = self.resolve_movie(title, year)
+        detail = self._fetch_czdb_detail(metadata.source_ids.get("csfd") or metadata.source_ids.get("czdb"))
+
+        resolved_title = metadata.canonical_title or title.strip()
+        original_title = metadata.original_title
+        resolved_year = metadata.year or year
+        csfd_url = self._clean_optional_text(metadata.source_ids.get("csfd_url")) or self._build_csfd_url(
+            metadata.source_ids.get("csfd")
+        )
+        imdb_url = None
+
+        if detail:
+            resolved_title = self._clean_optional_text(detail.get("nazev")) or resolved_title
+            original_title = self._clean_optional_text(detail.get("original")) or original_title
+            resolved_year = parse_year(detail.get("rok")) or resolved_year
+            csfd_url = self._clean_optional_text(detail.get("csfd_url")) or csfd_url or self._build_csfd_url(
+                detail.get("csfd_id")
+            )
+            imdb_url = self._build_imdb_title_url(detail.get("imdb_id"))
+
+        preferred_url = csfd_url or imdb_url
+        return {
+            "found": bool(preferred_url),
+            "preferred_url": preferred_url,
+            "csfd_url": csfd_url,
+            "imdb_url": imdb_url,
+            "resolved_title": resolved_title,
+            "original_title": original_title,
+            "year": resolved_year,
+            "source": metadata.source,
+        }
 
     def _resolve_from_czdb(
         self,
@@ -217,6 +287,12 @@ class TitleMetadataResolver:
         canonical_title = str(picked.get("nazev") or "").strip() or query
         original_title = self._clean_optional_text(picked.get("original"))
         alt_titles = self._split_alt_titles(picked.get("alt_nazev"))
+        detail = self._fetch_czdb_detail(picked.get("csfd_id") or picked.get("id"))
+
+        if detail:
+            canonical_title = self._clean_optional_text(detail.get("nazev")) or canonical_title
+            original_title = self._clean_optional_text(detail.get("original")) or original_title
+            alt_titles = self._dedupe_texts([*alt_titles, *self._split_alt_titles(detail.get("alt_nazev"))])
 
         local_titles = self._dedupe_texts([canonical_title, *alt_titles])
         aliases = build_ordered_aliases(
@@ -231,9 +307,15 @@ class TitleMetadataResolver:
             "czdb": picked.get("id"),
             "csfd": picked.get("csfd_id"),
         }
-        csfd_url = self._clean_optional_text(picked.get("csfd_url"))
+        csfd_url = self._clean_optional_text((detail or {}).get("csfd_url")) or self._clean_optional_text(picked.get("csfd_url"))
         if csfd_url:
             source_ids["csfd_url"] = csfd_url
+        imdb_id = self._clean_optional_text((detail or {}).get("imdb_id"))
+        if imdb_id and imdb_id != "0":
+            source_ids["imdb"] = imdb_id
+        tmdb_id = self._clean_optional_text((detail or {}).get("tmdb_id"))
+        if tmdb_id and tmdb_id != "0":
+            source_ids["tmdb"] = tmdb_id
 
         return TitleMetadata(
             kind="movie" if kind == "movie" else "tv",
@@ -241,10 +323,33 @@ class TitleMetadataResolver:
             original_title=original_title,
             local_titles=local_titles,
             aliases=aliases,
+            genres=self._split_genres((detail or {}).get("zanr")),
+            summary=self._clean_summary_text((detail or {}).get("plot")),
+            content_type=self._clean_optional_text((detail or {}).get("typ")),
             year=parse_year(picked.get("rok")) or year,
             source="czdb",
             source_ids=source_ids,
         )
+
+    def _fetch_czdb_detail(self, czdb_id: Any) -> dict[str, Any] | None:
+        if czdb_id in {None, ""}:
+            return None
+        try:
+            response = self.session.get(
+                CZDB_DETAIL_URL,
+                params={"uid": czdb_id},
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception:
+            return None
+        if isinstance(payload, dict):
+            items = payload.get("results")
+            if isinstance(items, list) and items and isinstance(items[0], dict):
+                return items[0]
+            return payload
+        return None
 
     def _pick_best_czdb_match(self, *, query: str, year: int | None, items: list[dict[str, Any]]) -> dict[str, Any] | None:
         query_key = normalize_alias_key(query)
@@ -305,11 +410,42 @@ class TitleMetadataResolver:
             ordered.append(text)
         return ordered
 
+    def _merge_genres(self, primary: list[str], secondary: list[str]) -> list[str]:
+        return self._dedupe_texts([*primary, *secondary])
+
+    def _split_genres(self, raw_value: Any) -> list[str]:
+        if raw_value is None:
+            return []
+        parts = re.split(r"\s*,\s*|\s+\|\s+|\|", str(raw_value))
+        return self._dedupe_texts([part.strip() for part in parts if str(part).strip()])
+
     def _clean_optional_text(self, value: Any) -> str | None:
         if value is None:
             return None
         text = str(value).strip()
         return text or None
+
+    def _clean_summary_text(self, value: Any) -> str | None:
+        text = self._clean_optional_text(value)
+        if not text:
+            return None
+        text = _HTML_TAG_RE.sub(" ", text)
+        text = _SUMMARY_SPACE_RE.sub(" ", text).strip()
+        return text or None
+
+    def _build_imdb_title_url(self, value: Any) -> str | None:
+        imdb_id = self._clean_optional_text(value)
+        if not imdb_id:
+            return None
+        if not imdb_id.startswith("tt"):
+            imdb_id = f"tt{imdb_id}"
+        return f"https://www.imdb.com/title/{imdb_id}/"
+
+    def _build_csfd_url(self, value: Any) -> str | None:
+        csfd_id = self._clean_optional_text(value)
+        if not csfd_id:
+            return None
+        return f"https://www.csfd.cz/film/{csfd_id}"
 
     def _metadata_from_dict(self, payload: dict[str, Any]) -> TitleMetadata:
         return TitleMetadata(
@@ -318,7 +454,18 @@ class TitleMetadataResolver:
             original_title=payload.get("original_title"),
             local_titles=list(payload.get("local_titles") or []),
             aliases=list(payload.get("aliases") or []),
+            genres=list(payload.get("genres") or []),
+            summary=self._clean_summary_text(payload.get("summary")),
+            content_type=self._clean_optional_text(payload.get("content_type")),
             year=parse_year(payload.get("year")),
             source=str(payload.get("source") or "fallback"),
             source_ids=dict(payload.get("source_ids") or {}),
         )
+
+    def _metadata_has_audience_hints(self, metadata: TitleMetadata) -> bool:
+        if metadata.genres:
+            return True
+        if metadata.summary:
+            return True
+        content_type = self._clean_optional_text(metadata.content_type)
+        return bool(content_type and content_type != "0")

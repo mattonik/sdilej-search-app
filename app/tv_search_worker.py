@@ -4,10 +4,10 @@ import threading
 
 from .sdilej_client import SdilejClient
 from .search_utils import (
-    aggregate_query_results,
-    build_episode_query_variants,
-    build_tv_episode_result_matcher,
+    build_tv_episode_result_scorer,
     build_tv_search_aliases,
+    search_tv_episode_results,
+    select_effective_tv_search_aliases,
 )
 from .storage import Storage
 
@@ -65,6 +65,12 @@ class TvSearchWorker:
             )
         if not search_aliases and show_name:
             search_aliases = [show_name]
+        search_aliases = select_effective_tv_search_aliases(
+            client=client,
+            show_name=show_name,
+            search_aliases=search_aliases,
+            category=str(job.get("category") or "video"),
+        )
 
         try:
             for episode in self.storage.list_pending_tv_search_episodes(job_id):
@@ -76,25 +82,27 @@ class TvSearchWorker:
                 if not self.storage.mark_tv_search_episode_running(job_id, season_number, episode_number):
                     continue
 
-                result_matcher = build_tv_episode_result_matcher(
-                    show_name=show_name,
-                    request_query=aliases[0] if aliases else show_name,
-                    title_metadata=job.get("title_metadata"),
+                result_scorer = build_tv_episode_result_scorer(
+                    show_aliases=search_aliases,
                     season=season_number,
                     episode=episode_number,
+                    episode_name=episode.get("episode_name"),
                 )
-                query_variants = build_episode_query_variants(search_aliases, season_number, episode_number)
-                aggregated = aggregate_query_results(
+                aggregated = search_tv_episode_results(
                     client=client,
-                    queries=query_variants,
+                    show_aliases=search_aliases,
+                    season=season_number,
+                    episode=episode_number,
                     category=str(job.get("category") or "video"),
+                    sort="relevance",
                     language=job.get("language"),
                     language_scope=str(job.get("language_scope") or "any"),
                     strict_dubbing=bool(job.get("strict_dubbing")),
                     release_year=None,
                     max_results_per_query=int(job.get("max_results_per_variant") or 120),
-                    result_filter=result_matcher,
+                    result_scorer=result_scorer,
                 )
+                query_variants = aggregated["expanded_queries"]
                 if self.storage.is_tv_search_job_canceled(job_id):
                     return
 

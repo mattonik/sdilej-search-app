@@ -17,6 +17,9 @@ class TitleMetadata:
     original_title: str | None = None
     local_titles: list[str] = field(default_factory=list)
     aliases: list[str] = field(default_factory=list)
+    genres: list[str] = field(default_factory=list)
+    summary: str | None = None
+    content_type: str | None = None
     year: int | None = None
     source: str = "fallback"
     source_ids: dict[str, str | int | None] = field(default_factory=dict)

@@ -140,7 +140,16 @@ class FakeTvMazeClient:
         episodes: list[TvEpisode] | None = None,
         akas: list[str] | None = None,
     ) -> None:
-        self.show = show or TvShowSummary(id=321, name="Shaun the Sheep", premiered="2007-03-01", language="English")
+        self.show = show or TvShowSummary(
+            id=321,
+            name="Shaun the Sheep",
+            premiered="2007-03-01",
+            language="English",
+            type="Animation",
+            genres=["Comedy", "Children"],
+            summary="A family-friendly animated series following Shaun and the flock.",
+            image_url="https://images.example.test/shaun-the-sheep.jpg",
+        )
         self.episodes = episodes or [
             TvEpisode(id=1, season=1, number=1, name="Off the Baa!", airdate="2007-03-05"),
             TvEpisode(id=2, season=1, number=2, name="Fetching", airdate="2007-03-06"),
@@ -191,6 +200,9 @@ def sample_movie_metadata() -> TitleMetadata:
         original_title="Shaun the Sheep",
         local_titles=["Ovecka Shaun", "Vesela farma"],
         aliases=["Shaun the Sheep", "Ovecka Shaun", "Vesela farma"],
+        genres=["Animovaný", "Rodinný"],
+        summary="Shaun and his flock go on family-friendly adventures.",
+        content_type="movie",
         year=2007,
         source="czdb",
         source_ids={"czdb": 123},
@@ -242,6 +254,26 @@ def sample_czdb_movie_response() -> dict[str, Any]:
 
 
 @pytest.fixture
+def sample_czdb_movie_detail_payload() -> dict[str, Any]:
+    return {
+        "results": [
+            {
+                "id": 43840,
+                "csfd_id": 9499,
+                "nazev": "Matrix",
+                "original": "The Matrix",
+                "rok": 1999,
+                "csfd_url": "https://www.csfd.cz/film/9499-matrix/",
+                "imdb_id": "tt0133093",
+                "plot": "Neo learns the truth.",
+                "zanr": "Akční, Sci-Fi",
+            }
+        ],
+        "response": "True",
+    }
+
+
+@pytest.fixture
 def sample_czdb_show_response() -> dict[str, Any]:
     return {
         "results": [
@@ -260,6 +292,26 @@ def sample_czdb_show_response() -> dict[str, Any]:
 
 
 @pytest.fixture
+def sample_czdb_show_detail_payload() -> dict[str, Any]:
+    return {
+        "results": [
+            {
+                "id": 101,
+                "csfd_id": 202,
+                "nazev": "Ovecka Shaun",
+                "original": "Shaun the Sheep",
+                "alt_nazev": "Shaun the Sheep | Vesela farma | Ovecka Shaun",
+                "rok": 2007,
+                "csfd_url": "https://www.csfd.cz/film/202",
+                "plot": "Shaun and his flock have playful family adventures on the farm.",
+                "zanr": "Animovaný, Rodinný, Komedie",
+            }
+        ],
+        "response": "True",
+    }
+
+
+@pytest.fixture
 def sample_tvmaze_show_payload() -> list[dict[str, Any]]:
     return [
         {
@@ -269,6 +321,13 @@ def sample_tvmaze_show_payload() -> list[dict[str, Any]]:
                 "name": "Shaun the Sheep",
                 "premiered": "2007-03-05",
                 "language": "English",
+                "type": "Animation",
+                "genres": ["Comedy", "Children"],
+                "summary": "<p>Shaun leads the flock through playful adventures for children and families.</p>",
+                "image": {
+                    "medium": "https://images.example.test/shaun-the-sheep-medium.jpg",
+                    "original": "https://images.example.test/shaun-the-sheep-original.jpg",
+                },
             },
         }
     ]

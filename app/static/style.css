@@ -8,6 +8,16 @@
   --border: #d6dee6;
   --danger: #991b1b;
   --danger-bg: #fee2e2;
+  --button-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+  --button-shadow-hover: 0 8px 18px rgb(15 23 42 / 0.08);
+  --button-focus-ring: 0 0 0 3px rgb(15 118 110 / 0.16);
+  --button-soft-bg: #f4f8fb;
+  --button-soft-hover: #e9f1f7;
+  --button-secondary-bg: #f7fafc;
+  --button-secondary-hover: #edf3f8;
+  --button-danger-border: #fecaca;
+  --button-danger-bg: #fff1f2;
+  --button-danger-hover: #ffe4e6;
 }
 
 * {
@@ -26,6 +36,13 @@ body {
 
 a {
   color: var(--accent-dark);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 .container {
@@ -249,6 +266,11 @@ a {
   background: #fdfefe;
 }
 
+.download-job.queue-job-highlight {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgb(56 189 248 / 0.22);
+}
+
 .job-head {
   display: flex;
   align-items: center;
@@ -385,16 +407,68 @@ a {
 
 .search-form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 0.8rem;
+  gap: 0.9rem;
   align-items: end;
 }
 
-.search-form label {
+.search-form label,
+.file-search-quick label,
+.file-search-advanced-grid label {
   display: flex;
   flex-direction: column;
   font-size: 0.9rem;
   gap: 0.35rem;
+}
+
+.file-search-quick {
+  display: grid;
+  grid-template-columns: minmax(260px, 2fr) repeat(3, minmax(150px, 1fr)) auto;
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.file-search-query {
+  min-width: 0;
+}
+
+.file-search-submit {
+  display: flex;
+  align-items: end;
+}
+
+.file-search-submit .btn {
+  width: 100%;
+}
+
+.file-search-advanced {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.55rem 0.65rem;
+}
+
+.file-search-advanced > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.file-search-advanced-grid {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.file-search-active-filters {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f7fafc;
+  color: var(--muted);
+  font-size: 0.84rem;
+  padding: 0.55rem 0.65rem;
 }
 
 .search-form .checkbox-field span {
@@ -467,6 +541,86 @@ a {
   gap: 0.4rem;
 }
 
+.file-results-toolbar {
+  gap: 0.8rem;
+}
+
+.file-results-toolbar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem 1rem;
+}
+
+.file-results-toolbar-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.file-results-toolbar-summary {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.file-results-toolbar-actions {
+  display: flex;
+  align-items: center;
+}
+
+.file-results-view-toggle {
+  display: inline-flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.file-results-filter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+}
+
+.file-results-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.file-results-filter-chip {
+  justify-content: space-between;
+}
+
+.file-results-filter-chip span {
+  min-width: 1.55rem;
+  text-align: center;
+  border-radius: 999px;
+  padding: 0.08rem 0.38rem;
+  background: #e2e8f0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.file-results-sort-shortcut {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.file-results-debug {
+  border-top: 1px solid #e5edf5;
+  padding-top: 0.5rem;
+}
+
+.file-results-debug > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .results-grid {
   margin-top: 1rem;
   display: grid;
@@ -479,6 +633,16 @@ a {
   background: #fff;
   border-radius: 12px;
   overflow: hidden;
+}
+
+.result-card.queue-active {
+  border-color: #86efac;
+  box-shadow: 0 0 0 2px rgb(134 239 172 / 0.18);
+}
+
+.result-card.queue-running {
+  border-color: #67e8f9;
+  box-shadow: 0 0 0 2px rgb(103 232 249 / 0.18);
 }
 
 .thumb-wrap {
@@ -512,6 +676,70 @@ a {
   line-height: 1.3;
 }
 
+.result-card.result-card-saved {
+  border-color: #c7d8ea;
+  box-shadow: 0 0 0 2px rgb(148 163 184 / 0.12);
+}
+
+.result-card-head {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.result-state-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.result-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: #f8fafc;
+}
+
+.result-badge[data-mode="saved"] {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.result-playable-badge[data-mode="playable"] {
+  background: #ecfdf5;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.result-playable-badge[data-mode="static"] {
+  background: #f8fafc;
+  color: #475569;
+  border-color: #dbe2ea;
+}
+
+.result-primary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.7rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.result-primary-meta span {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: baseline;
+}
+
+.result-primary-meta strong {
+  color: var(--text);
+}
+
 .card-body ul {
   margin: 0;
   padding-left: 1rem;
@@ -524,6 +752,7 @@ a {
 .card-actions {
   margin-top: 0.8rem;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -536,13 +765,116 @@ a {
   background: #f4f7fa;
 }
 
-.card-actions button:hover {
+.card-actions button:not(.btn):hover {
   background: #e9eef4;
 }
 
 .card-actions .save-btn:disabled {
   cursor: default;
   opacity: 0.7;
+}
+
+.result-details {
+  border-top: 1px solid #e5edf5;
+  padding-top: 0.5rem;
+}
+
+.result-details > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.result-details ul {
+  margin-top: 0.45rem;
+}
+
+.queue-action-btn:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.card-queue-state,
+.tv-result-queue-state {
+  margin-top: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: #f8fafc;
+}
+
+.card-queue-state[data-mode="queued"],
+.tv-result-queue-state[data-mode="queued"],
+.tv-episode-queue-badge[data-mode="queued"] {
+  color: #155e75;
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+
+.card-queue-state[data-mode="running"],
+.tv-result-queue-state[data-mode="running"],
+.tv-episode-queue-badge[data-mode="running"] {
+  color: #065f46;
+  background: #ecfdf5;
+  border-color: #86efac;
+}
+
+.queue-manage-btn,
+.tv-manage-btn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  background: #f8fafc;
+}
+
+.movie-info-status {
+  margin-top: 0.55rem;
+  min-height: 1.1rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.movie-info-status[data-mode="ok"] {
+  color: #166534;
+}
+
+.movie-info-status[data-mode="error"] {
+  color: #991b1b;
+}
+
+.results-grid[data-view="list"] {
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.results-grid[data-view="list"] .result-card {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.results-grid[data-view="list"] .thumb-wrap {
+  height: 100%;
+  min-height: 100%;
+  aspect-ratio: auto;
+}
+
+.results-grid[data-view="list"] .card-body {
+  display: grid;
+  align-content: start;
+  gap: 0.7rem;
+}
+
+.results-grid[data-view="list"] .card-body h3 {
+  margin-bottom: 0;
 }
 
 .saved-grid {
@@ -847,6 +1179,87 @@ a {
   font-weight: 600;
 }
 
+.tv-primary-btn {
+  min-height: 46px !important;
+  padding: 0.7rem 1rem !important;
+  font-size: 0.95rem !important;
+  box-shadow: 0 8px 18px rgb(15 118 110 / 0.16);
+}
+
+.tv-primary-btn:hover {
+  filter: brightness(1.04);
+}
+
+.tv-show-summary {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: linear-gradient(180deg, #f7fbfd 0%, #ffffff 100%);
+}
+
+.tv-show-summary.text-only {
+  grid-template-columns: 1fr;
+}
+
+.tv-show-summary img {
+  width: 88px;
+  height: 124px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #d9e4ed;
+  background: #e5e7eb;
+}
+
+.tv-show-summary-body {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.tv-show-summary-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.65rem;
+  align-items: baseline;
+}
+
+.tv-show-summary-title-row strong {
+  font-size: 1rem;
+}
+
+.tv-show-summary-title-row span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.tv-show-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.45rem;
+}
+
+.tv-show-summary-meta span {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #dbe8ef;
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  background: #f8fbfd;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.tv-show-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.87rem;
+  line-height: 1.45;
+}
+
 .tv-lookup-info {
   color: var(--muted);
   font-size: 0.9rem;
@@ -963,6 +1376,64 @@ a {
   gap: 0.7rem;
 }
 
+.tv-results-toolbar {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 0.8rem;
+  background: #fff;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.tv-results-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.9rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.tv-results-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.tv-results-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  background: #f8fafc;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.tv-results-filter-chip span {
+  min-width: 1.55rem;
+  text-align: center;
+  border-radius: 999px;
+  padding: 0.08rem 0.38rem;
+  background: #e2e8f0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.tv-results-filter-chip.active {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #075985;
+}
+
+.tv-results-filter-chip.active span {
+  background: #bae6fd;
+  color: #0c4a6e;
+}
+
 .tv-results-banner {
   position: sticky;
   top: 0.75rem;
@@ -1001,25 +1472,44 @@ a {
 }
 
 .tv-season,
-.tv-episode {
+.tv-episode-card {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.5rem 0.65rem;
   background: #fcfeff;
 }
 
-.tv-season > summary,
-.tv-episode > summary {
+.tv-season > summary {
   cursor: pointer;
   font-weight: 600;
   color: var(--text);
 }
 
+.tv-season > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+}
+
 .tv-summary-count {
   color: var(--muted);
-  margin-left: 0.45rem;
   font-weight: 500;
   font-size: 0.84rem;
+}
+
+.tv-season-queue-badge,
+.tv-episode-queue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: #f8fafc;
 }
 
 .tv-season-body {
@@ -1028,8 +1518,109 @@ a {
   gap: 0.6rem;
 }
 
+.tv-episode-card {
+  display: grid;
+  gap: 0.55rem;
+  background: #fff;
+}
+
+.tv-episode-card.queue-active {
+  border-color: #86efac;
+  box-shadow: 0 0 0 2px rgb(134 239 172 / 0.12);
+}
+
+.tv-episode-card.queue-running {
+  border-color: #67e8f9;
+  box-shadow: 0 0 0 2px rgb(103 232 249 / 0.14);
+}
+
+.tv-episode-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.tv-episode-heading {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.tv-episode-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.6rem;
+  align-items: baseline;
+}
+
+.tv-episode-code {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tv-episode-name {
+  color: var(--text);
+}
+
+.tv-episode-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+  align-items: center;
+}
+
+.tv-episode-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.tv-episode-status[data-mode="queued"] {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.tv-episode-status[data-mode="running"] {
+  background: #ecfeff;
+  color: #155e75;
+}
+
+.tv-episode-status[data-mode="done"] {
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.tv-episode-status[data-mode="failed"] {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.tv-episode-status[data-mode="canceled"] {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.tv-episode-status[data-mode="downloaded"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tv-best-result-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #075985;
+}
+
 .tv-query-list {
-  margin-top: 0.45rem;
   color: var(--muted);
   font-size: 0.82rem;
   display: flex;
@@ -1037,8 +1628,113 @@ a {
   gap: 0.35rem;
 }
 
+.tv-episode-empty {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 0.8rem;
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.tv-episode-empty[data-mode="running"],
+.tv-episode-empty[data-mode="queued"],
+.tv-season-queue-badge[data-mode="queued"],
+.tv-episode-queue-badge[data-mode="queued"] {
+  background: #ecfeff;
+  color: #155e75;
+  border-color: #a5f3fc;
+}
+
+.tv-episode-empty[data-mode="downloaded"] {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.tv-downloaded-summary {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.tv-downloaded-summary strong {
+  color: #92400e;
+}
+
+.tv-downloaded-summary span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.55rem;
+  align-items: baseline;
+  color: #78350f;
+  word-break: break-word;
+}
+
+.tv-downloaded-summary em {
+  font-style: normal;
+  color: #a16207;
+}
+
+.tv-season-queue-badge[data-mode="running"],
+.tv-episode-queue-badge[data-mode="running"] {
+  background: #ecfeff;
+  color: #155e75;
+  border-color: #67e8f9;
+}
+
+.tv-episode-secondary {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.tv-episode-alternatives,
+.tv-episode-search-details {
+  border-top: 1px solid #e5edf5;
+  padding-top: 0.45rem;
+}
+
+.tv-episode-alternatives > summary,
+.tv-episode-search-details > summary {
+  cursor: pointer;
+  color: #2563eb;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.tv-episode-search-panel {
+  margin-top: 0.45rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.tv-episode-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tv-episode-actions button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.32rem 0.6rem;
+  background: #eef4ff;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #1d4ed8;
+}
+
+.tv-episode-actions button:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.tv-episode-action-note {
+  color: var(--muted);
+  font-size: 0.79rem;
+}
+
 .tv-result-list {
-  margin-top: 0.5rem;
   display: grid;
   gap: 0.45rem;
 }
@@ -1052,9 +1748,25 @@ a {
   gap: 0.35rem;
 }
 
+.tv-result-primary {
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.tv-result-item.queue-active {
+  border-color: #86efac;
+  box-shadow: 0 0 0 2px rgb(134 239 172 / 0.14);
+}
+
+.tv-result-item.queue-running {
+  border-color: #67e8f9;
+  box-shadow: 0 0 0 2px rgb(103 232 249 / 0.14);
+}
+
 .tv-result-head {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 0.6rem;
 }
 
@@ -1072,6 +1784,7 @@ a {
 
 .tv-result-submeta {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.7rem;
   color: var(--muted);
   font-size: 0.8rem;
@@ -1079,16 +1792,246 @@ a {
 
 .tv-result-actions {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .tv-result-actions button {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 0.3rem 0.55rem;
+  padding: 0.32rem 0.55rem;
   background: #f4f7fa;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  min-height: 42px;
+  padding: 0.58rem 0.88rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.1;
+  cursor: pointer;
+  box-shadow: var(--button-shadow);
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    filter 140ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--button-shadow-hover);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--button-focus-ring), var(--button-shadow-hover);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.7;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.btn-secondary {
+  background: var(--button-secondary-bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--button-secondary-hover);
+}
+
+.btn-soft {
+  background: var(--button-soft-bg);
+  border-color: #d7e3ec;
+  color: #0f4f63;
+}
+
+.btn-soft:hover:not(:disabled) {
+  background: var(--button-soft-hover);
+}
+
+.btn-danger {
+  background: var(--button-danger-bg);
+  border-color: var(--button-danger-border);
+  color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--button-danger-hover);
+}
+
+.btn-pill {
+  min-height: 38px;
+  padding: 0.46rem 0.86rem;
+  border-radius: 999px;
+}
+
+.btn-sm {
+  min-height: 34px;
+  padding: 0.42rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.81rem;
+  font-weight: 600;
+}
+
+.btn-lg {
+  min-height: 46px;
+  padding: 0.72rem 1rem;
+  font-size: 0.95rem;
+  box-shadow: 0 8px 18px rgb(15 118 110 / 0.16);
+}
+
+.btn-icon {
+  min-width: 38px;
+  width: 38px;
+  padding: 0;
+}
+
+.workspace-tab,
+.workspace-tab-link {
+  min-height: 38px;
+}
+
+.workspace-tab.active,
+.workspace-tab-link.active,
+.search-mode-switch button.active,
+.file-results-view-toggle .btn.active,
+.file-results-filter-chip.active,
+.tv-results-filter-chip.active {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff;
+  border-color: var(--accent-dark);
+  box-shadow: 0 8px 18px rgb(15 118 110 / 0.15);
+}
+
+.workspace-tab.active,
+.workspace-tab-link.active {
+  cursor: default;
+}
+
+.search-mode-switch button {
+  min-height: 36px;
+}
+
+.tv-results-filter-chip {
+  justify-content: space-between;
+}
+
+.tv-results-filter-chip span {
+  min-width: 1.55rem;
+}
+
+.tv-results-filter-chip.active span {
+  background: rgb(255 255 255 / 0.18);
+  color: #f8fafc;
+}
+
+.file-results-filter-chip.active span {
+  background: rgb(255 255 255 / 0.18);
+  color: #f8fafc;
+}
+
+.search-form .btn,
+.card-actions .btn,
+.saved-actions .btn,
+.job-actions .btn,
+.tv-result-actions .btn,
+.tv-episode-actions .btn,
+.queue-dialog-actions .btn,
+.file-results-view-toggle .btn,
+.file-results-filter-chip.btn,
+.tv-season-toolbar .btn,
+.tv-episode-picker-toolbar .btn {
+  box-shadow: var(--button-shadow);
+}
+
+.search-form .btn-primary,
+.card-actions .btn-primary,
+.saved-actions .btn-primary,
+.job-actions .btn-primary,
+.tv-result-actions .btn-primary,
+.tv-actions .btn-primary,
+.queue-dialog-actions .btn-primary {
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
+
+.card-actions .btn-secondary,
+.saved-actions .btn-secondary,
+.job-actions .btn-secondary,
+.tv-result-actions .btn-secondary,
+.tv-episode-actions .btn-secondary,
+.queue-dialog-actions .btn-secondary,
+.file-results-view-toggle .btn,
+.file-results-filter-chip.btn,
+.tv-season-toolbar .btn,
+.tv-episode-picker-toolbar .btn {
+  background: var(--button-secondary-bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.card-actions .btn-soft,
+.saved-actions .btn-soft,
+.job-actions .btn-soft,
+.tv-result-actions .btn-soft,
+.tv-episode-actions .btn-soft {
+  background: var(--button-soft-bg);
+  border-color: #d7e3ec;
+  color: #0f4f63;
+}
+
+.card-actions .btn-danger,
+.saved-actions .btn-danger,
+.job-actions .btn-danger,
+.tv-result-actions .btn-danger,
+.tv-episode-actions .btn-danger {
+  background: var(--button-danger-bg);
+  border-color: var(--button-danger-border);
+  color: var(--danger);
+}
+
+.queue-dialog-close {
+  line-height: 1;
+}
+
+.job-actions .btn,
+.saved-actions .btn,
+.card-actions .btn,
+.tv-result-actions .btn,
+.tv-episode-actions .btn,
+.queue-dialog-actions .btn {
+  margin: 0;
 }
 
 @media (max-width: 560px) {
@@ -1141,7 +2084,8 @@ a {
     flex: 1;
   }
 
-  .search-form {
+  .file-search-quick,
+  .file-search-advanced-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1150,8 +2094,59 @@ a {
     align-items: flex-start;
   }
 
+  .file-results-toolbar-head,
+  .file-results-filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .file-results-view-toggle,
+  .file-results-filter-chips {
+    width: 100%;
+  }
+
+  .file-results-view-toggle .btn,
+  .file-results-filter-chip {
+    flex: 1;
+  }
+
+  .results-grid[data-view="list"] .result-card {
+    grid-template-columns: 1fr;
+  }
+
+  .results-grid[data-view="list"] .thumb-wrap {
+    aspect-ratio: 16 / 9;
+  }
+
   .tv-controls {
     grid-template-columns: 1fr;
+  }
+
+  .tv-show-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .tv-show-summary img {
+    width: 100%;
+    max-width: 140px;
+    height: auto;
+  }
+
+  .tv-results-stats,
+  .tv-results-filters,
+  .tv-result-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tv-results-filter-chip {
+    justify-content: space-between;
+  }
+
+  .tv-season > summary,
+  .tv-episode-summary,
+  .tv-result-head {
+    align-items: flex-start;
   }
 
   .tv-result-head {

@@ -169,6 +169,7 @@ class Storage:
                     query_variants_json TEXT NOT NULL DEFAULT '[]',
                     query_errors_json TEXT NOT NULL DEFAULT '[]',
                     results_json TEXT NOT NULL DEFAULT '[]',
+                    downloaded_files_json TEXT NOT NULL DEFAULT '[]',
                     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                     UNIQUE(job_id, season_number, episode_number),
                     FOREIGN KEY(job_id) REFERENCES tv_search_jobs(id)
@@ -622,8 +623,9 @@ class Storage:
                         episode_name,
                         airdate,
                         episode_code,
-                        status
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'pending')
+                        status,
+                        downloaded_files_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         job_id,
@@ -632,7 +634,34 @@ class Storage:
                         episode.get("episode_name"),
                         episode.get("airdate"),
                         episode.get("episode_code"),
+                        str(episode.get("status") or "pending"),
+                        json.dumps(list(episode.get("downloaded_files") or [])),
                     ),
+                )
+
+            self._refresh_tv_search_job_counts(conn, job_id)
+            pending_count = int(
+                conn.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM tv_search_job_episodes
+                    WHERE job_id = ? AND status = 'pending'
+                    """,
+                    (job_id,),
+                ).fetchone()[0]
+            )
+            if pending_count == 0:
+                conn.execute(
+                    """
+                    UPDATE tv_search_jobs
+                    SET
+                        status = 'done',
+                        started_at = COALESCE(started_at, datetime('now')),
+                        finished_at = datetime('now'),
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    (job_id,),
                 )
 
             conn.commit()
@@ -779,6 +808,37 @@ class Storage:
                     json.dumps(query_variants),
                     json.dumps(query_errors),
                     json.dumps(results),
+                    job_id,
+                    season_number,
+                    episode_number,
+                ),
+            )
+            self._refresh_tv_search_job_counts(conn, job_id)
+
+    def mark_tv_search_episode_downloaded(
+        self,
+        job_id: int,
+        *,
+        season_number: int,
+        episode_number: int,
+        downloaded_files: list[str],
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE tv_search_job_episodes
+                SET
+                    status = 'downloaded',
+                    result_count = 0,
+                    query_variants_json = '[]',
+                    query_errors_json = '[]',
+                    results_json = '[]',
+                    downloaded_files_json = ?,
+                    updated_at = datetime('now')
+                WHERE job_id = ? AND season_number = ? AND episode_number = ?
+                """,
+                (
+                    json.dumps(list(downloaded_files)),
                     job_id,
                     season_number,
                     episode_number,
@@ -1681,6 +1741,7 @@ class Storage:
             "query_variants": json.loads(row["query_variants_json"] or "[]"),
             "query_errors": json.loads(row["query_errors_json"] or "[]"),
             "results": json.loads(row["results_json"] or "[]"),
+            "downloaded_files": json.loads(row["downloaded_files_json"] or "[]"),
             "updated_at": row["updated_at"],
         }
 
@@ -1731,7 +1792,8 @@ class Storage:
                 {
                     "season_number": season_number,
                     "episode_count": len(items),
-                    "completed_episodes": sum(1 for item in items if item["status"] == "done"),
+                    "completed_episodes": sum(1 for item in items if item["status"] in {"done", "downloaded"}),
+                    "downloaded_episodes": sum(1 for item in items if item["status"] == "downloaded"),
                     "result_count": sum(int(item.get("result_count") or 0) for item in items),
                     "episodes": items,
                 }
@@ -1743,7 +1805,7 @@ class Storage:
         summary = conn.execute(
             """
             SELECT
-                COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0) AS completed_episodes,
+                COALESCE(SUM(CASE WHEN status IN ('done', 'downloaded') THEN 1 ELSE 0 END), 0) AS completed_episodes,
                 COALESCE(SUM(result_count), 0) AS total_results
             FROM tv_search_job_episodes
             WHERE job_id = ?
@@ -1893,6 +1955,12 @@ class Storage:
             conn,
             table="tv_search_jobs",
             column="search_aliases_json",
+            definition="TEXT NOT NULL DEFAULT '[]'",
+        )
+        self._ensure_column(
+            conn,
+            table="tv_search_job_episodes",
+            column="downloaded_files_json",
             definition="TEXT NOT NULL DEFAULT '[]'",
         )
 

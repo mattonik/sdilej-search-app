@@ -7,6 +7,7 @@ from pathlib import PurePosixPath
 from typing import Literal
 
 from .dataclass_compat import dataclass
+from .models import TitleMetadata
 
 MediaKind = Literal["movie", "tv", "unknown"]
 ClassificationConfidence = Literal["strict", "loose", "unknown", "manual"]
@@ -32,6 +33,37 @@ _KIDS_HINT_RE = re.compile(
     re.IGNORECASE,
 )
 _FILE_EXT_RE = re.compile(r"\.[A-Za-z0-9]{2,5}$")
+_KIDS_SUMMARY_RE = re.compile(
+    r"\b(?:kids?|child(?:ren)?|family|preschool|young\s+audience|for\s+children|detsk|deti|rodin)\b",
+    re.IGNORECASE,
+)
+_ADULT_SUMMARY_RE = re.compile(
+    r"\b(?:murder|killer|crime|criminal|gang|police|detective|war|erotic|adult|drug|violent)\b",
+    re.IGNORECASE,
+)
+_STRONG_KIDS_GENRE_HINTS = (
+    "children",
+    "childrens",
+    "family",
+    "rodinny",
+    "detsky",
+    "kids",
+)
+_SOFT_KIDS_GENRE_HINTS = (
+    "animation",
+    "animated",
+    "animovany",
+    "animacni",
+)
+_ADULT_GENRE_HINTS = (
+    "crime",
+    "krimi",
+    "horror",
+    "thriller",
+    "erotic",
+    "adult",
+    "war",
+)
 
 
 @dataclass(slots=True)
@@ -57,6 +89,7 @@ def classify_media_title(
     *,
     media_kind_override: MediaKind | None = None,
     is_kids_override: bool | None = None,
+    metadata: TitleMetadata | None = None,
     series_name_override: str | None = None,
     season_number_override: int | None = None,
     episode_number_override: int | None = None,
@@ -64,11 +97,17 @@ def classify_media_title(
     text = title.strip()
     stem = _strip_file_extension(text)
     is_kids_detected = bool(_KIDS_HINT_RE.search(_normalize_text(stem)))
+    metadata_is_kids = infer_is_kids_from_metadata(metadata)
+    resolved_is_kids = _resolve_is_kids(
+        detected_from_title=is_kids_detected,
+        metadata_is_kids=metadata_is_kids,
+        override=is_kids_override,
+    )
 
     if media_kind_override in {"movie", "tv"}:
         return MediaClassification(
             media_kind=media_kind_override,
-            is_kids=is_kids_detected if is_kids_override is None else bool(is_kids_override),
+            is_kids=resolved_is_kids,
             series_name=_normalize_optional_text(series_name_override),
             season_number=season_number_override,
             episode_number=episode_number_override,
@@ -84,7 +123,7 @@ def classify_media_title(
         if series:
             return MediaClassification(
                 media_kind="tv",
-                is_kids=is_kids_detected if is_kids_override is None else bool(is_kids_override),
+                is_kids=resolved_is_kids,
                 series_name=series,
                 season_number=season,
                 episode_number=episode,
@@ -100,7 +139,7 @@ def classify_media_title(
         if series:
             return MediaClassification(
                 media_kind="tv",
-                is_kids=is_kids_detected if is_kids_override is None else bool(is_kids_override),
+                is_kids=resolved_is_kids,
                 series_name=series,
                 season_number=season,
                 episode_number=episode,
@@ -116,7 +155,7 @@ def classify_media_title(
         if series:
             return MediaClassification(
                 media_kind="tv",
-                is_kids=is_kids_detected if is_kids_override is None else bool(is_kids_override),
+                is_kids=resolved_is_kids,
                 series_name=series,
                 season_number=season,
                 episode_number=episode,
@@ -127,7 +166,7 @@ def classify_media_title(
     if _TV_HINT_RE.search(_normalize_text(stem)):
         return MediaClassification(
             media_kind="unknown",
-            is_kids=is_kids_detected if is_kids_override is None else bool(is_kids_override),
+            is_kids=resolved_is_kids,
             series_name=_normalize_optional_text(series_name_override),
             season_number=season_number_override,
             episode_number=episode_number_override,
@@ -137,7 +176,7 @@ def classify_media_title(
 
     return MediaClassification(
         media_kind="movie",
-        is_kids=is_kids_detected if is_kids_override is None else bool(is_kids_override),
+        is_kids=resolved_is_kids,
         series_name=None,
         season_number=None,
         episode_number=None,
@@ -197,6 +236,66 @@ def _extract_series_name(title: str, marker_index: int) -> str | None:
     if not candidate:
         return None
     return candidate
+
+
+def infer_is_kids_from_metadata(metadata: TitleMetadata | None) -> bool | None:
+    if metadata is None:
+        return None
+
+    score = 0
+    normalized_genres = [_normalize_text(value) for value in metadata.genres if value]
+    normalized_summary = _normalize_text(metadata.summary or "")
+    normalized_type = _normalize_text(metadata.content_type or "")
+    normalized_titles = _normalize_text(
+        " ".join(
+            value
+            for value in [
+                metadata.canonical_title,
+                metadata.original_title or "",
+                *metadata.local_titles,
+                *metadata.aliases,
+            ]
+            if value
+        )
+    )
+
+    for genre in normalized_genres:
+        if any(token in genre for token in _STRONG_KIDS_GENRE_HINTS):
+            score += 4
+        if any(token in genre for token in _SOFT_KIDS_GENRE_HINTS):
+            score += 2
+        if any(token in genre for token in _ADULT_GENRE_HINTS):
+            score -= 4
+
+    if normalized_type in {"animation", "animated"}:
+        score += 2
+
+    if normalized_summary and _KIDS_SUMMARY_RE.search(normalized_summary):
+        score += 2
+    if normalized_summary and _ADULT_SUMMARY_RE.search(normalized_summary):
+        score -= 2
+
+    if normalized_titles and _KIDS_HINT_RE.search(normalized_titles):
+        score += 1
+
+    if score >= 4:
+        return True
+    if score <= -4:
+        return False
+    return None
+
+
+def _resolve_is_kids(
+    *,
+    detected_from_title: bool,
+    metadata_is_kids: bool | None,
+    override: bool | None,
+) -> bool:
+    if override is not None:
+        return bool(override)
+    if metadata_is_kids is not None:
+        return metadata_is_kids
+    return bool(detected_from_title)
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
