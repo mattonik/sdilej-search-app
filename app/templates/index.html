@@ -714,6 +714,85 @@
         return `${normalizedSeries}:${season}:${episode}`;
       };
 
+      const buildTvEpisodeKey = ({ seasonNumber, episodeNumber }) => {
+        const season = Number(seasonNumber);
+        const episode = Number(episodeNumber);
+        if (!Number.isFinite(season) || season <= 0 || !Number.isFinite(episode) || episode <= 0) {
+          return "";
+        }
+        return `${season}:${episode}`;
+      };
+
+      const basenameFromPath = (value) => {
+        const raw = String(value ?? "").trim();
+        if (!raw) return "";
+        const parts = raw.split(/[\\/]+/).filter(Boolean);
+        return parts[parts.length - 1] || "";
+      };
+
+      const sameStringList = (left, right) => JSON.stringify(Array.isArray(left) ? left : []) === JSON.stringify(Array.isArray(right) ? right : []);
+
+      const buildCurrentTvShowAliasKeys = () => {
+        const titleMetadata = tvResultsState?.title_metadata || tvLookupState?.title_metadata || null;
+        const candidates = [
+          tvResultsState?.show?.name,
+          tvLookupState?.show?.name,
+          ...(Array.isArray(tvResultsState?.aliases) ? tvResultsState.aliases : []),
+          ...(Array.isArray(tvLookupState?.aliases) ? tvLookupState.aliases : []),
+          ...(Array.isArray(tvResultsState?.all_search_aliases) ? tvResultsState.all_search_aliases : []),
+          ...(Array.isArray(tvLookupState?.all_search_aliases) ? tvLookupState.all_search_aliases : []),
+          ...(Array.isArray(tvResultsState?.search_aliases) ? tvResultsState.search_aliases : []),
+          ...(Array.isArray(tvLookupState?.search_aliases) ? tvLookupState.search_aliases : []),
+          titleMetadata?.canonical_title,
+          titleMetadata?.original_title,
+          ...(Array.isArray(titleMetadata?.local_titles) ? titleMetadata.local_titles : []),
+          ...(Array.isArray(titleMetadata?.aliases) ? titleMetadata.aliases : []),
+        ];
+        return new Set(candidates.map((value) => normalizeQueueTextKey(value)).filter(Boolean));
+      };
+
+      const buildDownloadedTvEpisodesFromJobs = (jobs) => {
+        const aliasKeys = buildCurrentTvShowAliasKeys();
+        if (!aliasKeys.size) return new Map();
+
+        const downloadedEpisodes = new Map();
+        (Array.isArray(jobs) ? jobs : []).forEach((job) => {
+          if (String(job?.status || "") !== "done") return;
+          if (String(job?.media_kind || "") !== "tv") return;
+
+          const normalizedSeries = normalizeQueueTextKey(job?.series_name);
+          if (!normalizedSeries || !aliasKeys.has(normalizedSeries)) return;
+
+          const episodeKey = buildTvEpisodeKey({
+            seasonNumber: job?.season_number,
+            episodeNumber: job?.episode_number,
+          });
+          if (!episodeKey) return;
+
+          const label =
+            basenameFromPath(job?.save_path) ||
+            basenameFromPath(job?.working_path) ||
+            String(job?.title || "").trim() ||
+            `S${String(job?.season_number || "").padStart(2, "0")}E${String(job?.episode_number || "").padStart(2, "0")}`;
+
+          const current = downloadedEpisodes.get(episodeKey) || [];
+          if (!current.includes(label)) {
+            current.push(label);
+            downloadedEpisodes.set(episodeKey, current);
+          }
+        });
+
+        return downloadedEpisodes;
+      };
+
+      const buildDownloadedEpisodeState = (episode, downloadedFiles) => ({
+        ...episode,
+        status: "downloaded",
+        result_count: 0,
+        results: [],
+        downloaded_files: Array.isArray(downloadedFiles) ? [...downloadedFiles] : [],
+      });
+
       const buildSavedStateFromItems = (items) => {
         const keys = new Set();
         const itemsByKey = new Map();
@@ -752,15 +831,6 @@
           filtered.push(item);
         }
         setSavedStateFromItems(filtered);
-      };
-
-      const buildTvEpisodeKey = ({ seasonNumber, episodeNumber }) => {
-        const season = Number(seasonNumber);
-        const episode = Number(episodeNumber);
-        if (!Number.isFinite(season) || season <= 0 || !Number.isFinite(episode) || episode <= 0) {
-          return "";
-        }
-        return `${season}:${episode}`;
       };
 
       const queueButtonLabelForStatus = (status) => (status === "running" ? "Downloading" : "Added to queue");
@@ -810,10 +880,14 @@
 
       const setActiveQueueStateFromJobs = (jobs) => {
         activeQueueState = buildActiveQueueStateFromJobs(jobs);
+        const tvDownloadedStateChanged = tvResultsState ? syncTvResultsDownloadedStateFromJobs(jobs) : false;
         refreshFileSearchResultsUi();
         if (tvResultsState) {
-          renderTvResults(tvResultsState);
-          return;
+          if (tvDownloadedStateChanged) {
+            renderTvResults(tvResultsState);
+          } else {
+            refreshTvResultsQueueUi();
+          }
         }
         applyActiveQueueStateToSearchResults();
       };
@@ -1582,6 +1656,55 @@
 
       const pluralize = (count, singular, plural = `${singular}s`) => (count === 1 ? singular : plural);
 
+      const syncTvResultsDownloadedStateFromJobs = (jobs) => {
+        if (!tvResultsState) return false;
+
+        const downloadedEpisodes = buildDownloadedTvEpisodesFromJobs(jobs);
+        if (!downloadedEpisodes.size) return false;
+
+        let changed = false;
+
+        if (Array.isArray(tvResultsState.seasons)) {
+          tvResultsState.seasons = tvResultsState.seasons.map((season) => {
+            if (!Array.isArray(season?.episodes)) return season;
+
+            let seasonChanged = false;
+            const nextEpisodes = season.episodes.map((episode) => {
+              const episodeKey = buildTvEpisodeKey({
+                seasonNumber: episode?.season_number,
+                episodeNumber: episode?.episode_number,
+              });
+              const downloadedFiles = episodeKey ? downloadedEpisodes.get(episodeKey) : null;
+              if (!downloadedFiles) return episode;
+
+              const alreadyDownloaded =
+                String(episode?.status || "") === "downloaded" && sameStringList(episode?.downloaded_files, downloadedFiles);
+              if (alreadyDownloaded) return episode;
+
+              seasonChanged = true;
+              changed = true;
+              return buildDownloadedEpisodeState(episode, downloadedFiles);
+            });
+
+            return seasonChanged ? { ...season, episodes: nextEpisodes } : season;
+          });
+        }
+
+        Array.from(tvEpisodeSearchOverrides.entries()).forEach(([episodeKey, episode]) => {
+          const downloadedFiles = downloadedEpisodes.get(String(episodeKey));
+          if (!downloadedFiles) return;
+
+          const alreadyDownloaded =
+            String(episode?.status || "") === "downloaded" && sameStringList(episode?.downloaded_files, downloadedFiles);
+          if (alreadyDownloaded) return;
+
+          tvEpisodeSearchOverrides.set(episodeKey, buildDownloadedEpisodeState(episode, downloadedFiles));
+          changed = true;
+        });
+
+        return changed;
+      };
+
       const getTvEpisodeOutcome = (episode, episodeQueueSummary) => {
         const status = String(episode?.status || "pending");
         const resultCount = Number(episode?.result_count || 0);
@@ -1600,7 +1723,15 @@
         return true;
       };
 
-      const buildTvResultsToolbarHtml = (overview) => {
+      const buildTvResultsStatsHtml = (overview) => `
+        <span><strong>${esc(overview.totalEpisodes)}</strong> episodes searched</span>
+        <span><strong>${esc(overview.matchedEpisodes)}</strong> with matches</span>
+        <span><strong>${esc(overview.queuedEpisodes)}</strong> in queue</span>
+        <span><strong>${esc(overview.downloadedEpisodes)}</strong> already downloaded</span>
+        <span><strong>${esc(overview.noMatchEpisodes)}</strong> without matches</span>
+      `;
+
+      const buildTvResultsFilterChipsHtml = (overview) => {
         const chips = [
           { key: "all", label: "All", count: overview.totalEpisodes },
           { key: "matches", label: "With matches", count: overview.matchedEpisodes },
@@ -1609,33 +1740,145 @@
           { key: "unmatched", label: "No matches", count: overview.noMatchEpisodes },
         ];
 
+        return chips
+          .map(
+            (chip) => `
+              <button
+                type="button"
+                class="tv-results-filter-chip btn btn-pill${tvResultsFilter === chip.key ? " active" : ""}"
+                data-filter="${esc(chip.key)}"
+              >
+                ${esc(chip.label)}
+                <span>${esc(chip.count)}</span>
+              </button>
+            `
+          )
+          .join("");
+      };
+
+      const buildTvResultsToolbarHtml = (overview) => {
         return `
           <section class="tv-results-toolbar" aria-label="TV results filters">
-            <div class="tv-results-stats">
-              <span><strong>${esc(overview.totalEpisodes)}</strong> episodes searched</span>
-              <span><strong>${esc(overview.matchedEpisodes)}</strong> with matches</span>
-              <span><strong>${esc(overview.queuedEpisodes)}</strong> in queue</span>
-              <span><strong>${esc(overview.downloadedEpisodes)}</strong> already downloaded</span>
-              <span><strong>${esc(overview.noMatchEpisodes)}</strong> without matches</span>
-            </div>
-            <div class="tv-results-filters">
-              ${chips
-                .map(
-                  (chip) => `
-                    <button
-                      type="button"
-                      class="tv-results-filter-chip btn btn-pill${tvResultsFilter === chip.key ? " active" : ""}"
-                      data-filter="${esc(chip.key)}"
-                    >
-                      ${esc(chip.label)}
-                      <span>${esc(chip.count)}</span>
-                    </button>
-                  `
-                )
-                .join("")}
-            </div>
+            <div class="tv-results-stats">${buildTvResultsStatsHtml(overview)}</div>
+            <div class="tv-results-filters">${buildTvResultsFilterChipsHtml(overview)}</div>
           </section>
         `;
+      };
+
+      const buildTvResultsViewModel = (payload) => {
+        const seasons = payload?.seasons || [];
+        const completed = Number(payload?.completed_episodes || 0);
+        const total = Number(payload?.total_episodes || 0);
+        const resultCount = Number(payload?.result_count || 0);
+        const status = String(payload?.status || "");
+        const allSearchAliases =
+          (Array.isArray(payload?.all_search_aliases) && payload.all_search_aliases.length ? payload.all_search_aliases : null) ||
+          (Array.isArray(tvLookupState?.all_search_aliases) && tvLookupState.all_search_aliases.length ? tvLookupState.all_search_aliases : null) ||
+          (Array.isArray(payload?.search_aliases) ? payload.search_aliases : []);
+        const activeSearchAliases = Array.isArray(payload?.search_aliases) ? payload.search_aliases : [];
+        const bannerMessage =
+          status === "done"
+            ? `Search complete. ${completed}/${total} episodes processed, ${resultCount} files found. No more results are coming.`
+            : status === "failed"
+              ? `Search failed after ${completed}/${total} episodes. ${payload?.error || "Check the status above for details."}`
+              : status === "canceled"
+                ? `Search canceled at ${completed}/${total} processed episodes. No more results are coming.`
+                : status === "running"
+                  ? `Search running in the background. ${completed}/${total} episodes processed, ${resultCount} files found so far.`
+                  : status === "queued"
+                    ? `Search queued in the background. ${completed}/${total} episodes processed so far.`
+                    : "";
+        const bannerHtml = bannerMessage
+          ? `<div class="tv-results-banner" data-mode="${esc(status || "neutral")}" aria-live="polite">${esc(bannerMessage)}</div>`
+          : "";
+
+        const seasonViewModels = (Array.isArray(seasons) ? seasons : []).map((season) => {
+          const episodeViewModels = (season.episodes || []).map((episode) => {
+            const episodeKey = buildTvEpisodeKey({
+              seasonNumber: episode.season_number ?? season.season_number ?? "",
+              episodeNumber: episode.episode_number ?? "",
+            });
+            const effectiveEpisode = tvEpisodeSearchOverrides.get(episodeKey) || episode;
+            const queueEpisodeKey = buildEpisodeQueueKey({
+              seriesName: payload?.show?.name || "",
+              seasonNumber: effectiveEpisode.season_number ?? season.season_number ?? "",
+              episodeNumber: effectiveEpisode.episode_number ?? "",
+            });
+            const episodeQueueSummary = queueEpisodeKey ? activeQueueState.episodeJobs.get(queueEpisodeKey) || null : null;
+            const outcome = getTvEpisodeOutcome(effectiveEpisode, episodeQueueSummary);
+            return {
+              episodeKey,
+              effectiveEpisode,
+              queueEpisodeKey,
+              episodeQueueSummary,
+              outcome,
+              bestResult: Array.isArray(effectiveEpisode.results) ? effectiveEpisode.results[0] || null : null,
+              alternativeResults: Array.isArray(effectiveEpisode.results) ? effectiveEpisode.results.slice(1) : [],
+            };
+          });
+
+          const stats = episodeViewModels.reduce(
+            (acc, viewModel) => {
+              acc.totalEpisodes += 1;
+              if (viewModel.outcome.hasMatches) acc.matchedEpisodes += 1;
+              if (viewModel.outcome.hasActiveQueue) {
+                acc.queuedEpisodes += 1;
+                acc.queueStatus =
+                  acc.queueStatus === "running" || viewModel.episodeQueueSummary?.status === "running" ? "running" : "queued";
+              }
+              if (viewModel.outcome.isDownloaded) acc.downloadedEpisodes += 1;
+              if (viewModel.outcome.isNoMatch) acc.noMatchEpisodes += 1;
+              return acc;
+            },
+            { totalEpisodes: 0, matchedEpisodes: 0, queuedEpisodes: 0, downloadedEpisodes: 0, noMatchEpisodes: 0, queueStatus: "" }
+          );
+
+          return {
+            ...season,
+            episodeViewModels,
+            visibleEpisodeViewModels: episodeViewModels.filter((viewModel) => matchesTvResultsFilter(viewModel.outcome)),
+            stats,
+          };
+        });
+
+        const overview = seasonViewModels.reduce(
+          (acc, season) => {
+            acc.totalEpisodes += season.stats.totalEpisodes;
+            acc.matchedEpisodes += season.stats.matchedEpisodes;
+            acc.queuedEpisodes += season.stats.queuedEpisodes;
+            acc.downloadedEpisodes += season.stats.downloadedEpisodes;
+            acc.noMatchEpisodes += season.stats.noMatchEpisodes;
+            return acc;
+          },
+          { totalEpisodes: 0, matchedEpisodes: 0, queuedEpisodes: 0, downloadedEpisodes: 0, noMatchEpisodes: 0 }
+        );
+        const visibleSeasons = seasonViewModels.filter((season) => season.visibleEpisodeViewModels.length > 0);
+
+        return {
+          completed,
+          total,
+          resultCount,
+          status,
+          allSearchAliases,
+          activeSearchAliases,
+          bannerHtml,
+          seasonViewModels,
+          overview,
+          visibleSeasons,
+        };
+      };
+
+      const buildTvSeasonSummaryBits = (season) => {
+        const seasonSummaryBits = [
+          `${season.stats.matchedEpisodes} matched`,
+          `${season.stats.queuedEpisodes} in queue`,
+          `${season.stats.downloadedEpisodes} downloaded`,
+          `${season.stats.noMatchEpisodes} no matches`,
+        ];
+        if (tvResultsFilter !== "all" && season.visibleEpisodeViewModels.length !== season.stats.totalEpisodes) {
+          seasonSummaryBits.unshift(`${season.visibleEpisodeViewModels.length} shown`);
+        }
+        return seasonSummaryBits;
       };
 
       const renderTvResultItem = ({
@@ -2092,93 +2335,10 @@
 
       const renderTvResults = (payload) => {
         tvResultsState = payload;
-        const seasons = payload?.seasons || [];
-        const completed = Number(payload?.completed_episodes || 0);
-        const total = Number(payload?.total_episodes || 0);
-        const resultCount = Number(payload?.result_count || 0);
-        const status = String(payload?.status || "");
-        const allSearchAliases =
-          (Array.isArray(payload?.all_search_aliases) && payload.all_search_aliases.length ? payload.all_search_aliases : null) ||
-          (Array.isArray(tvLookupState?.all_search_aliases) && tvLookupState.all_search_aliases.length ? tvLookupState.all_search_aliases : null) ||
-          (Array.isArray(payload?.search_aliases) ? payload.search_aliases : []);
-        const activeSearchAliases = Array.isArray(payload?.search_aliases) ? payload.search_aliases : [];
-        const bannerMessage =
-          status === "done"
-            ? `Search complete. ${completed}/${total} episodes processed, ${resultCount} files found. No more results are coming.`
-            : status === "failed"
-              ? `Search failed after ${completed}/${total} episodes. ${payload?.error || "Check the status above for details."}`
-              : status === "canceled"
-                ? `Search canceled at ${completed}/${total} processed episodes. No more results are coming.`
-                : status === "running"
-                  ? `Search running in the background. ${completed}/${total} episodes processed, ${resultCount} files found so far.`
-                  : status === "queued"
-                    ? `Search queued in the background. ${completed}/${total} episodes processed so far.`
-                    : "";
-        const bannerHtml = bannerMessage
-          ? `<div class="tv-results-banner" data-mode="${esc(status || "neutral")}" aria-live="polite">${esc(bannerMessage)}</div>`
-          : "";
+        const viewModel = buildTvResultsViewModel(payload);
+        const { bannerHtml, seasonViewModels, visibleSeasons, overview, allSearchAliases, activeSearchAliases } = viewModel;
         const uiState = captureTvResultsUiState();
-        const seasonViewModels = (Array.isArray(seasons) ? seasons : []).map((season) => {
-          const episodeViewModels = (season.episodes || []).map((episode) => {
-            const episodeKey = buildTvEpisodeKey({
-              seasonNumber: episode.season_number ?? season.season_number ?? "",
-              episodeNumber: episode.episode_number ?? "",
-            });
-            const effectiveEpisode = tvEpisodeSearchOverrides.get(episodeKey) || episode;
-            const queueEpisodeKey = buildEpisodeQueueKey({
-              seriesName: payload?.show?.name || "",
-              seasonNumber: effectiveEpisode.season_number ?? season.season_number ?? "",
-              episodeNumber: effectiveEpisode.episode_number ?? "",
-            });
-            const episodeQueueSummary = queueEpisodeKey ? activeQueueState.episodeJobs.get(queueEpisodeKey) || null : null;
-            const outcome = getTvEpisodeOutcome(effectiveEpisode, episodeQueueSummary);
-            return {
-              episodeKey,
-              effectiveEpisode,
-              queueEpisodeKey,
-              episodeQueueSummary,
-              outcome,
-              bestResult: Array.isArray(effectiveEpisode.results) ? effectiveEpisode.results[0] || null : null,
-              alternativeResults: Array.isArray(effectiveEpisode.results) ? effectiveEpisode.results.slice(1) : [],
-            };
-          });
-
-            const stats = episodeViewModels.reduce(
-              (acc, viewModel) => {
-                acc.totalEpisodes += 1;
-                if (viewModel.outcome.hasMatches) acc.matchedEpisodes += 1;
-                if (viewModel.outcome.hasActiveQueue) {
-                  acc.queuedEpisodes += 1;
-                  acc.queueStatus = acc.queueStatus === "running" || viewModel.episodeQueueSummary?.status === "running" ? "running" : "queued";
-                }
-                if (viewModel.outcome.isDownloaded) acc.downloadedEpisodes += 1;
-                if (viewModel.outcome.isNoMatch) acc.noMatchEpisodes += 1;
-                return acc;
-              },
-            { totalEpisodes: 0, matchedEpisodes: 0, queuedEpisodes: 0, downloadedEpisodes: 0, noMatchEpisodes: 0, queueStatus: "" }
-          );
-
-          return {
-            ...season,
-            episodeViewModels,
-            visibleEpisodeViewModels: episodeViewModels.filter((viewModel) => matchesTvResultsFilter(viewModel.outcome)),
-            stats,
-          };
-        });
-
-        const overview = seasonViewModels.reduce(
-          (acc, season) => {
-            acc.totalEpisodes += season.stats.totalEpisodes;
-            acc.matchedEpisodes += season.stats.matchedEpisodes;
-            acc.queuedEpisodes += season.stats.queuedEpisodes;
-            acc.downloadedEpisodes += season.stats.downloadedEpisodes;
-            acc.noMatchEpisodes += season.stats.noMatchEpisodes;
-            return acc;
-          },
-          { totalEpisodes: 0, matchedEpisodes: 0, queuedEpisodes: 0, downloadedEpisodes: 0, noMatchEpisodes: 0 }
-        );
         const toolbarHtml = buildTvResultsToolbarHtml(overview);
-        const visibleSeasons = seasonViewModels.filter((season) => season.visibleEpisodeViewModels.length > 0);
 
         if (seasonViewModels.length === 0) {
           tvResults.innerHTML = `
@@ -2314,19 +2474,11 @@
               })
               .join("");
 
-            const seasonSummaryBits = [
-              `${season.stats.matchedEpisodes} matched`,
-              `${season.stats.queuedEpisodes} in queue`,
-              `${season.stats.downloadedEpisodes} downloaded`,
-              `${season.stats.noMatchEpisodes} no matches`,
-            ];
-            if (tvResultsFilter !== "all" && season.visibleEpisodeViewModels.length !== season.stats.totalEpisodes) {
-              seasonSummaryBits.unshift(`${season.visibleEpisodeViewModels.length} shown`);
-            }
+            const seasonSummaryBits = buildTvSeasonSummaryBits(season);
             const seasonQueueBadge =
               season.stats.queuedEpisodes > 0
                 ? `<span class="tv-season-queue-badge" data-mode="${esc(season.stats.queueStatus || "queued")}">${esc(queueBadgeLabelForStatus(season.stats.queueStatus || "queued"))} (${esc(season.stats.queuedEpisodes)})</span>`
-                : "";
+                : `<span class="tv-season-queue-badge hidden"></span>`;
 
             return `
               <details class="tv-season" data-season-key="${esc(season.season_number)}">
@@ -2340,7 +2492,12 @@
             `;
           })
           .join("");
-        tvResults.innerHTML = `${bannerHtml}${toolbarHtml}${seasonHtml}`;
+        tvResults.innerHTML = `
+          ${bannerHtml}
+          ${toolbarHtml}
+          ${seasonHtml}
+          <div class="download-empty tv-results-empty hidden">No episodes match the current filter.</div>
+        `;
 
         restoreTvResultsUiState(uiState);
         bindTvResultsToolbar();
@@ -2348,6 +2505,84 @@
         bindTvEpisodeSearchAnywayButtons();
         bindTvEpisodeAliasButtons();
         applyActiveQueueStateToSearchResults();
+      };
+
+      const refreshTvResultsQueueUi = () => {
+        if (!tvResultsState || !tvResults.querySelector(".tv-results-toolbar")) return;
+
+        const viewModel = buildTvResultsViewModel(tvResultsState);
+        if (!viewModel.seasonViewModels.length) return;
+
+        const seasonMap = new Map(viewModel.seasonViewModels.map((season) => [String(season.season_number), season]));
+        const episodeMap = new Map();
+        viewModel.seasonViewModels.forEach((season) => {
+          season.episodeViewModels.forEach((episodeViewModel) => {
+            episodeMap.set(String(episodeViewModel.episodeKey), episodeViewModel);
+          });
+        });
+
+        const visibleSeasonKeys = new Set(viewModel.visibleSeasons.map((season) => String(season.season_number)));
+        const renderedSeasonKeys = new Set(
+          Array.from(tvResults.querySelectorAll("details.tv-season[data-season-key]"))
+            .map((node) => String(node.dataset.seasonKey || ""))
+            .filter(Boolean)
+        );
+        const missingVisibleSeason = Array.from(visibleSeasonKeys).some((key) => !renderedSeasonKeys.has(key));
+        if (missingVisibleSeason) {
+          renderTvResults(tvResultsState);
+          return;
+        }
+
+        const toolbar = tvResults.querySelector(".tv-results-toolbar");
+        if (toolbar) {
+          const stats = toolbar.querySelector(".tv-results-stats");
+          const filters = toolbar.querySelector(".tv-results-filters");
+          if (stats) {
+            stats.innerHTML = buildTvResultsStatsHtml(viewModel.overview);
+          }
+          if (filters) {
+            filters.innerHTML = buildTvResultsFilterChipsHtml(viewModel.overview);
+          }
+          bindTvResultsToolbar();
+        }
+
+        tvResults.querySelectorAll(".tv-episode-card[data-episode-key]").forEach((episodeNode) => {
+          const episodeKey = String(episodeNode.dataset.episodeKey || "");
+          const episodeViewModel = episodeMap.get(episodeKey);
+          if (!episodeViewModel) return;
+          episodeNode.hidden = !matchesTvResultsFilter(episodeViewModel.outcome);
+        });
+
+        tvResults.querySelectorAll("details.tv-season[data-season-key]").forEach((seasonNode) => {
+          const seasonKey = String(seasonNode.dataset.seasonKey || "");
+          const season = seasonMap.get(seasonKey);
+          if (!season) return;
+
+          seasonNode.hidden = !visibleSeasonKeys.has(seasonKey);
+
+          const summaryCount = seasonNode.querySelector(":scope > summary .tv-summary-count");
+          if (summaryCount) {
+            summaryCount.textContent = buildTvSeasonSummaryBits(season).join(" · ");
+          }
+
+          const queueBadge = seasonNode.querySelector(":scope > summary .tv-season-queue-badge");
+          if (queueBadge) {
+            if (season.stats.queuedEpisodes > 0) {
+              queueBadge.classList.remove("hidden");
+              queueBadge.dataset.mode = season.stats.queueStatus || "queued";
+              queueBadge.textContent = `${queueBadgeLabelForStatus(season.stats.queueStatus || "queued")} (${season.stats.queuedEpisodes})`;
+            } else {
+              queueBadge.classList.add("hidden");
+              queueBadge.textContent = "";
+              delete queueBadge.dataset.mode;
+            }
+          }
+        });
+
+        const emptyState = tvResults.querySelector(".tv-results-empty");
+        if (emptyState) {
+          emptyState.classList.toggle("hidden", viewModel.visibleSeasons.length > 0);
+        }
       };
 
       const renderDownloadJobs = (jobs) => {
