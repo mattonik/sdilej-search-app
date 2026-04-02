@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+import os
 import re
 import unicodedata
 from typing import Any
@@ -13,6 +15,7 @@ from .tvmaze_client import TvMazeClient, TvShowSummary
 CZDB_SEARCH_URL = "https://api.czdb.cz/search"
 CZDB_DETAIL_URL = CZDB_SEARCH_URL
 MAX_ALIAS_COUNT = 12
+DEFAULT_TITLE_METADATA_CACHE_TTL_HOURS = 168
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _SUMMARY_SPACE_RE = re.compile(r"\s+")
 
@@ -82,11 +85,13 @@ class TitleMetadataResolver:
         tv_client: TvMazeClient,
         timeout_seconds: int = 20,
         max_alias_count: int = MAX_ALIAS_COUNT,
+        cache_ttl_hours: int | None = None,
     ) -> None:
         self.storage = storage
         self.tv_client = tv_client
         self.timeout_seconds = timeout_seconds
         self.max_alias_count = max_alias_count
+        self.cache_ttl = timedelta(hours=_resolve_cache_ttl_hours(cache_ttl_hours))
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "sdilej-search-app/1.0"})
 
@@ -96,10 +101,10 @@ class TitleMetadataResolver:
             raise ValueError("title is required")
 
         cache_key = normalize_alias_key(query)
-        cached = self.storage.get_title_metadata_cache("movie", cache_key, year)
-        if cached:
-            cached_metadata = self._metadata_from_dict(cached)
-            if self._metadata_has_audience_hints(cached_metadata):
+        cached_entry = self.storage.get_title_metadata_cache_entry("movie", cache_key, year)
+        if cached_entry:
+            cached_metadata = self._metadata_from_dict(cached_entry["payload"])
+            if self._cache_entry_is_fresh(cached_entry):
                 return cached_metadata
             refreshed = self._resolve_from_czdb(kind="movie", query=query, year=year)
             if refreshed is not None:
@@ -139,10 +144,10 @@ class TitleMetadataResolver:
 
         effective_year = year or parse_year(show.premiered if show else None)
         cache_key = normalize_alias_key(query)
-        cached = self.storage.get_title_metadata_cache("tv", cache_key, effective_year)
-        if cached:
-            cached_metadata = self._metadata_from_dict(cached)
-            if not self._metadata_has_audience_hints(cached_metadata):
+        cached_entry = self.storage.get_title_metadata_cache_entry("tv", cache_key, effective_year)
+        if cached_entry:
+            cached_metadata = self._metadata_from_dict(cached_entry["payload"])
+            if not self._cache_entry_is_fresh(cached_entry):
                 refreshed = self._resolve_from_czdb(kind="tv", query=query, year=effective_year)
                 if refreshed is not None:
                     cached_metadata = refreshed
@@ -462,10 +467,33 @@ class TitleMetadataResolver:
             source_ids=dict(payload.get("source_ids") or {}),
         )
 
-    def _metadata_has_audience_hints(self, metadata: TitleMetadata) -> bool:
-        if metadata.genres:
-            return True
-        if metadata.summary:
-            return True
-        content_type = self._clean_optional_text(metadata.content_type)
-        return bool(content_type and content_type != "0")
+    def _cache_entry_is_fresh(self, entry: dict[str, Any]) -> bool:
+        updated_at = self._parse_cache_timestamp(entry.get("updated_at"))
+        if updated_at is None:
+            return False
+        return datetime.utcnow() - updated_at <= self.cache_ttl
+
+    def _parse_cache_timestamp(self, value: Any) -> datetime | None:
+        text = self._clean_optional_text(value)
+        if not text:
+            return None
+        try:
+            return datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+
+
+def _resolve_cache_ttl_hours(configured_value: int | None) -> int:
+    if configured_value is not None:
+        try:
+            return max(1, int(configured_value))
+        except (TypeError, ValueError):
+            return DEFAULT_TITLE_METADATA_CACHE_TTL_HOURS
+
+    raw = os.getenv("TITLE_METADATA_CACHE_TTL_HOURS", "").strip()
+    if not raw:
+        return DEFAULT_TITLE_METADATA_CACHE_TTL_HOURS
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return DEFAULT_TITLE_METADATA_CACHE_TTL_HOURS

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 import responses
 
 from app.title_metadata import CZDB_DETAIL_URL, CZDB_SEARCH_URL, TitleMetadataResolver, build_ordered_aliases, normalize_alias_key
@@ -104,3 +106,128 @@ def test_tv_metadata_falls_back_when_czdb_has_no_match(storage, sample_tvmaze_ak
     assert metadata.source == "tvmaze"
     assert metadata.canonical_title == "Shaun the Sheep"
     assert metadata.aliases[0] == "Shaun the Sheep"
+
+
+@responses.activate
+def test_movie_metadata_uses_fresh_cache_without_refresh(storage) -> None:
+    resolver = TitleMetadataResolver(storage=storage, tv_client=TvMazeClient(), cache_ttl_hours=168)
+    cache_key = normalize_alias_key("Matrix")
+    storage.set_title_metadata_cache(
+        "movie",
+        cache_key,
+        1999,
+        {
+            "kind": "movie",
+            "canonical_title": "Matrix",
+            "original_title": "The Matrix",
+            "local_titles": ["Matrix"],
+            "aliases": ["Matrix", "The Matrix"],
+            "genres": ["Akční", "Sci-Fi"],
+            "summary": "Fresh cached summary.",
+            "content_type": "movie",
+            "year": 1999,
+            "source": "czdb",
+            "source_ids": {"czdb": 43840, "csfd": 9499},
+        },
+        "czdb",
+    )
+
+    metadata = resolver.resolve_movie("Matrix", 1999)
+
+    assert metadata.summary == "Fresh cached summary."
+    assert len(responses.calls) == 0
+
+
+@responses.activate
+def test_movie_metadata_refreshes_stale_cache_and_updates_payload(
+    storage,
+    sample_czdb_movie_response,
+    sample_czdb_movie_detail_payload,
+) -> None:
+    cache_key = normalize_alias_key("Matrix")
+    storage.set_title_metadata_cache(
+        "movie",
+        cache_key,
+        1999,
+        {
+            "kind": "movie",
+            "canonical_title": "Matrix",
+            "original_title": "The Matrix",
+            "local_titles": ["Matrix"],
+            "aliases": ["Matrix"],
+            "genres": [],
+            "summary": "Old cached summary.",
+            "content_type": None,
+            "year": 1999,
+            "source": "fallback",
+            "source_ids": {},
+        },
+        "fallback",
+    )
+    stale_timestamp = (datetime.utcnow() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+    with storage._connect() as conn:
+        conn.execute(
+            """
+            UPDATE title_metadata_cache
+            SET updated_at = ?
+            WHERE lookup_kind = ? AND lookup_key = ? AND lookup_year_key = ?
+            """,
+            (stale_timestamp, "movie", cache_key, "1999"),
+        )
+
+    responses.get(CZDB_SEARCH_URL, json=sample_czdb_movie_response)
+    responses.get(
+        CZDB_DETAIL_URL,
+        json=sample_czdb_movie_detail_payload,
+        match=[responses.matchers.query_param_matcher({"uid": "9499"})],
+    )
+
+    resolver = TitleMetadataResolver(storage=storage, tv_client=TvMazeClient(), cache_ttl_hours=168)
+    metadata = resolver.resolve_movie("Matrix", 1999)
+    cached_entry = storage.get_title_metadata_cache_entry("movie", cache_key, 1999)
+
+    assert metadata.summary == "Neo learns the truth."
+    assert cached_entry is not None
+    assert cached_entry["payload"]["summary"] == "Neo learns the truth."
+    assert cached_entry["source"] == "czdb"
+    assert len(responses.calls) == 2
+
+
+@responses.activate
+def test_movie_metadata_returns_stale_cache_when_refresh_fails(storage, monkeypatch) -> None:
+    monkeypatch.setenv("TITLE_METADATA_CACHE_TTL_HOURS", "1")
+    cache_key = normalize_alias_key("Matrix")
+    storage.set_title_metadata_cache(
+        "movie",
+        cache_key,
+        1999,
+        {
+            "kind": "movie",
+            "canonical_title": "Matrix",
+            "original_title": "The Matrix",
+            "local_titles": ["Matrix"],
+            "aliases": ["Matrix", "The Matrix"],
+            "genres": [],
+            "summary": "Fallback cached summary.",
+            "content_type": None,
+            "year": 1999,
+            "source": "fallback",
+            "source_ids": {},
+        },
+        "fallback",
+    )
+    stale_timestamp = (datetime.utcnow() - timedelta(days=8)).strftime("%Y-%m-%d %H:%M:%S")
+    with storage._connect() as conn:
+        conn.execute(
+            """
+            UPDATE title_metadata_cache
+            SET updated_at = ?
+            WHERE lookup_kind = ? AND lookup_key = ? AND lookup_year_key = ?
+            """,
+            (stale_timestamp, "movie", cache_key, "1999"),
+        )
+
+    resolver = TitleMetadataResolver(storage=storage, tv_client=TvMazeClient())
+    metadata = resolver.resolve_movie("Matrix", 1999)
+
+    assert metadata.summary == "Fallback cached summary."

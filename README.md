@@ -47,9 +47,12 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 
 ## Project structure
 
-- `app/main.py` - FastAPI app + routes
+- `app/main.py` - FastAPI app factory + route registration
+- `app/db.py` - shared SQLite connection policy + retry helpers
 - `app/sdilej_client.py` - HTTP client + parser + URL mapping
-- `app/templates/index.html` - UI
+- `app/templates/index.html` - UI shell
+- `app/static/js/app.js` - main browser runtime
+- `app/static/js/saved.js` - saved-picks browser runtime
 - `app/static/style.css` - styling
 - `docs/reverse-engineering.md` - endpoint and URL analysis notes
 
@@ -86,12 +89,24 @@ Run opt-in live smoke tests against real external services:
 RUN_LIVE_SMOKE=1 pytest -m live
 ```
 
+Run opt-in browser E2E tests (requires Playwright browser install):
+
+```bash
+RUN_E2E=1 pytest -m e2e
+```
+
 Recommended local release gate before pushing or building for the server:
 
 ```bash
 pytest -m "not live"
 docker build -t sdilej-search:test .
 ```
+
+Optional config:
+
+- `TITLE_METADATA_CACHE_TTL_HOURS`
+  - default: `168`
+  - controls how long localized title metadata stays fresh before the resolver attempts a synchronous refresh
 
 ## Run with Docker
 
