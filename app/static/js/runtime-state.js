@@ -1,0 +1,29 @@
+export const createRuntimeState = ({
+  fileResultsView = "cards",
+  fileResultsFilter = "all",
+  searchMode = "file",
+  activeTvSearchJobId = null,
+} = {}) => ({
+  timer: null,
+  queueDialogState: null,
+  tvLookupState: null,
+  tvResultsState: null,
+  tvResultsFilter: "all",
+  fileResultsView,
+  fileResultsFilter,
+  searchMode,
+  activeTvSearchJobId,
+  tvJobPollInFlight: false,
+  tvEpisodeSearchOverrides: new Map(),
+  tvEpisodeSearchesInFlight: new Set(),
+  tvShowSummarySignature: "",
+  savedResultsState: {
+    keys: new Set(),
+    itemsByKey: new Map(),
+  },
+  activeQueueState: {
+    fileJobs: new Map(),
+    episodeJobs: new Map(),
+    jobsById: new Map(),
+  },
+});

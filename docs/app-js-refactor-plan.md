@@ -331,7 +331,7 @@ The following behaviors must be preserved unless a separate task changes them in
   - mocked suite: `49 passed, 1 skipped, 3 deselected`
   - browser E2E: `2 passed, 52 deselected`
 - Commit:
-  - `e7c51bf` `Extract shared app.js foundation modules`
+  - `c2f4634` `Record app.js refactor baseline verification`
 
 ## Phase 1 Log
 
@@ -357,11 +357,31 @@ The following behaviors must be preserved unless a separate task changes them in
   - browser E2E: `2 passed, 52 deselected`
   - diff check: clean
 - Commit:
-  - pending at log update time
+  - `a7f27c3` `Extract shared app.js foundation modules`
 
 ## Phase 2 Log
 
-- No entries yet.
+### Entry 2.1
+
+- Date: `2026-06-12`
+- Type: `implementation`
+- Summary:
+  - introduced [`app/static/js/runtime-state.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/runtime-state.js)
+  - introduced [`app/static/js/api.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/api.js)
+  - centralized browser API access behind the `api` facade
+  - removed direct raw `fetch(...)` calls from `app.js`
+  - added explicit runtime bootstrap state object and started wiring shared mutable UI state through it
+  - kept feature ownership inside `app.js` for now; this phase is preparation for later extraction
+- Tests run:
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `git diff --check`
+- Result:
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `2 passed, 52 deselected`
+  - diff check: clean
+- Commit:
+  - pending at log update time
 
 ## Phase 3 Log
 

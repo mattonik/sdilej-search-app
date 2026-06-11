@@ -27,6 +27,8 @@ import {
   writeFileSearchAdvancedOpen,
   writeSearchMode,
 } from "./storage-state.js";
+import { api } from "./api.js";
+import { createRuntimeState } from "./runtime-state.js";
 
       const input = document.getElementById("queryInput");
       const list = document.getElementById("suggestions");
@@ -108,28 +110,27 @@ import {
       const queueDialogChunkCount = document.getElementById("queueDialogChunkCount");
       const queueDialogPriority = document.getElementById("queueDialogPriority");
       const queueDialogPreview = document.getElementById("queueDialogPreview");
-      let timer = null;
-      let queueDialogState = null;
-      let tvLookupState = null;
-      let tvResultsState = null;
-      let tvResultsFilter = "all";
-      let fileResultsView = readFileResultsView();
-      let fileResultsFilter = readFileResultsFilter();
-      let searchMode = "file";
-      let activeTvSearchJobId = readActiveTvSearchJobId();
-      let tvJobPollInFlight = false;
-      let tvEpisodeSearchOverrides = new Map();
-      let tvEpisodeSearchesInFlight = new Set();
-      let tvShowSummarySignature = "";
-      let savedResultsState = {
-        keys: new Set(),
-        itemsByKey: new Map(),
-      };
-      let activeQueueState = {
-        fileJobs: new Map(),
-        episodeJobs: new Map(),
-        jobsById: new Map(),
-      };
+      const state = createRuntimeState({
+        fileResultsView: readFileResultsView(),
+        fileResultsFilter: readFileResultsFilter(),
+        searchMode: "file",
+        activeTvSearchJobId: readActiveTvSearchJobId(),
+      });
+      let timer = state.timer;
+      let queueDialogState = state.queueDialogState;
+      let tvLookupState = state.tvLookupState;
+      let tvResultsState = state.tvResultsState;
+      let tvResultsFilter = state.tvResultsFilter;
+      let fileResultsView = state.fileResultsView;
+      let fileResultsFilter = state.fileResultsFilter;
+      let searchMode = state.searchMode;
+      let activeTvSearchJobId = state.activeTvSearchJobId;
+      let tvJobPollInFlight = state.tvJobPollInFlight;
+      let tvEpisodeSearchOverrides = state.tvEpisodeSearchOverrides;
+      let tvEpisodeSearchesInFlight = state.tvEpisodeSearchesInFlight;
+      let tvShowSummarySignature = state.tvShowSummarySignature;
+      let savedResultsState = state.savedResultsState;
+      let activeQueueState = state.activeQueueState;
 
       const buildCurrentTvShowAliasKeys = () => {
         const titleMetadata = tvResultsState?.title_metadata || tvLookupState?.title_metadata || null;
@@ -216,6 +217,7 @@ import {
 
       const setSavedStateFromItems = (items) => {
         savedResultsState = buildSavedStateFromItems(items);
+        state.savedResultsState = savedResultsState;
         refreshFileSearchResultsUi();
       };
 
@@ -276,6 +278,7 @@ import {
 
       const setActiveQueueStateFromJobs = (jobs) => {
         activeQueueState = buildActiveQueueStateFromJobs(jobs);
+        state.activeQueueState = activeQueueState;
         const tvDownloadedStateChanged = tvResultsState ? syncTvResultsDownloadedStateFromJobs(jobs) : false;
         refreshFileSearchResultsUi();
         if (tvResultsState) {
@@ -344,6 +347,7 @@ import {
 
       const setFileResultsView = (view) => {
         fileResultsView = view === "list" ? "list" : "cards";
+        state.fileResultsView = fileResultsView;
         if (fileResultsGrid) {
           fileResultsGrid.dataset.view = fileResultsView;
         }
@@ -355,6 +359,7 @@ import {
       const setFileResultsFilter = (filter) => {
         const next = ["all", "unsaved", "saved", "queued", "playable"].includes(String(filter)) ? String(filter) : "all";
         fileResultsFilter = next;
+        state.fileResultsFilter = fileResultsFilter;
         fileResultsToolbar?.querySelectorAll(".file-results-filter-chip").forEach((btn) => {
           btn.classList.toggle("active", btn.dataset.filter === next);
         });
@@ -570,6 +575,7 @@ import {
 
       const setSearchMode = (mode) => {
         searchMode = mode === "tv" ? "tv" : "file";
+        state.searchMode = searchMode;
         const tvActive = searchMode === "tv";
         fileSearchModeBtn.classList.toggle("active", !tvActive);
         tvSearchModeBtn.classList.toggle("active", tvActive);
@@ -598,9 +604,8 @@ import {
 
         timer = setTimeout(async () => {
           try {
-            const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(q)}&limit=10`);
-            if (!res.ok) return;
-            const payload = await res.json();
+            const { ok, data: payload } = await api.autocomplete(q, 10);
+            if (!ok) return;
             list.innerHTML = "";
             for (const suggestion of payload.suggestions || []) {
               const opt = document.createElement("option");
@@ -611,6 +616,7 @@ import {
             // Ignore autocomplete failures; main search still works.
           }
         }, 180);
+        state.timer = timer;
       });
 
       const runTvLookup = async () => {
@@ -626,19 +632,19 @@ import {
         tvResults.innerHTML = "";
         renderTvShowSummary(null);
         tvResultsState = null;
+        state.tvResultsState = tvResultsState;
         tvResultsFilter = "all";
+        state.tvResultsFilter = tvResultsFilter;
         tvEpisodeSearchOverrides = new Map();
+        state.tvEpisodeSearchOverrides = tvEpisodeSearchOverrides;
         tvEpisodeSearchesInFlight = new Set();
+        state.tvEpisodeSearchesInFlight = tvEpisodeSearchesInFlight;
         tvLookupState = null;
+        state.tvLookupState = tvLookupState;
         updateTvSearchButtonState();
         try {
-          const res = await fetch("/api/tv/lookup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ show_name: showName }),
-          });
-          const data = await res.json();
-          if (!res.ok) {
+          const { ok, data } = await api.tvLookup({ show_name: showName });
+          if (!ok) {
             setTvStatus(data.error || "TV lookup failed.", "error");
             return;
           }
@@ -646,6 +652,7 @@ import {
             ...data,
             all_search_aliases: data.all_search_aliases || data.search_aliases || [],
           };
+          state.tvLookupState = tvLookupState;
           const show = data.show || {};
           tvLookupInfo.innerHTML = `
             <strong>${esc(show.name || showName)}</strong>
@@ -657,6 +664,7 @@ import {
           updateTvSearchButtonState();
         } catch (_) {
           tvLookupState = null;
+          state.tvLookupState = tvLookupState;
           renderTvShowSummary(null);
           updateTvSearchButtonState();
           setTvStatus("TV lookup failed.", "error");
@@ -687,16 +695,17 @@ import {
         setTvStatus("Starting background TV search...", "neutral");
         tvResults.innerHTML = "";
         tvResultsState = null;
+        state.tvResultsState = tvResultsState;
         tvResultsFilter = "all";
+        state.tvResultsFilter = tvResultsFilter;
         tvEpisodeSearchOverrides = new Map();
+        state.tvEpisodeSearchOverrides = tvEpisodeSearchOverrides;
         tvEpisodeSearchesInFlight = new Set();
+        state.tvEpisodeSearchesInFlight = tvEpisodeSearchesInFlight;
         const maxPerVariantRaw = Number(maxResultsInput.value || 120);
         const maxPerVariant = Number.isFinite(maxPerVariantRaw) && maxPerVariantRaw > 0 ? Math.min(500, maxPerVariantRaw) : 120;
         try {
-          const res = await fetch("/api/tv/search-jobs", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+          const { ok, data } = await api.createTvSearchJob({
               show_id: tvLookupState.show.id,
               show_name: tvLookupState.show.name || tvShowName.value.trim(),
               seasons,
@@ -708,10 +717,8 @@ import {
               language_scope: languageScopeSelect.value || "any",
               strict_dubbing: Boolean(strictDubbingInput.checked),
               max_results_per_variant: maxPerVariant,
-            }),
           });
-          const data = await res.json();
-          if (!res.ok) {
+          if (!ok) {
             setTvStatus(data.error || "TV search failed.", "error");
             return;
           }
@@ -736,6 +743,7 @@ import {
 
       const setActiveTvSearchJobId = (jobId) => {
         activeTvSearchJobId = jobId ? String(jobId) : null;
+        state.activeTvSearchJobId = activeTvSearchJobId;
         if (activeTvSearchJobId) {
           writeActiveTvSearchJobId(activeTvSearchJobId);
         } else {
@@ -788,11 +796,11 @@ import {
         if (!force && document.visibilityState === "hidden") return;
 
         tvJobPollInFlight = true;
+        state.tvJobPollInFlight = tvJobPollInFlight;
         try {
-          const res = await fetch(`/api/tv/search-jobs/${encodeURIComponent(activeTvSearchJobId)}`);
-          const data = await res.json();
-          if (!res.ok) {
-            if (res.status === 404) {
+          const { ok, status, data } = await api.getTvSearchJob(activeTvSearchJobId);
+          if (!ok) {
+            if (status === 404) {
               setActiveTvSearchJobId(null);
             }
             setTvStatus(data.error || "TV search job is unavailable.", "error");
@@ -807,6 +815,7 @@ import {
             search_aliases: data.search_aliases || tvLookupState?.search_aliases || [],
             seasons: data.seasons || tvLookupState?.seasons || [],
           };
+          state.tvLookupState = tvLookupState;
           if (tvLookupState.show) {
             tvLookupInfo.innerHTML = `
               <strong>${esc(tvLookupState.show.name || "")}</strong>
@@ -834,6 +843,7 @@ import {
           setTvStatus("TV search job refresh failed.", "error");
         } finally {
           tvJobPollInFlight = false;
+          state.tvJobPollInFlight = tvJobPollInFlight;
         }
       };
 
@@ -1393,10 +1403,7 @@ import {
             setTvStatus(`Searching anyway for S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}...`, "neutral");
 
             try {
-              const res = await fetch("/api/tv/search-episode", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+              const { ok, data } = await api.searchTvEpisode({
                   show_id: Number(btn.dataset.showId || 0),
                   show_name: btn.dataset.showName || "",
                   season_number: seasonNumber,
@@ -1416,10 +1423,8 @@ import {
                     Number(tvResultsState?.max_results_per_variant || maxResultsInput.value || 120) || 120,
                   alias_mode: "optimized",
                   force_search: true,
-                }),
               });
-              const data = await res.json();
-              if (!res.ok) {
+              if (!ok) {
                 setTvStatus(data.error || "Episode search failed.", "error");
                 return;
               }
@@ -1636,10 +1641,7 @@ import {
             setTvStatus(`Searching all aliases for S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}...`, "neutral");
 
             try {
-              const res = await fetch("/api/tv/search-episode", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+              const { ok, data } = await api.searchTvEpisode({
                   show_id: Number(btn.dataset.showId || 0),
                   show_name: btn.dataset.showName || "",
                   season_number: seasonNumber,
@@ -1658,10 +1660,8 @@ import {
                   max_results_per_variant:
                     Number(tvResultsState?.max_results_per_variant || maxResultsInput.value || 120) || 120,
                   alias_mode: "all",
-                }),
               });
-              const data = await res.json();
-              if (!res.ok) {
+              if (!ok) {
                 setTvStatus(data.error || "Expanded episode search failed.", "error");
                 return;
               }
@@ -2003,16 +2003,16 @@ import {
 
         downloadJobsEl.querySelectorAll("button[data-action]").forEach((btn) => {
           btn.addEventListener("click", async () => {
-            const action = btn.dataset.action;
-            const jobId = Number(btn.dataset.id);
+              const action = btn.dataset.action;
+              const jobId = Number(btn.dataset.id);
             if (!jobId) return;
 
             try {
               if (action === "cancel") {
-                await fetch(`/api/downloads/${jobId}/cancel`, { method: "POST" });
+                await api.cancelDownloadJob(jobId);
                 setDownloadStatus(`Canceled job #${jobId}.`, "neutral");
               } else if (action === "cancel_complete") {
-                await fetch(`/api/downloads/${jobId}/cancel-complete`, { method: "POST" });
+                await api.cancelDownloadJobComplete(jobId);
                 setDownloadStatus(`Canceled job #${jobId} completely.`, "ok");
               } else if (action === "classify") {
                 await openQueueDialog({
@@ -2031,23 +2031,21 @@ import {
                 });
                 return;
               } else if (action === "retry") {
-                await fetch(`/api/downloads/${jobId}/retry`, { method: "POST" });
+                await api.retryDownloadJob(jobId);
                 setDownloadStatus(`Retried job #${jobId}.`, "ok");
               } else if (action === "top") {
-                await fetch(`/api/downloads/${jobId}/top`, { method: "POST" });
+                await api.moveDownloadJobToTop(jobId);
                 setDownloadStatus(`Moved job #${jobId} to top.`, "ok");
               } else if (action === "remove") {
-                const res = await fetch(`/api/downloads/${jobId}`, { method: "DELETE" });
-                const data = await res.json();
-                if (!res.ok) {
+                const { ok, data } = await api.deleteDownloadJob(jobId);
+                if (!ok) {
                   setDownloadStatus(data.error || "Failed to remove job.", "error");
                   return;
                 }
                 setDownloadStatus(`Removed job #${jobId}.`, "ok");
               } else if (action === "remove_data") {
-                const res = await fetch(`/api/downloads/${jobId}?with_data=true`, { method: "DELETE" });
-                const data = await res.json();
-                if (!res.ok) {
+                const { ok, data } = await api.deleteDownloadJob(jobId, { withData: true });
+                if (!ok) {
                   setDownloadStatus(data.error || "Failed to remove job + data.", "error");
                   return;
                 }
@@ -2062,13 +2060,8 @@ import {
                   setDownloadStatus("Priority must be a number.", "error");
                   return;
                 }
-                const res = await fetch(`/api/downloads/${jobId}/priority`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ priority: next }),
-                });
-                const data = await res.json();
-                if (!res.ok) {
+                const { ok, data } = await api.updateDownloadJobPriority(jobId, { priority: next });
+                if (!ok) {
                   setDownloadStatus(data.error || "Failed to set priority.", "error");
                   return;
                 }
@@ -2085,9 +2078,8 @@ import {
 
       const refreshDownloads = async () => {
         try {
-          const res = await fetch("/api/downloads?limit=200");
-          const data = await res.json();
-          if (!res.ok) {
+          const { ok, data } = await api.listDownloads(200);
+          if (!ok) {
             setDownloadStatus(data.error || "Failed to refresh download queue.", "error");
             return;
           }
@@ -2103,9 +2095,8 @@ import {
 
       const refreshDownloadSettings = async () => {
         try {
-          const res = await fetch("/api/downloads/settings");
-          const data = await res.json();
-          if (!res.ok) {
+          const { ok, data } = await api.getDownloadSettings();
+          if (!ok) {
             setDownloadStatus(data.error || "Failed to load download settings.", "error");
             return;
           }
@@ -2121,9 +2112,8 @@ import {
       const refreshSavedCandidates = async () => {
         if (!fileResultsGrid) return;
         try {
-          const res = await fetch("/api/saved?limit=1000");
-          const data = await res.json();
-          if (!res.ok) return;
+          const { ok, data } = await api.listSaved(1000);
+          if (!ok) return;
           setSavedStateFromItems(data.items || []);
         } catch (_) {
           // Keep file search usable even if saved-state hydration fails.
@@ -2132,14 +2122,9 @@ import {
 
       const enqueueDownload = async (payload) => {
         try {
-          const res = await fetch("/api/downloads", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            if (res.status === 409 && data.duplicate_job) {
+          const { ok, status, data } = await api.enqueueDownload(payload);
+          if (!ok) {
+            if (status === 409 && data.duplicate_job) {
               const dup = data.duplicate_job;
               if (ACTIVE_QUEUE_STATUSES.has(String(dup.status || ""))) {
                 upsertActiveQueueJob(dup);
@@ -2153,7 +2138,7 @@ import {
                 duplicateJob: dup,
                 duplicateIsActive: ACTIVE_QUEUE_STATUSES.has(String(dup.status || "")),
               };
-            } else if (res.status === 409 && data.requires_confirmation) {
+            } else if (status === 409 && data.requires_confirmation) {
               setDownloadStatus(data.error || "Classification confirmation is required.", "error");
             } else {
               setDownloadStatus(data.error || "Failed to enqueue job.", "error");
@@ -2223,13 +2208,8 @@ import {
           ...queueDialogMediaPayload(),
         };
         try {
-          const res = await fetch("/api/media/classify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json();
-          if (!res.ok) {
+          const { ok, data } = await api.classifyMedia(payload);
+          if (!ok) {
             queueDialogPreview.textContent = data.error || "Classification preview failed.";
             return;
           }
@@ -2314,13 +2294,8 @@ import {
         const mediaPayload = queueDialogMediaPayload();
 
         if (queueDialogState.intent === "edit") {
-          const res = await fetch(`/api/downloads/${queueDialogState.jobId}/classification`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(mediaPayload),
-          });
-          const data = await res.json();
-          if (!res.ok) {
+          const { ok, data } = await api.updateDownloadClassification(queueDialogState.jobId, mediaPayload);
+          if (!ok) {
             setDownloadStatus(data.error || "Failed to update category.", "error");
             if (data.destination_subpath) {
               queueDialogPreview.textContent = `Suggested route: ${data.destination_subpath}`;
@@ -2371,19 +2346,14 @@ import {
           setMovieInfoStatus(statusEl, "Resolving movie info link...", "neutral");
 
           try {
-            const res = await fetch("/api/movie/info-link", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
+            const { ok, data } = await api.resolveMovieInfoLink({
                 title: btn.dataset.title || "",
                 primary_year: btn.dataset.primaryYear ? Number(btn.dataset.primaryYear) : null,
                 search_query: btn.dataset.searchQuery || null,
                 search_title: btn.dataset.searchTitle || null,
-              }),
             });
-            const data = await res.json();
 
-            if (!res.ok || !data.found || !data.preferred_url) {
+            if (!ok || !data.found || !data.preferred_url) {
               if (openedTab && !openedTab.closed) {
                 openedTab.close();
               }
@@ -2434,13 +2404,8 @@ import {
             has_subtitle_hint: btn.dataset.hasSubtitleHint === "1",
           };
 
-          const res = await fetch("/api/saved", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json();
-          if (!res.ok) {
+          const { ok, data } = await api.saveCandidate(payload);
+          if (!ok) {
             alert(`Save failed: ${data.error || "unknown error"}`);
             return;
           }
@@ -2467,9 +2432,8 @@ import {
 
       const refreshAccountStatus = async () => {
         try {
-          const res = await fetch("/api/account");
-          const data = await res.json();
-          if (!res.ok) {
+          const { ok, data } = await api.getAccount();
+          if (!ok) {
             setAccountStatus(`Status error: ${data.error || "unknown error"}`, "error");
             return;
           }
@@ -2519,13 +2483,8 @@ import {
       clearFinishedBtn.addEventListener("click", async () => {
         setDownloadStatus("Clearing finished jobs...", "neutral");
         try {
-          const res = await fetch("/api/downloads/clear", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ statuses: ["done", "failed", "canceled"] }),
-          });
-          const data = await res.json();
-          if (!res.ok) {
+          const { ok, data } = await api.clearDownloads({ statuses: ["done", "failed", "canceled"] });
+          if (!ok) {
             setDownloadStatus(data.error || "Failed to clear jobs.", "error");
             return;
           }
@@ -2563,13 +2522,8 @@ import {
         };
         setDownloadStatus("Saving download settings...", "neutral");
         try {
-          const res = await fetch("/api/downloads/settings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json();
-          if (!res.ok) {
+          const { ok, data } = await api.updateDownloadSettings(payload);
+          if (!ok) {
             setDownloadStatus(data.error || "Failed to save download settings.", "error");
             return;
           }
@@ -2598,17 +2552,12 @@ import {
 
         setAccountStatus("Saving credentials...", "neutral");
         try {
-          const res = await fetch("/api/account", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              login,
-              password,
-              verify: accountVerify.checked,
-            }),
+          const { ok, data } = await api.setAccount({
+            login,
+            password,
+            verify: accountVerify.checked,
           });
-          const data = await res.json();
-          if (!res.ok) {
+          if (!ok) {
             setAccountStatus(data.error || "Failed to save credentials.", "error");
             return;
           }
@@ -2628,9 +2577,8 @@ import {
       accountClearBtn.addEventListener("click", async () => {
         setAccountStatus("Clearing credentials...", "neutral");
         try {
-          const res = await fetch("/api/account", { method: "DELETE" });
-          const data = await res.json();
-          if (!res.ok || !data.cleared) {
+          const { ok, data } = await api.deleteAccount();
+          if (!ok || !data.cleared) {
             setAccountStatus(data.error || "Failed to clear credentials.", "error");
             return;
           }
