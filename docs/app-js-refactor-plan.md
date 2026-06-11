@@ -331,11 +331,33 @@ The following behaviors must be preserved unless a separate task changes them in
   - mocked suite: `49 passed, 1 skipped, 3 deselected`
   - browser E2E: `2 passed, 52 deselected`
 - Commit:
-  - pending at log update time
+  - `e7c51bf` `Extract shared app.js foundation modules`
 
 ## Phase 1 Log
 
-- No entries yet.
+### Entry 1.1
+
+- Date: `2026-06-11`
+- Type: `implementation`
+- Summary:
+  - extracted the first shared foundation modules from `app.js`
+  - created:
+    - [`app/static/js/dom-utils.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/dom-utils.js)
+    - [`app/static/js/keys.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/keys.js)
+    - [`app/static/js/formatters.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/formatters.js)
+    - [`app/static/js/storage-state.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/storage-state.js)
+  - moved only pure helpers, key builders, formatter helpers and localStorage wrappers
+  - kept rendering, polling and feature orchestration inside `app.js`
+- Tests run:
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `git diff --check`
+- Result:
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `2 passed, 52 deselected`
+  - diff check: clean
+- Commit:
+  - pending at log update time
 
 ## Phase 2 Log
 

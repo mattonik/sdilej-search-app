@@ -1,3 +1,33 @@
+import { basenameFromPath, esc, stripHtml, truncateText } from "./dom-utils.js";
+import {
+  ACTIVE_QUEUE_STATUSES,
+  buildEpisodeQueueKey,
+  buildFileQueueKey,
+  buildTvEpisodeKey,
+  FILE_RESULTS_FILTER_KEY,
+  FILE_RESULTS_VIEW_KEY,
+  FILE_SEARCH_ADVANCED_KEY,
+  normalizeQueueTextKey,
+  sameStringList,
+  TV_ACTIVE_JOB_KEY,
+} from "./keys.js";
+import { formatBytes, formatEta, formatSpeed, pluralize, queueBadgeLabelForStatus, queueButtonLabelForStatus } from "./formatters.js";
+import {
+  clearActiveTvSearchJobId,
+  readActiveTvSearchJobId,
+  readActiveWorkspaceTab,
+  readFileResultsFilter,
+  readFileResultsView,
+  readFileSearchAdvancedOpen,
+  readSearchMode,
+  writeActiveTvSearchJobId,
+  writeActiveWorkspaceTab,
+  writeFileResultsFilter,
+  writeFileResultsView,
+  writeFileSearchAdvancedOpen,
+  writeSearchMode,
+} from "./storage-state.js";
+
       const input = document.getElementById("queryInput");
       const list = document.getElementById("suggestions");
       const categorySelect = document.getElementById("categorySelect");
@@ -78,20 +108,15 @@
       const queueDialogChunkCount = document.getElementById("queueDialogChunkCount");
       const queueDialogPriority = document.getElementById("queueDialogPriority");
       const queueDialogPreview = document.getElementById("queueDialogPreview");
-      const TV_ACTIVE_JOB_KEY = "activeTvSearchJobId";
-      const FILE_RESULTS_VIEW_KEY = "fileResultsView";
-      const FILE_RESULTS_FILTER_KEY = "fileResultsFilter";
-      const FILE_SEARCH_ADVANCED_KEY = "fileSearchAdvancedOpen";
-      const ACTIVE_QUEUE_STATUSES = new Set(["queued", "running"]);
       let timer = null;
       let queueDialogState = null;
       let tvLookupState = null;
       let tvResultsState = null;
       let tvResultsFilter = "all";
-      let fileResultsView = window.localStorage.getItem(FILE_RESULTS_VIEW_KEY) === "list" ? "list" : "cards";
-      let fileResultsFilter = window.localStorage.getItem(FILE_RESULTS_FILTER_KEY) || "all";
+      let fileResultsView = readFileResultsView();
+      let fileResultsFilter = readFileResultsFilter();
       let searchMode = "file";
-      let activeTvSearchJobId = window.localStorage.getItem(TV_ACTIVE_JOB_KEY);
+      let activeTvSearchJobId = readActiveTvSearchJobId();
       let tvJobPollInFlight = false;
       let tvEpisodeSearchOverrides = new Map();
       let tvEpisodeSearchesInFlight = new Set();
@@ -105,82 +130,6 @@
         episodeJobs: new Map(),
         jobsById: new Map(),
       };
-
-      const esc = (value) =>
-        String(value ?? "")
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replaceAll('"', "&quot;")
-          .replaceAll("'", "&#39;");
-
-      const stripHtml = (value) =>
-        String(value ?? "")
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim();
-
-      const truncateText = (value, maxLength = 220) => {
-        const text = String(value ?? "").trim();
-        if (text.length <= maxLength) return text;
-        return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
-      };
-
-      const normalizeQueueTextKey = (value) =>
-        String(value ?? "")
-          .normalize("NFKD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, " ")
-          .trim();
-
-      const normalizeDetailQueueKey = (value) => {
-        const raw = String(value ?? "").trim();
-        if (!raw) return "";
-        try {
-          const url = new URL(raw, window.location.origin);
-          return `${url.pathname.replace(/\/+$/, "")}${url.search}`.toLowerCase();
-        } catch (_) {
-          return raw.toLowerCase();
-        }
-      };
-
-      const buildFileQueueKey = ({ fileId, detailUrl }) => {
-        const numericFileId = Number(fileId);
-        if (Number.isFinite(numericFileId) && numericFileId > 0) {
-          return `id:${numericFileId}`;
-        }
-        const normalizedUrl = normalizeDetailQueueKey(detailUrl);
-        return normalizedUrl ? `url:${normalizedUrl}` : "";
-      };
-
-      const buildEpisodeQueueKey = ({ seriesName, seasonNumber, episodeNumber }) => {
-        const normalizedSeries = normalizeQueueTextKey(seriesName);
-        const season = Number(seasonNumber);
-        const episode = Number(episodeNumber);
-        if (!normalizedSeries || !Number.isFinite(season) || season <= 0 || !Number.isFinite(episode) || episode <= 0) {
-          return "";
-        }
-        return `${normalizedSeries}:${season}:${episode}`;
-      };
-
-      const buildTvEpisodeKey = ({ seasonNumber, episodeNumber }) => {
-        const season = Number(seasonNumber);
-        const episode = Number(episodeNumber);
-        if (!Number.isFinite(season) || season <= 0 || !Number.isFinite(episode) || episode <= 0) {
-          return "";
-        }
-        return `${season}:${episode}`;
-      };
-
-      const basenameFromPath = (value) => {
-        const raw = String(value ?? "").trim();
-        if (!raw) return "";
-        const parts = raw.split(/[\\/]+/).filter(Boolean);
-        return parts[parts.length - 1] || "";
-      };
-
-      const sameStringList = (left, right) => JSON.stringify(Array.isArray(left) ? left : []) === JSON.stringify(Array.isArray(right) ? right : []);
 
       const buildCurrentTvShowAliasKeys = () => {
         const titleMetadata = tvResultsState?.title_metadata || tvLookupState?.title_metadata || null;
@@ -283,9 +232,6 @@
         setSavedStateFromItems(filtered);
       };
 
-      const queueButtonLabelForStatus = (status) => (status === "running" ? "Downloading" : "Added to queue");
-      const queueBadgeLabelForStatus = (status) => (status === "running" ? "Downloading" : "In queue");
-
       const choosePreferredActiveJob = (current, candidate) => {
         if (!current) return candidate;
         if (!candidate) return current;
@@ -350,42 +296,6 @@
         setActiveQueueStateFromJobs(jobs);
       };
 
-      const formatBytes = (value) => {
-        if (value == null || Number.isNaN(Number(value))) return "n/a";
-        const num = Number(value);
-        const units = ["B", "KB", "MB", "GB", "TB"];
-        let idx = 0;
-        let current = num;
-        while (current >= 1024 && idx < units.length - 1) {
-          current /= 1024;
-          idx += 1;
-        }
-        const precision = current >= 10 || idx === 0 ? 0 : 1;
-        return `${current.toFixed(precision)} ${units[idx]}`;
-      };
-
-      const formatSpeed = (value) => {
-        if (value == null || Number.isNaN(Number(value)) || Number(value) <= 0) return "n/a";
-        return `${formatBytes(value)}/s`;
-      };
-
-      const formatEta = (bytesDownloaded, bytesTotal, speedBps) => {
-        const done = Number(bytesDownloaded);
-        const total = Number(bytesTotal);
-        const speed = Number(speedBps);
-        if (!Number.isFinite(done) || !Number.isFinite(total) || !Number.isFinite(speed) || speed <= 0 || done >= total) {
-          return "n/a";
-        }
-        const seconds = Math.floor((total - done) / speed);
-        if (!Number.isFinite(seconds) || seconds < 0) return "n/a";
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
-        if (h > 0) return `${h}h ${m}m`;
-        if (m > 0) return `${m}m ${s}s`;
-        return `${s}s`;
-      };
-
       const setActiveTab = (tabName) => {
         const resolved = tabName === "downloads" ? "downloads" : "search";
         workspaceTabs.forEach((tab) => {
@@ -398,7 +308,7 @@
           section.style.display = visible ? "" : "none";
         });
         window.location.hash = resolved;
-        window.localStorage.setItem("activeWorkspaceTab", resolved);
+        writeActiveWorkspaceTab(resolved);
       };
 
       workspaceTabs.forEach((tab) => {
@@ -408,7 +318,7 @@
       const initialTab = (() => {
         const hash = (window.location.hash || "").replace("#", "").trim();
         if (hash === "search" || hash === "downloads") return hash;
-        const saved = window.localStorage.getItem("activeWorkspaceTab");
+        const saved = readActiveWorkspaceTab();
         if (saved === "search" || saved === "downloads") return saved;
         return "search";
       })();
@@ -439,7 +349,7 @@
         }
         fileResultsCardsBtn?.classList.toggle("active", fileResultsView === "cards");
         fileResultsListBtn?.classList.toggle("active", fileResultsView === "list");
-        window.localStorage.setItem(FILE_RESULTS_VIEW_KEY, fileResultsView);
+        writeFileResultsView(fileResultsView);
       };
 
       const setFileResultsFilter = (filter) => {
@@ -448,7 +358,7 @@
         fileResultsToolbar?.querySelectorAll(".file-results-filter-chip").forEach((btn) => {
           btn.classList.toggle("active", btn.dataset.filter === next);
         });
-        window.localStorage.setItem(FILE_RESULTS_FILTER_KEY, fileResultsFilter);
+        writeFileResultsFilter(fileResultsFilter);
         refreshFileSearchResultsUi();
       };
 
@@ -672,7 +582,7 @@
           renderTvActiveFilters();
           updateTvSearchButtonState();
         }
-        window.localStorage.setItem("searchMode", searchMode);
+        writeSearchMode(searchMode);
       };
 
       fileSearchModeBtn.addEventListener("click", () => setSearchMode("file"));
@@ -827,9 +737,9 @@
       const setActiveTvSearchJobId = (jobId) => {
         activeTvSearchJobId = jobId ? String(jobId) : null;
         if (activeTvSearchJobId) {
-          window.localStorage.setItem(TV_ACTIVE_JOB_KEY, activeTvSearchJobId);
+          writeActiveTvSearchJobId(activeTvSearchJobId);
         } else {
-          window.localStorage.removeItem(TV_ACTIVE_JOB_KEY);
+          clearActiveTvSearchJobId();
         }
       };
 
@@ -1103,8 +1013,6 @@
 
         bindQueueManageButtons(document);
       };
-
-      const pluralize = (count, singular, plural = `${singular}s`) => (count === 1 ? singular : plural);
 
       const syncTvResultsDownloadedStateFromJobs = (jobs) => {
         if (!tvResultsState) return false;
@@ -2643,7 +2551,7 @@
       });
 
       fileSearchAdvancedFilters?.addEventListener("toggle", () => {
-        window.localStorage.setItem(FILE_SEARCH_ADVANCED_KEY, fileSearchAdvancedFilters.open ? "1" : "0");
+        writeFileSearchAdvancedOpen(fileSearchAdvancedFilters.open);
       });
 
       downloadSettingsForm.addEventListener("submit", async (event) => {
@@ -2770,11 +2678,10 @@
       });
 
       const initialMode = (() => {
-        const saved = window.localStorage.getItem("searchMode");
-        return saved === "tv" ? "tv" : "file";
+        return readSearchMode();
       })();
       if (fileSearchAdvancedFilters) {
-        fileSearchAdvancedFilters.open = window.localStorage.getItem(FILE_SEARCH_ADVANCED_KEY) === "1";
+        fileSearchAdvancedFilters.open = readFileSearchAdvancedOpen();
       }
       syncFileFiltersToTvEditor();
       renderFileSearchActiveFilters();
