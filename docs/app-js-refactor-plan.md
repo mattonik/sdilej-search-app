@@ -402,6 +402,29 @@ The following behaviors must be preserved unless a separate task changes them in
   - browser E2E: `2 passed, 52 deselected`
   - diff check: clean
 - Commit:
+  - `e0dd71f` `Extract workspace tabs from app.js`
+
+### Entry 3.2
+
+- Date: `2026-06-12`
+- Type: `implementation`
+- Summary:
+  - extracted queue dialog behavior into [`app/static/js/queue-dialog.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/queue-dialog.js)
+  - queue dialog state is now owned by the queue dialog module instead of `app.js`
+  - `app.js` now delegates:
+    - dialog open/close
+    - classification preview
+    - edit-vs-enqueue submit flow
+  - the dialog remains reusable from file search, TV results and downloads actions
+- Tests run:
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `git diff --check`
+- Result:
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `2 passed, 52 deselected`
+  - diff check: clean
+- Commit:
   - pending at log update time
 
 ## Phase 4 Log
