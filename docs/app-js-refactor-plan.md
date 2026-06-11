@@ -381,11 +381,28 @@ The following behaviors must be preserved unless a separate task changes them in
   - browser E2E: `2 passed, 52 deselected`
   - diff check: clean
 - Commit:
-  - pending at log update time
+  - `c046ab6` `Introduce app.js runtime state and API facades`
 
 ## Phase 3 Log
 
-- No entries yet.
+### Entry 3.1
+
+- Date: `2026-06-12`
+- Type: `implementation`
+- Summary:
+  - extracted workspace tab behavior into [`app/static/js/workspace-tabs.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/workspace-tabs.js)
+  - `app.js` now delegates tab activation and section visibility to a dedicated feature module
+  - state persistence for active workspace tab remains unchanged
+- Tests run:
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `git diff --check`
+- Result:
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `2 passed, 52 deselected`
+  - diff check: clean
+- Commit:
+  - pending at log update time
 
 ## Phase 4 Log
 

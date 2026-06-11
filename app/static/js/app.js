@@ -29,6 +29,7 @@ import {
 } from "./storage-state.js";
 import { api } from "./api.js";
 import { createRuntimeState } from "./runtime-state.js";
+import { initWorkspaceTabs } from "./workspace-tabs.js";
 
       const input = document.getElementById("queryInput");
       const list = document.getElementById("suggestions");
@@ -299,25 +300,6 @@ import { createRuntimeState } from "./runtime-state.js";
         setActiveQueueStateFromJobs(jobs);
       };
 
-      const setActiveTab = (tabName) => {
-        const resolved = tabName === "downloads" ? "downloads" : "search";
-        workspaceTabs.forEach((tab) => {
-          tab.classList.toggle("active", tab.dataset.tab === resolved);
-        });
-        tabSections.forEach((section) => {
-          const showSearch = section.classList.contains("tab-search");
-          const showDownloads = section.classList.contains("tab-downloads");
-          const visible = (resolved === "search" && showSearch) || (resolved === "downloads" && showDownloads);
-          section.style.display = visible ? "" : "none";
-        });
-        window.location.hash = resolved;
-        writeActiveWorkspaceTab(resolved);
-      };
-
-      workspaceTabs.forEach((tab) => {
-        tab.addEventListener("click", () => setActiveTab(tab.dataset.tab || "search"));
-      });
-
       const initialTab = (() => {
         const hash = (window.location.hash || "").replace("#", "").trim();
         if (hash === "search" || hash === "downloads") return hash;
@@ -325,7 +307,6 @@ import { createRuntimeState } from "./runtime-state.js";
         if (saved === "search" || saved === "downloads") return saved;
         return "search";
       })();
-      setActiveTab(initialTab);
 
       const renderFileSearchActiveFilters = () => {
         if (!fileSearchActiveFilters) return;
@@ -2634,6 +2615,15 @@ import { createRuntimeState } from "./runtime-state.js";
       syncFileFiltersToTvEditor();
       renderFileSearchActiveFilters();
       renderTvActiveFilters();
+      initWorkspaceTabs({
+        workspaceTabs,
+        tabSections,
+        initialTab,
+        onTabChange: (resolved) => {
+          window.location.hash = resolved;
+          writeActiveWorkspaceTab(resolved);
+        },
+      });
       setSearchMode(initialMode);
       setFileResultsView(fileResultsView);
       setFileResultsFilter(fileResultsFilter);
