@@ -314,6 +314,25 @@ The following behaviors must be preserved unless a separate task changes them in
 - Commit:
   - pending at document creation time
 
+### Entry 0.2
+
+- Date: `2026-06-11`
+- Type: `baseline verification`
+- Summary:
+  - verified that the current `app.js` behavior is covered well enough to start extraction work
+  - no additional baseline test had to be added before Phase 1
+  - existing browser coverage already protects:
+    - file search view/filter persistence
+    - TV downloaded episode state in the current collapsed-season UI
+- Tests run:
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+- Result:
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `2 passed, 52 deselected`
+- Commit:
+  - pending at log update time
+
 ## Phase 1 Log
 
 - No entries yet.
