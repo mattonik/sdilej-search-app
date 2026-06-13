@@ -97,7 +97,7 @@ class StorageDownloadsRepository:
                     (file_id,),
                 ).fetchone()
                 if row is not None:
-                    return self.storage._row_to_download_job(row)
+                    return self.storage.row_to_download_job(row)
 
             row = conn.execute(
                 """
@@ -112,7 +112,7 @@ class StorageDownloadsRepository:
             ).fetchone()
             if row is None:
                 return None
-            return self.storage._row_to_download_job(row)
+            return self.storage.row_to_download_job(row)
 
     def list_download_jobs(self, limit: int = 200, status: str | None = None) -> list[dict[str, Any]]:
         safe_limit = max(1, min(limit, 1000))
@@ -139,14 +139,14 @@ class StorageDownloadsRepository:
                     (safe_limit,),
                 ).fetchall()
 
-        return [self.storage._row_to_download_job(row) for row in rows]
+        return [self.storage.row_to_download_job(row) for row in rows]
 
     def get_download_job(self, job_id: int) -> dict[str, Any] | None:
         with self.storage._connect() as conn:
             row = conn.execute("SELECT * FROM download_jobs WHERE id = ?", (job_id,)).fetchone()
         if row is None:
             return None
-        return self.storage._row_to_download_job(row)
+        return self.storage.row_to_download_job(row)
 
     def claim_next_download_job(self) -> dict[str, Any] | None:
         job_id: int | None = None

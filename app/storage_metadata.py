@@ -30,7 +30,7 @@ class StorageMetadataRepository:
                   AND lookup_key = ?
                   AND lookup_year_key = ?
                 """,
-                (lookup_kind, lookup_key, self.storage._year_key(year)),
+                (lookup_kind, lookup_key, self.storage.schema.year_key(year)),
             ).fetchone()
 
         if row is None:
@@ -83,7 +83,7 @@ class StorageMetadataRepository:
                 (
                     lookup_kind,
                     lookup_key,
-                    self.storage._year_key(lookup_year),
+                    self.storage.schema.year_key(lookup_year),
                     lookup_year,
                     json.dumps(payload, ensure_ascii=False),
                     source,

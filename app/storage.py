@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 from pathlib import Path
@@ -10,6 +9,10 @@ from .db import connect_sqlite, run_with_sqlite_retry
 from .models import SearchResponse
 from .storage_downloads import StorageDownloadsRepository
 from .storage_metadata import StorageMetadataRepository
+from .storage_schema import StorageSchemaRepository
+from .storage_rows import StorageRowsRepository
+from .storage_saved import StorageSavedRepository
+from .storage_search import StorageSearchRepository
 from .storage_settings import StorageSettingsRepository
 from .storage_tv_jobs import StorageTvJobsRepository
 
@@ -21,6 +24,10 @@ class Storage:
         configured_path = db_path or os.getenv("APP_DB_PATH", DEFAULT_DB_PATH)
         self.db_path = Path(configured_path).expanduser().resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.rows = StorageRowsRepository(self)
+        self.search = StorageSearchRepository(self)
+        self.saved = StorageSavedRepository(self)
+        self.schema = StorageSchemaRepository(self)
         self.metadata = StorageMetadataRepository(self)
         self.settings = StorageSettingsRepository(self)
         self.downloads = StorageDownloadsRepository(self)
@@ -187,85 +194,13 @@ class Storage:
                 );
                 """
             )
-            self._migrate_schema(conn)
+            self.schema.apply_schema(conn)
 
     def record_search(self, search: SearchResponse) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO search_history (
-                    query,
-                    effective_query,
-                    category,
-                    sort,
-                    language,
-                    language_scope,
-                    strict_dubbing,
-                    release_year,
-                    search_url,
-                    result_count,
-                    unfiltered_result_count
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    search.query,
-                    search.effective_query,
-                    search.category,
-                    search.sort,
-                    search.language,
-                    search.language_scope,
-                    1 if search.strict_dubbing else 0,
-                    search.release_year,
-                    search.search_url,
-                    search.result_count,
-                    search.unfiltered_result_count,
-                ),
-            )
+        self.search.record_search(search)
 
     def list_search_history(self, limit: int = 50) -> list[dict[str, Any]]:
-        safe_limit = max(1, min(limit, 500))
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT
-                    id,
-                    created_at,
-                    query,
-                    effective_query,
-                    category,
-                    sort,
-                    language,
-                    language_scope,
-                    strict_dubbing,
-                    release_year,
-                    search_url,
-                    result_count,
-                    unfiltered_result_count
-                FROM search_history
-                ORDER BY id DESC
-                LIMIT ?
-                """,
-                (safe_limit,),
-            ).fetchall()
-
-        return [
-            {
-                "id": row["id"],
-                "created_at": row["created_at"],
-                "query": row["query"],
-                "effective_query": row["effective_query"],
-                "category": row["category"],
-                "sort": row["sort"],
-                "language": row["language"],
-                "language_scope": row["language_scope"],
-                "strict_dubbing": bool(row["strict_dubbing"]),
-                "release_year": row["release_year"],
-                "search_url": row["search_url"],
-                "result_count": row["result_count"],
-                "unfiltered_result_count": row["unfiltered_result_count"],
-            }
-            for row in rows
-        ]
+        return self.search.list_search_history(limit=limit)
 
     def upsert_saved_candidate(
         self,
@@ -289,177 +224,35 @@ class Storage:
         classification_confidence: str | None,
         notes: str | None,
     ) -> dict[str, Any]:
-        detected_json = json.dumps(detected_languages)
-
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO saved_candidates (
-                    file_id,
-                    title,
-                    detail_url,
-                    download_url,
-                    size,
-                    duration,
-                    extension,
-                    primary_year,
-                    detected_languages_json,
-                    has_dub_hint,
-                    has_subtitle_hint,
-                    media_kind,
-                    is_kids,
-                    series_name,
-                    season_number,
-                    episode_number,
-                    classification_confidence,
-                    notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(file_id) DO UPDATE SET
-                    title=excluded.title,
-                    detail_url=excluded.detail_url,
-                    download_url=excluded.download_url,
-                    size=excluded.size,
-                    duration=excluded.duration,
-                    extension=excluded.extension,
-                    primary_year=excluded.primary_year,
-                    detected_languages_json=excluded.detected_languages_json,
-                    has_dub_hint=excluded.has_dub_hint,
-                    has_subtitle_hint=excluded.has_subtitle_hint,
-                    media_kind=excluded.media_kind,
-                    is_kids=excluded.is_kids,
-                    series_name=excluded.series_name,
-                    season_number=excluded.season_number,
-                    episode_number=excluded.episode_number,
-                    classification_confidence=excluded.classification_confidence,
-                    notes=excluded.notes,
-                    updated_at=datetime('now')
-                """,
-                (
-                    file_id,
-                    title,
-                    detail_url,
-                    download_url,
-                    size,
-                    duration,
-                    extension,
-                    primary_year,
-                    detected_json,
-                    1 if has_dub_hint else 0,
-                    1 if has_subtitle_hint else 0,
-                    media_kind,
-                    1 if is_kids else 0,
-                    series_name,
-                    season_number,
-                    episode_number,
-                    classification_confidence,
-                    notes,
-                ),
-            )
-
-            row = conn.execute(
-                """
-                SELECT
-                    file_id,
-                    title,
-                    detail_url,
-                    download_url,
-                    size,
-                    duration,
-                    extension,
-                    primary_year,
-                    detected_languages_json,
-                    has_dub_hint,
-                    has_subtitle_hint,
-                    media_kind,
-                    is_kids,
-                    series_name,
-                    season_number,
-                    episode_number,
-                    classification_confidence,
-                    notes,
-                    created_at,
-                    updated_at
-                FROM saved_candidates
-                WHERE file_id = ?
-                """,
-                (file_id,),
-            ).fetchone()
-
-        return self._row_to_saved_candidate(row)
+        return self.saved.upsert_saved_candidate(
+            file_id=file_id,
+            title=title,
+            detail_url=detail_url,
+            download_url=download_url,
+            size=size,
+            duration=duration,
+            extension=extension,
+            primary_year=primary_year,
+            detected_languages=detected_languages,
+            has_dub_hint=has_dub_hint,
+            has_subtitle_hint=has_subtitle_hint,
+            media_kind=media_kind,
+            is_kids=is_kids,
+            series_name=series_name,
+            season_number=season_number,
+            episode_number=episode_number,
+            classification_confidence=classification_confidence,
+            notes=notes,
+        )
 
     def list_saved_candidates(self, limit: int = 200) -> list[dict[str, Any]]:
-        safe_limit = max(1, min(limit, 1000))
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT
-                    file_id,
-                    title,
-                    detail_url,
-                    download_url,
-                    size,
-                    duration,
-                    extension,
-                    primary_year,
-                    detected_languages_json,
-                    has_dub_hint,
-                    has_subtitle_hint,
-                    media_kind,
-                    is_kids,
-                    series_name,
-                    season_number,
-                    episode_number,
-                    classification_confidence,
-                    notes,
-                    created_at,
-                    updated_at
-                FROM saved_candidates
-                ORDER BY updated_at DESC, file_id DESC
-                LIMIT ?
-                """,
-                (safe_limit,),
-            ).fetchall()
-
-        return [self._row_to_saved_candidate(row) for row in rows]
+        return self.saved.list_saved_candidates(limit=limit)
 
     def get_saved_candidate(self, file_id: int) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                """
-                SELECT
-                    file_id,
-                    title,
-                    detail_url,
-                    download_url,
-                    size,
-                    duration,
-                    extension,
-                    primary_year,
-                    detected_languages_json,
-                    has_dub_hint,
-                    has_subtitle_hint,
-                    media_kind,
-                    is_kids,
-                    series_name,
-                    season_number,
-                    episode_number,
-                    classification_confidence,
-                    notes,
-                    created_at,
-                    updated_at
-                FROM saved_candidates
-                WHERE file_id = ?
-                """,
-                (file_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._row_to_saved_candidate(row)
+        return self.saved.get_saved_candidate(file_id)
 
     def delete_saved_candidate(self, file_id: int) -> bool:
-        with self._connect() as conn:
-            cursor = conn.execute("DELETE FROM saved_candidates WHERE file_id = ?", (file_id,))
-            return cursor.rowcount > 0
+        return self.saved.delete_saved_candidate(file_id)
 
     def set_account_credentials(self, login: str, password: str) -> None:
         with self._connect() as conn:
@@ -826,361 +619,17 @@ class Storage:
             confirm_on_uncertain=confirm_on_uncertain,
         )
 
-    def _row_to_saved_candidate(self, row: sqlite3.Row) -> dict[str, Any]:
-        return {
-            "file_id": row["file_id"],
-            "title": row["title"],
-            "detail_url": row["detail_url"],
-            "download_url": row["download_url"],
-            "size": row["size"],
-            "duration": row["duration"],
-            "extension": row["extension"],
-            "primary_year": row["primary_year"],
-            "detected_languages": json.loads(row["detected_languages_json"] or "[]"),
-            "has_dub_hint": bool(row["has_dub_hint"]),
-            "has_subtitle_hint": bool(row["has_subtitle_hint"]),
-            "media_kind": row["media_kind"],
-            "is_kids": bool(row["is_kids"]),
-            "series_name": row["series_name"],
-            "season_number": row["season_number"],
-            "episode_number": row["episode_number"],
-            "classification_confidence": row["classification_confidence"],
-            "notes": row["notes"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        }
+    def row_to_saved_candidate(self, row):
+        return self.rows.row_to_saved_candidate(row)
 
-    def _row_to_download_job(self, row: sqlite3.Row) -> dict[str, Any]:
-        return {
-            "id": row["id"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-            "started_at": row["started_at"],
-            "finished_at": row["finished_at"],
-            "file_id": row["file_id"],
-            "title": row["title"],
-            "detail_url": row["detail_url"],
-            "preferred_mode": row["preferred_mode"],
-            "output_dir": row["output_dir"],
-            "status": row["status"],
-            "priority": row["priority"],
-            "attempt_count": row["attempt_count"],
-            "chunk_count": row["chunk_count"],
-            "media_kind": row["media_kind"],
-            "is_kids": bool(row["is_kids"]),
-            "series_name": row["series_name"],
-            "season_number": row["season_number"],
-            "episode_number": row["episode_number"],
-            "destination_subpath": row["destination_subpath"],
-            "source_saved_file_id": row["source_saved_file_id"],
-            "delete_saved_on_complete": bool(row["delete_saved_on_complete"]),
-            "save_path": row["save_path"],
-            "working_path": row["working_path"],
-            "final_url": row["final_url"],
-            "bytes_total": row["bytes_total"],
-            "bytes_downloaded": row["bytes_downloaded"],
-            "speed_bps": row["speed_bps"],
-            "delete_partial_on_cancel": bool(row["delete_partial_on_cancel"]),
-            "error": row["error"],
-        }
+    def row_to_download_job(self, row):
+        return self.rows.row_to_download_job(row)
 
-    def _row_to_tv_search_episode(self, row: sqlite3.Row) -> dict[str, Any]:
-        return {
-            "id": row["id"],
-            "job_id": row["job_id"],
-            "season_number": row["season_number"],
-            "episode_number": row["episode_number"],
-            "episode_name": row["episode_name"],
-            "airdate": row["airdate"],
-            "episode_code": row["episode_code"],
-            "status": row["status"],
-            "result_count": row["result_count"],
-            "query_variants": json.loads(row["query_variants_json"] or "[]"),
-            "query_errors": json.loads(row["query_errors_json"] or "[]"),
-            "results": json.loads(row["results_json"] or "[]"),
-            "downloaded_files": json.loads(row["downloaded_files_json"] or "[]"),
-            "updated_at": row["updated_at"],
-        }
+    def row_to_tv_search_episode(self, row):
+        return self.rows.row_to_tv_search_episode(row)
 
-    def _row_to_tv_search_job(
-        self,
-        row: sqlite3.Row,
-        *,
-        episode_rows: list[sqlite3.Row] | None = None,
-        include_episodes: bool = True,
-    ) -> dict[str, Any]:
-        payload = {
-            "id": row["id"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-            "started_at": row["started_at"],
-            "finished_at": row["finished_at"],
-            "status": row["status"],
-            "priority": row["priority"],
-            "attempt_count": row["attempt_count"],
-            "show": json.loads(row["show_json"] or "{}"),
-            "title_metadata": json.loads(row["title_metadata_json"] or "null"),
-            "aliases": json.loads(row["aliases_json"] or "[]"),
-            "search_aliases": json.loads(row["search_aliases_json"] or "[]"),
-            "selected_seasons": json.loads(row["selected_seasons_json"] or "[]"),
-            "episodes_by_season": json.loads(row["episodes_by_season_json"] or "{}"),
-            "category": row["category"],
-            "language": row["language"],
-            "language_scope": row["language_scope"],
-            "strict_dubbing": bool(row["strict_dubbing"]),
-            "max_results_per_variant": row["max_results_per_variant"],
-            "total_episodes": row["total_episodes"],
-            "completed_episodes": row["completed_episodes"],
-            "result_count": row["result_count"],
-            "error": row["error"],
-        }
-        if not include_episodes:
-            return payload
+    def row_to_tv_search_job(self, row, *, episode_rows=None, include_episodes: bool = True):
+        return self.rows.row_to_tv_search_job(row, episode_rows=episode_rows, include_episodes=include_episodes)
 
-        episode_items = [self._row_to_tv_search_episode(item) for item in (episode_rows or [])]
-        seasons_map: dict[int, list[dict[str, Any]]] = {}
-        for episode in episode_items:
-            seasons_map.setdefault(int(episode["season_number"]), []).append(episode)
-
-        seasons: list[dict[str, Any]] = []
-        for season_number in sorted(seasons_map):
-            items = sorted(seasons_map[season_number], key=lambda item: (item["episode_number"], item["id"]))
-            seasons.append(
-                {
-                    "season_number": season_number,
-                    "episode_count": len(items),
-                    "completed_episodes": sum(1 for item in items if item["status"] in {"done", "downloaded"}),
-                    "downloaded_episodes": sum(1 for item in items if item["status"] == "downloaded"),
-                    "result_count": sum(int(item.get("result_count") or 0) for item in items),
-                    "episodes": items,
-                }
-            )
-        payload["seasons"] = seasons
-        return payload
-
-    def _refresh_tv_search_job_counts(self, conn: sqlite3.Connection, job_id: int) -> None:
-        summary = conn.execute(
-            """
-            SELECT
-                COALESCE(SUM(CASE WHEN status IN ('done', 'downloaded') THEN 1 ELSE 0 END), 0) AS completed_episodes,
-                COALESCE(SUM(result_count), 0) AS total_results
-            FROM tv_search_job_episodes
-            WHERE job_id = ?
-            """,
-            (job_id,),
-        ).fetchone()
-        completed = int(summary["completed_episodes"]) if summary is not None else 0
-        total_results = int(summary["total_results"]) if summary is not None else 0
-        conn.execute(
-            """
-            UPDATE tv_search_jobs
-            SET
-                completed_episodes = ?,
-                result_count = ?,
-                updated_at = datetime('now')
-            WHERE id = ?
-            """,
-            (completed, total_results, job_id),
-        )
-
-    def _year_key(self, value: int | None) -> str:
-        return "" if value is None else str(int(value))
-
-    def _migrate_schema(self, conn: sqlite3.Connection) -> None:
-        self._ensure_column(
-            conn,
-            table="search_history",
-            column="strict_dubbing",
-            definition="INTEGER NOT NULL DEFAULT 0",
-        )
-
-        self._ensure_column(
-            conn,
-            table="saved_candidates",
-            column="updated_at",
-            definition="TEXT NOT NULL DEFAULT (datetime('now'))",
-        )
-        self._ensure_column(
-            conn,
-            table="saved_candidates",
-            column="media_kind",
-            definition="TEXT",
-        )
-        self._ensure_column(
-            conn,
-            table="saved_candidates",
-            column="is_kids",
-            definition="INTEGER NOT NULL DEFAULT 0",
-        )
-        self._ensure_column(
-            conn,
-            table="saved_candidates",
-            column="series_name",
-            definition="TEXT",
-        )
-        self._ensure_column(
-            conn,
-            table="saved_candidates",
-            column="season_number",
-            definition="INTEGER",
-        )
-        self._ensure_column(
-            conn,
-            table="saved_candidates",
-            column="episode_number",
-            definition="INTEGER",
-        )
-        self._ensure_column(
-            conn,
-            table="saved_candidates",
-            column="classification_confidence",
-            definition="TEXT",
-        )
-
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="working_path",
-            definition="TEXT",
-        )
-
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="chunk_count",
-            definition="INTEGER",
-        )
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="media_kind",
-            definition="TEXT",
-        )
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="is_kids",
-            definition="INTEGER NOT NULL DEFAULT 0",
-        )
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="series_name",
-            definition="TEXT",
-        )
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="season_number",
-            definition="INTEGER",
-        )
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="episode_number",
-            definition="INTEGER",
-        )
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="destination_subpath",
-            definition="TEXT",
-        )
-
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="source_saved_file_id",
-            definition="INTEGER",
-        )
-
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="delete_saved_on_complete",
-            definition="INTEGER NOT NULL DEFAULT 0",
-        )
-
-        self._ensure_column(
-            conn,
-            table="download_jobs",
-            column="delete_partial_on_cancel",
-            definition="INTEGER NOT NULL DEFAULT 0",
-        )
-
-        self._ensure_column(
-            conn,
-            table="tv_search_jobs",
-            column="search_aliases_json",
-            definition="TEXT NOT NULL DEFAULT '[]'",
-        )
-        self._ensure_column(
-            conn,
-            table="tv_search_job_episodes",
-            column="downloaded_files_json",
-            definition="TEXT NOT NULL DEFAULT '[]'",
-        )
-        self._ensure_index(
-            conn,
-            name="idx_download_jobs_status_priority_id",
-            table="download_jobs",
-            columns="status, priority DESC, id ASC",
-        )
-        self._ensure_index(
-            conn,
-            name="idx_download_jobs_file_status_id",
-            table="download_jobs",
-            columns="file_id, status, id DESC",
-        )
-        self._ensure_index(
-            conn,
-            name="idx_download_jobs_detail_status_id",
-            table="download_jobs",
-            columns="detail_url, status, id DESC",
-        )
-        self._ensure_index(
-            conn,
-            name="idx_tv_search_jobs_status_priority_id",
-            table="tv_search_jobs",
-            columns="status, priority DESC, id ASC",
-        )
-        self._ensure_index(
-            conn,
-            name="idx_tv_search_job_episodes_job_status_season_episode",
-            table="tv_search_job_episodes",
-            columns="job_id, status, season_number ASC, episode_number ASC",
-        )
-        self._ensure_index(
-            conn,
-            name="idx_title_metadata_cache_lookup_updated_at",
-            table="title_metadata_cache",
-            columns="lookup_kind, lookup_key, lookup_year_key, updated_at DESC",
-        )
-
-    def _ensure_column(
-        self,
-        conn: sqlite3.Connection,
-        *,
-        table: str,
-        column: str,
-        definition: str,
-    ) -> None:
-        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-        existing_columns = {row["name"] for row in rows}
-        if column in existing_columns:
-            return
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-
-    def _ensure_index(
-        self,
-        conn: sqlite3.Connection,
-        *,
-        name: str,
-        table: str,
-        columns: str,
-        where: str | None = None,
-    ) -> None:
-        statement = f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({columns})"
-        if where:
-            statement = f"{statement} WHERE {where}"
-        conn.execute(statement)
+    def refresh_tv_search_job_counts(self, conn, job_id: int) -> None:
+        self.tv_jobs.refresh_tv_search_job_counts(conn, job_id)

@@ -106,7 +106,7 @@ class StorageTvJobsRepository:
                         ),
                     )
 
-                self.storage._refresh_tv_search_job_counts(conn, job_id)
+                self.refresh_tv_search_job_counts(conn, job_id)
                 pending_count = int(
                     conn.execute(
                         """
@@ -163,7 +163,7 @@ class StorageTvJobsRepository:
                     """,
                     (safe_limit,),
                 ).fetchall()
-        return [self.storage._row_to_tv_search_job(row, include_episodes=False) for row in rows]
+        return [self.storage.row_to_tv_search_job(row, include_episodes=False) for row in rows]
 
     def get_tv_search_job(self, job_id: int) -> dict[str, Any] | None:
         with self.storage._connect() as conn:
@@ -179,7 +179,7 @@ class StorageTvJobsRepository:
                 """,
                 (job_id,),
             ).fetchall()
-        return self.storage._row_to_tv_search_job(row, episode_rows=episode_rows, include_episodes=True)
+        return self.storage.row_to_tv_search_job(row, episode_rows=episode_rows, include_episodes=True)
 
     def claim_next_tv_search_job(self) -> dict[str, Any] | None:
         job_id: int | None = None
@@ -244,7 +244,7 @@ class StorageTvJobsRepository:
                 """,
                 (job_id,),
             ).fetchall()
-        return [self.storage._row_to_tv_search_episode(row) for row in rows]
+        return [self.storage.row_to_tv_search_episode(row) for row in rows]
 
     def mark_tv_search_episode_running(self, job_id: int, season_number: int, episode_number: int) -> bool:
         def operation() -> bool:
@@ -297,7 +297,7 @@ class StorageTvJobsRepository:
                         episode_number,
                     ),
                 )
-                self.storage._refresh_tv_search_job_counts(conn, job_id)
+                self.refresh_tv_search_job_counts(conn, job_id)
 
         self.storage._with_write_retry(operation)
 
@@ -331,7 +331,7 @@ class StorageTvJobsRepository:
                         episode_number,
                     ),
                 )
-                self.storage._refresh_tv_search_job_counts(conn, job_id)
+                self.refresh_tv_search_job_counts(conn, job_id)
 
         self.storage._with_write_retry(operation)
 
@@ -356,7 +356,7 @@ class StorageTvJobsRepository:
     def finalize_tv_search_job(self, job_id: int) -> None:
         def operation() -> None:
             with self.storage._connect() as conn:
-                self.storage._refresh_tv_search_job_counts(conn, job_id)
+                self.refresh_tv_search_job_counts(conn, job_id)
                 row = conn.execute(
                     """
                     SELECT
@@ -464,6 +464,31 @@ class StorageTvJobsRepository:
                 return cursor.rowcount
 
         return self.storage._with_write_retry(operation)
+
+    def refresh_tv_search_job_counts(self, conn, job_id: int) -> None:
+        summary = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN status IN ('done', 'downloaded') THEN 1 ELSE 0 END), 0) AS completed_episodes,
+                COALESCE(SUM(result_count), 0) AS total_results
+            FROM tv_search_job_episodes
+            WHERE job_id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        completed = int(summary["completed_episodes"]) if summary is not None else 0
+        total_results = int(summary["total_results"]) if summary is not None else 0
+        conn.execute(
+            """
+            UPDATE tv_search_jobs
+            SET
+                completed_episodes = ?,
+                result_count = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (completed, total_results, job_id),
+        )
 
 
 if TYPE_CHECKING:
