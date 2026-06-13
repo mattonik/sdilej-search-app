@@ -451,6 +451,34 @@ The following behaviors must be preserved unless a separate task changes them in
   - browser E2E: `2 passed, 52 deselected`
   - diff check: clean
 - Commit:
+  - `9240f94` `Extract downloads panel from app.js`
+
+### Entry 3.4
+
+- Date: `2026-06-13`
+- Type: `implementation`
+- Summary:
+  - extracted file-search results runtime into [`app/static/js/file-search.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/file-search.js)
+  - moved out of `app.js`:
+    - file results cards/list toggle
+    - file results filter chips
+    - active file filter summary
+    - saved-state hydration and saved badge updates
+    - queue-state refresh for file results
+    - movie info button behavior
+    - save action handling
+    - file-result queue-dialog button handling
+  - kept file-vs-TV shared filter synchronization in `app.js` for now, because it still bridges both search modes
+  - `app.js` now delegates file-search rendering/state behavior through explicit callbacks into the file-search module
+- Tests run:
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `git diff --check`
+- Result:
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `2 passed, 52 deselected`
+  - diff check: clean
+- Commit:
   - pending at log update time
 
 ## Phase 4 Log
