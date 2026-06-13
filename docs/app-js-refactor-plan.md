@@ -316,6 +316,30 @@ This section tracks the incremental decomposition of `app/storage.py` into small
 
 - pending at the time of this document update
 
+### Stage 2: TV Job Repository
+
+**Outcome**
+
+- extracted [`app/storage_tv_jobs.py`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/storage_tv_jobs.py)
+- `Storage` now delegates all TV search job lifecycle operations to a dedicated repository
+- TV job create/claim/update/finalize/cancel/recover behavior is unchanged
+
+**Verification**
+
+- `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py`
+- `.venv/bin/pytest -m 'not live'`
+- `RUN_E2E=1 .venv/bin/pytest -m e2e`
+- `RUN_LIVE_SMOKE=1 .venv/bin/pytest -m live`
+
+**Result**
+
+- all gates passed
+- TV job tests remained green after the split
+
+**Commit**
+
+- pending at the time of this document update
+
 ## Phase 5: Final Bootstrap Cleanup
 
 ### Goal
