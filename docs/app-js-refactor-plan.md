@@ -636,3 +636,21 @@ The following behaviors must be preserved unless a separate task changes them in
   - `RUN_E2E=1 .venv/bin/pytest -m e2e`
   - `git diff --check`
 - Result: passed
+
+### Entry 5.2
+
+- Date: 2026-06-14
+- Commit: `816c755`
+- Scope: extracted TV state derivation helpers into `app/static/js/tv-state.js`, kept `tv-search.js` focused on orchestration/rendering, and tightened browser E2E coverage around TV polling and downloaded episode handling.
+- Verification:
+  - `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py`
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `RUN_LIVE_SMOKE=1 .venv/bin/pytest -m live`
+  - `git diff --check`
+- Result:
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `6 passed`
+  - live smoke: `3 passed, 1 skipped, 49 deselected`
+  - bytecode: passed
+  - diff check: passed
