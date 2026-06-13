@@ -340,6 +340,30 @@ This section tracks the incremental decomposition of `app/storage.py` into small
 
 - pending at the time of this document update
 
+### Stage 3: Download Job Repository
+
+**Outcome**
+
+- extracted [`app/storage_downloads.py`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/storage_downloads.py)
+- `Storage` now delegates all download job lifecycle operations to a dedicated repository
+- download job create/claim/update/fail/cancel/retry/recover behavior is unchanged
+
+**Verification**
+
+- `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py`
+- `.venv/bin/pytest -m 'not live'`
+- `RUN_E2E=1 .venv/bin/pytest -m e2e`
+- `RUN_LIVE_SMOKE=1 .venv/bin/pytest -m live`
+
+**Result**
+
+- all gates passed
+- no API or browser behavior regressions detected
+
+**Commit**
+
+- pending at the time of this document update
+
 ## Phase 5: Final Bootstrap Cleanup
 
 ### Goal
