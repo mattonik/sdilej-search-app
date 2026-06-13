@@ -65,10 +65,13 @@ Split `app/storage.py` into small repositories and helpers without changing publ
 - Test gate:
   - `.venv/bin/pytest -m 'not live'`
   - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `RUN_LIVE_SMOKE=1 .venv/bin/pytest -m live`
   - `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py`
   - `git diff --check`
 - Result:
-  - mocked suite: pending in current pass
-  - browser E2E: pending in current pass
-  - diff check: pending in current pass
-- Commit: pending
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `3 passed, 3 deselected`
+  - live smoke: `3 passed, 1 skipped, 49 deselected`
+  - bytecode: passed
+  - diff check: passed
+- Commit: `d06b7fd` `Add storage cleanup and TV stability notes`
