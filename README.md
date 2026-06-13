@@ -98,9 +98,10 @@ RUN_E2E=1 pytest -m e2e
 Recommended local release gate before pushing or building for the server:
 
 ```bash
-pytest -m "not live"
-docker build -t sdilej-search:test .
+./scripts/check.sh
 ```
+
+This gate expects a running Docker daemon (for example Colima or Docker Desktop) so the final image build step can complete.
 
 Optional config:
 
