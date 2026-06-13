@@ -523,7 +523,7 @@ The following behaviors must be preserved unless a separate task changes them in
 ### Entry 5.1
 
 - Date: 2026-06-13
-- Commit: pending
+- Commit: `bad98fb`
 - Scope: removed the remaining queue/bootstrap glue from `app.js` by introducing `app/static/js/queue-ui.js` and wiring `app.js` to use shared queue helpers instead of inlining them.
 - Verification:
   - `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py`
@@ -531,4 +531,3 @@ The following behaviors must be preserved unless a separate task changes them in
   - `RUN_E2E=1 .venv/bin/pytest -m e2e`
   - `git diff --check`
 - Result: passed
-
