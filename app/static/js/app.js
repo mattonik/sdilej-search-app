@@ -137,6 +137,8 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
         focusDownloadJob,
         bindQueueManageButtons,
         applyCardQueueState,
+        applyTvResultQueueState,
+        applyEpisodeQueueSummaryState,
         buildActiveQueueStateFromJobs,
       } = queueUi;
 
@@ -312,6 +314,8 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
         api,
         state,
         setActiveQueueStateFromJobs,
+        applyTvResultQueueState,
+        applyEpisodeQueueSummaryState,
         openQueueDialog: (...args) => openQueueDialog?.(...args),
       });
 

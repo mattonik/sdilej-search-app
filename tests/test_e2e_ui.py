@@ -429,7 +429,7 @@ def test_tv_polling_preserves_open_season_and_selected_filter(tmp_path) -> None:
         page.wait_for_selector("#tvResults details.tv-season")
 
         season = page.locator("#tvResults details.tv-season").first
-        season.locator("summary").click()
+        season.locator(":scope > summary").click()
         page.wait_for_selector("#tvResults details.tv-season[open] .tv-episode-card")
         page.locator('.tv-results-filter-chip[data-filter="downloaded"]').click()
 
@@ -476,7 +476,7 @@ def test_tv_episode_queue_state_transitions_to_downloaded(tmp_path) -> None:
         page.wait_for_selector("#tvResults details.tv-season")
 
         season = page.locator("#tvResults details.tv-season").first
-        season.locator("summary").click()
+        season.locator(":scope > summary").click()
         page.wait_for_function(
             """() => Boolean(document.querySelector('#tvResults details.tv-season[open]'))""",
             timeout=10000,

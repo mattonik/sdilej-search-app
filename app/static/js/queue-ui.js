@@ -108,7 +108,7 @@ export const createQueueUiHelpers = ({ downloadJobsEl, setDownloadStatus } = {})
     return { fileJobs, episodeJobs, jobsById };
   };
 
-  const buildDownloadedTvEpisodesFromJobs = (jobs, tvLookupState, tvResultsState, tvEpisodeSearchOverrides = new Map()) => {
+  const buildDownloadedTvEpisodesFromJobs = (jobs, tvLookupState, tvResultsState) => {
     const candidates = [
       tvResultsState?.show?.name,
       tvLookupState?.show?.name,
@@ -157,29 +157,75 @@ export const createQueueUiHelpers = ({ downloadJobsEl, setDownloadStatus } = {})
       }
     });
 
-    Array.from(tvEpisodeSearchOverrides.entries())
-      .forEach(([episodeKey, episode]) => {
-        const downloadedFiles = downloadedEpisodes.get(String(episodeKey));
-        if (!downloadedFiles) return;
-        if (String(episode?.status || "") === "downloaded" && Array.isArray(episode?.downloaded_files) && downloadedFiles.every((item) => episode.downloaded_files.includes(item))) {
-          return;
-        }
-        tvEpisodeSearchOverrides.set(episodeKey, {
-          ...episode,
-          status: "downloaded",
-          result_count: 0,
-          results: [],
-          downloaded_files: [...downloadedFiles],
-        });
-      });
-
     return downloadedEpisodes;
+  };
+
+  const applyTvResultQueueState = (row, job) => {
+    const queueBtn = row.querySelector(".tv-queue-btn");
+    const manageBtn = row.querySelector(".tv-manage-btn");
+    const stateEl = row.querySelector(".tv-result-queue-state");
+
+    row.classList.remove("queue-active", "queue-running", "queue-queued");
+
+    if (!job) {
+      if (queueBtn) {
+        queueBtn.disabled = false;
+        queueBtn.textContent = queueBtn.dataset.defaultLabel || "Add to queue...";
+      }
+      if (manageBtn) {
+        manageBtn.classList.add("hidden");
+        manageBtn.dataset.jobId = "";
+      }
+      if (stateEl) {
+        stateEl.classList.add("hidden");
+        stateEl.textContent = "";
+        delete stateEl.dataset.mode;
+      }
+      return;
+    }
+
+    row.classList.add("queue-active", `queue-${job.status}`);
+    if (queueBtn) {
+      queueBtn.disabled = true;
+      queueBtn.textContent = queueButtonLabelForStatus(job.status);
+    }
+    if (manageBtn) {
+      manageBtn.classList.remove("hidden");
+      manageBtn.dataset.jobId = String(job.id);
+    }
+    if (stateEl) {
+      stateEl.classList.remove("hidden");
+      stateEl.dataset.mode = job.status;
+      stateEl.textContent = `${queueBadgeLabelForStatus(job.status)} as job #${job.id}`;
+    }
+  };
+
+  const applyEpisodeQueueSummaryState = (episodeNode, summary) => {
+    const badge = episodeNode.querySelector(".tv-episode-queue-badge");
+    episodeNode.classList.remove("queue-active", "queue-running", "queue-queued");
+    if (!badge) return;
+
+    if (!summary || !Array.isArray(summary.jobs) || summary.jobs.length === 0) {
+      badge.classList.add("hidden");
+      badge.textContent = "";
+      delete badge.dataset.mode;
+      return;
+    }
+
+    const label = queueBadgeLabelForStatus(summary.status);
+    const suffix = summary.jobs.length > 1 ? ` (${summary.jobs.length})` : "";
+    episodeNode.classList.add("queue-active", `queue-${summary.status}`);
+    badge.classList.remove("hidden");
+    badge.dataset.mode = summary.status;
+    badge.textContent = `${label}${suffix}`;
   };
 
   return {
     focusDownloadJob,
     bindQueueManageButtons,
     applyCardQueueState,
+    applyTvResultQueueState,
+    applyEpisodeQueueSummaryState,
     buildActiveQueueStateFromJobs,
     buildDownloadedTvEpisodesFromJobs,
   };

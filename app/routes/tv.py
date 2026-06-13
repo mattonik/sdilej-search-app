@@ -9,6 +9,7 @@ from ..main import (
     TvSeasonSearchPayload,
     _annotate_downloaded_tv_search_items,
     _build_tv_lookup_payload,
+    _coerce_title_metadata_payload,
     _get_services,
     _resolve_tv_search_alias_context,
     _resolve_tv_search_alias_sets,
@@ -138,10 +139,13 @@ def api_tv_search_episode(request: Request, payload: TvEpisodeSearchPayload):
     try:
         services = _get_services(request)
         show_summary = _resolve_tv_show_summary(payload.show_name, show_id=payload.show_id, services=services)
-        title_metadata = payload.title_metadata or services.metadata_resolver.resolve_tv(
-            payload.show_name,
-            show=show_summary,
-        ).to_dict()
+        title_metadata_obj = _coerce_title_metadata_payload(payload.title_metadata)
+        if title_metadata_obj is None:
+            title_metadata_obj = services.metadata_resolver.resolve_tv(
+                payload.show_name,
+                show=show_summary,
+            )
+        title_metadata = title_metadata_obj.to_dict()
         local_context = _resolve_tv_show_local_context(payload.show_name, title_metadata=title_metadata, services=services)
         aliases, all_search_aliases, search_aliases = _resolve_tv_search_alias_sets(
             show_name=payload.show_name,
@@ -195,10 +199,13 @@ def api_tv_search_jobs_create(request: Request, payload: TvSeasonSearchPayload):
         episodes = services.tv_client.get_episodes(payload.show_id)
         selected_seasons, _selected_episode_map, selected_items = _selected_tv_search_items(payload, episodes)
         show_summary = _resolve_tv_show_summary(payload.show_name, show_id=payload.show_id, services=services)
-        title_metadata = payload.title_metadata or services.metadata_resolver.resolve_tv(
-            payload.show_name,
-            show=show_summary,
-        ).to_dict()
+        title_metadata_obj = _coerce_title_metadata_payload(payload.title_metadata)
+        if title_metadata_obj is None:
+            title_metadata_obj = services.metadata_resolver.resolve_tv(
+                payload.show_name,
+                show=show_summary,
+            )
+        title_metadata = title_metadata_obj.to_dict()
         local_context = _resolve_tv_show_local_context(payload.show_name, title_metadata=title_metadata, services=services)
         annotated_items = _annotate_downloaded_tv_search_items(selected_items, local_context=local_context)
         aliases, all_search_aliases, search_aliases = _resolve_tv_search_alias_sets(
