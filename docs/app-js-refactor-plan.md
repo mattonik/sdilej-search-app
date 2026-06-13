@@ -479,6 +479,28 @@ The following behaviors must be preserved unless a separate task changes them in
   - browser E2E: `2 passed, 52 deselected`
   - diff check: clean
 - Commit:
+  - `2016e7f` `Extract file search runtime from app.js`
+
+### Entry 3.5
+
+- Date: `2026-06-13`
+- Type: `test hardening`
+- Summary:
+  - added a dedicated TV UI safety net before starting the high-risk `tv-search.js` extraction
+  - extended [`tests/test_e2e_ui.py`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/tests/test_e2e_ui.py) with browser-level non-regression coverage for:
+    - TV polling preserving open season state and the selected results filter
+    - TV episode queue state transitioning from queued to downloaded after download completion
+    - `Search anyway` replacing downloaded episode state with live search results
+  - kept the tests deterministic by driving real browser polling against a local uvicorn app while mutating test storage directly instead of depending on background workers
+- Tests run:
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `git diff --check`
+- Result:
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `5 passed, 52 deselected`
+  - diff check: clean
+- Commit:
   - pending at log update time
 
 ## Phase 4 Log

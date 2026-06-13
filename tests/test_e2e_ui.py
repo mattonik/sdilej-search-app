@@ -88,6 +88,14 @@ def build_search_response(query: str, results: list[SearchResult]) -> SearchResp
     )
 
 
+def dump_search_result(result: SearchResult) -> dict:
+    if hasattr(result, "model_dump"):
+        return result.model_dump(mode="json")
+    if hasattr(result, "to_dict"):
+        return result.to_dict()
+    return dict(result)
+
+
 class FakeSdilejClient:
     def __init__(self, timeout_seconds: int = 20, responses_by_query: dict[str, list[SearchResult]] | None = None) -> None:
         self.timeout_seconds = timeout_seconds
@@ -315,6 +323,51 @@ def _build_tv_search_app(tmp_path: Path):
     return app
 
 
+def _build_tv_polling_app(
+    tmp_path: Path,
+    *,
+    search_responses: dict[str, list[SearchResult]] | None = None,
+    downloaded_episode_codes: tuple[str, ...] = (),
+):
+    media_root = tmp_path / "media"
+    os.environ["DOWNLOAD_DIR"] = str(media_root)
+    season_dir = media_root / "kids" / "tv" / "Bluey" / "S01"
+    season_dir.mkdir(parents=True, exist_ok=True)
+    for code in downloaded_episode_codes:
+        (season_dir / f"Bluey.{code}.mkv").write_text("video", encoding="utf-8")
+
+    storage = Storage(db_path=str(tmp_path / "tv-polling.db"))
+    storage.init_db()
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Bluey",
+        original_title="Bluey",
+        local_titles=["Bluey"],
+        aliases=["Bluey"],
+        genres=["Children", "Family"],
+        summary="A family-friendly animated series.",
+        content_type="Animation",
+        year=2018,
+        source="test",
+        source_ids={},
+    )
+    client = FakeSdilejClient(
+        responses_by_query=search_responses
+        or {
+            "Bluey S01E01": [build_search_result(file_id=201, title="Bluey S01E01 Magic Xylophone")],
+            "Bluey S01E02": [build_search_result(file_id=202, title="Bluey S01E02 Hospital")],
+        }
+    )
+    app = create_app(
+        storage_instance=storage,
+        client_instance=client,
+        tv_client_instance=FakeTvMazeClient(),
+        metadata_resolver_instance=E2EMetadataResolver(metadata),
+        start_workers=False,
+    )
+    return app, storage, media_root
+
+
 @pytest.mark.e2e
 def test_file_search_view_and_filter_state_persist(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
@@ -357,3 +410,173 @@ def test_tv_search_marks_downloaded_episode_without_searching(tmp_path) -> None:
         expect_text.wait_for(state="visible")
         assert "downloaded" in expect_text.text_content().lower()
         assert first_episode.locator("button", has_text="Search anyway").count() == 1
+
+
+@pytest.mark.e2e
+def test_tv_polling_preserves_open_season_and_selected_filter(tmp_path) -> None:
+    app, storage, _ = _build_tv_polling_app(tmp_path, downloaded_episode_codes=("S01E01",))
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "Bluey")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowSummaryCard")
+        page.click("#tvSelectAllSeasons")
+        page.click("#tvSearchBtn")
+
+        season = page.locator("#tvResults details.tv-season").first
+        season.locator("summary").click()
+        page.wait_for_selector("#tvResults details.tv-season[open] .tv-episode-card")
+        page.locator('.tv-results-filter-chip[data-filter="downloaded"]').click()
+
+        job_id = storage.list_tv_search_jobs(limit=10)[0]["id"]
+        claimed = storage.claim_next_tv_search_job()
+        assert claimed is not None
+        assert claimed["id"] == job_id
+        storage.mark_tv_search_episode_running(job_id, 1, 2)
+        storage.complete_tv_search_episode(
+            job_id,
+            season_number=1,
+            episode_number=2,
+            query_variants=["Bluey S01E02"],
+            query_errors=[],
+            results=[dump_search_result(build_search_result(file_id=202, title="Bluey S01E02 Hospital"))],
+        )
+        storage.finalize_tv_search_job(job_id)
+
+        page.wait_for_function(
+            """() => {
+              const status = document.querySelector('#tvStatus');
+              return Boolean(status && /complete/i.test(status.textContent || ''));
+            }""",
+            timeout=10000,
+        )
+
+        assert season.get_attribute("open") is not None
+        assert page.locator('.tv-results-filter-chip[data-filter="downloaded"].active').count() == 1
+
+
+@pytest.mark.e2e
+def test_tv_episode_queue_state_transitions_to_downloaded(tmp_path) -> None:
+    app, storage, media_root = _build_tv_polling_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "Bluey")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowSummaryCard")
+        page.click("#tvSelectAllSeasons")
+        page.click("#tvSearchBtn")
+
+        season = page.locator("#tvResults details.tv-season").first
+        season.locator("summary").click()
+        episode_card = page.locator("#tvResults details.tv-season[open] .tv-episode-card").nth(1)
+        episode_card.wait_for()
+        job_id = storage.list_tv_search_jobs(limit=10)[0]["id"]
+        claimed = storage.claim_next_tv_search_job()
+        assert claimed is not None
+        assert claimed["id"] == job_id
+        storage.mark_tv_search_episode_running(job_id, 1, 1)
+        storage.complete_tv_search_episode(
+            job_id,
+            season_number=1,
+            episode_number=1,
+            query_variants=["Bluey S01E01"],
+            query_errors=[],
+            results=[dump_search_result(build_search_result(file_id=201, title="Bluey S01E01 Magic Xylophone"))],
+        )
+        storage.mark_tv_search_episode_running(job_id, 1, 2)
+        storage.complete_tv_search_episode(
+            job_id,
+            season_number=1,
+            episode_number=2,
+            query_variants=["Bluey S01E02"],
+            query_errors=[],
+            results=[dump_search_result(build_search_result(file_id=202, title="Bluey S01E02 Hospital"))],
+        )
+        storage.finalize_tv_search_job(job_id)
+
+        page.wait_for_function(
+            """() => {
+              const cards = document.querySelectorAll('#tvResults details.tv-season[open] .tv-episode-card');
+              const secondCard = cards[1];
+              return Boolean(secondCard && /done/i.test(secondCard.querySelector('.tv-episode-status')?.textContent || ''));
+            }""",
+            timeout=10000,
+        )
+        episode_card.locator("button", has_text="Add best to queue").click()
+        page.wait_for_selector("#queueDialogBackdrop:not(.hidden)")
+        page.locator("#queueDialogForm button[type='submit']").click()
+
+        page.wait_for_function(
+            """() => {
+              const badge = document.querySelector('#tvResults details.tv-season[open] .tv-episode-card:nth-of-type(2) .tv-episode-queue-badge');
+              return Boolean(badge && !badge.classList.contains('hidden'));
+            }""",
+            timeout=10000,
+        )
+
+        job = storage.claim_next_download_job()
+        assert job is not None
+        save_path = media_root / "kids" / "tv" / "Bluey" / "S01" / "Bluey.S01E02.mkv"
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        save_path.write_text("video", encoding="utf-8")
+        storage.complete_download_job(
+            job["id"],
+            save_path=str(save_path),
+            final_url="https://sdilej.cz/final/202",
+            bytes_total=123456,
+            status_code=200,
+        )
+
+        page.wait_for_function(
+            """() => {
+              const cards = Array.from(document.querySelectorAll('#tvResults details.tv-season[open] .tv-episode-card'));
+              const target = cards[1];
+              const status = target?.querySelector('.tv-episode-status');
+              return Boolean(status && /downloaded/i.test(status.textContent || ''));
+            }""",
+            timeout=10000,
+        )
+        assert episode_card.locator("button", has_text="Search anyway").count() == 1
+
+
+@pytest.mark.e2e
+def test_tv_search_anyway_replaces_downloaded_state_with_live_results(tmp_path) -> None:
+    app, _, _ = _build_tv_polling_app(
+        tmp_path,
+        search_responses={
+            "Bluey S01E01": [build_search_result(file_id=201, title="Bluey S01E01 Magic Xylophone")],
+            "Bluey 1x01": [build_search_result(file_id=201, title="Bluey S01E01 Magic Xylophone")],
+            "Bluey 1x1": [build_search_result(file_id=201, title="Bluey S01E01 Magic Xylophone")],
+        },
+        downloaded_episode_codes=("S01E01",),
+    )
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "Bluey")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowSummaryCard")
+        page.click("#tvSelectAllSeasons")
+        page.click("#tvSearchBtn")
+
+        page.locator("#tvResults details.tv-season summary").first.click()
+        episode_card = page.locator("#tvResults details.tv-season[open] .tv-episode-card").first
+        episode_card.locator("button", has_text="Search anyway").click()
+
+        page.wait_for_function(
+            """() => {
+              const link = document.querySelector('#tvResults details.tv-season[open] .tv-episode-card .tv-result-item a');
+              const status = document.querySelector('#tvResults details.tv-season[open] .tv-episode-card .tv-episode-status');
+              return Boolean(link && /Bluey S01E01 Magic Xylophone/i.test(link.textContent || '') && status && /done/i.test(status.textContent || ''));
+            }""",
+            timeout=10000,
+        )
+        assert episode_card.locator(".tv-episode-status").text_content().lower().find("done") >= 0
