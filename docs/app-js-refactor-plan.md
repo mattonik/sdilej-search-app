@@ -312,7 +312,7 @@ The following behaviors must be preserved unless a separate task changes them in
 - Result:
   - not applicable
 - Commit:
-  - pending at document creation time
+  - `ad459a7` `Add app.js refactor implementation plan`
 
 ### Entry 0.2
 
@@ -416,6 +416,32 @@ The following behaviors must be preserved unless a separate task changes them in
     - classification preview
     - edit-vs-enqueue submit flow
   - the dialog remains reusable from file search, TV results and downloads actions
+- Tests run:
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `git diff --check`
+- Result:
+  - mocked suite: `49 passed, 1 skipped, 3 deselected`
+  - browser E2E: `2 passed, 52 deselected`
+  - diff check: clean
+- Commit:
+  - `0e66f18` `Extract queue dialog from app.js`
+
+### Entry 3.3
+
+- Date: `2026-06-13`
+- Type: `implementation`
+- Summary:
+  - extracted downloads and account panel behavior into [`app/static/js/downloads.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/downloads.js)
+  - moved out of `app.js`:
+    - download queue rendering
+    - download queue refresh/settings/account refresh
+    - download enqueue form handling
+    - queue action handlers
+    - download settings form handling
+    - account form and clear handling
+  - resolved the queue-dialog/downloads mutual dependency in bootstrap code through explicit closure callbacks instead of cross-module imports
+  - kept file search toolbar controls and movie info flow in `app.js` for the next extraction step
 - Tests run:
   - `.venv/bin/pytest -m 'not live'`
   - `RUN_E2E=1 .venv/bin/pytest -m e2e`
