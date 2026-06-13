@@ -1,17 +1,11 @@
-import { basenameFromPath, esc, stripHtml, truncateText } from "./dom-utils.js";
+import { esc, stripHtml, truncateText } from "./dom-utils.js";
 import {
-  ACTIVE_QUEUE_STATUSES,
-  buildEpisodeQueueKey,
-  buildFileQueueKey,
-  buildTvEpisodeKey,
   FILE_RESULTS_FILTER_KEY,
   FILE_RESULTS_VIEW_KEY,
   FILE_SEARCH_ADVANCED_KEY,
-  normalizeQueueTextKey,
-  sameStringList,
   TV_ACTIVE_JOB_KEY,
 } from "./keys.js";
-import { pluralize, queueBadgeLabelForStatus, queueButtonLabelForStatus } from "./formatters.js";
+import { pluralize } from "./formatters.js";
 import {
   clearActiveTvSearchJobId,
   readActiveTvSearchJobId,
@@ -28,6 +22,7 @@ import { api } from "./api.js";
 import { createRuntimeState } from "./runtime-state.js";
 import { initDownloads } from "./downloads.js";
 import { initFileSearch } from "./file-search.js";
+import { createQueueUiHelpers } from "./queue-ui.js";
 import { initTvSearch } from "./tv-search.js";
 import { initQueueDialog } from "./queue-dialog.js";
 import { initWorkspaceTabs } from "./workspace-tabs.js";
@@ -129,141 +124,21 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
       let tvEpisodeSearchesInFlight = state.tvEpisodeSearchesInFlight;
       let tvShowSummarySignature = state.tvShowSummarySignature;
       let activeQueueState = state.activeQueueState;
-
       const setDownloadStatus = (text, mode = "neutral") => {
         if (!downloadStatus) return;
         downloadStatus.textContent = text || "";
         downloadStatus.dataset.mode = mode;
       };
-
-      const focusDownloadJob = (jobId) => {
-        const job = downloadJobsEl?.querySelector(`[data-job-id="${CSS.escape(String(jobId))}"]`);
-        if (!job) {
-          setDownloadStatus(`Job #${jobId} is no longer visible in the queue.`, "neutral");
-          return false;
-        }
-        job.scrollIntoView({ behavior: "smooth", block: "center" });
-        job.classList.add("job-focused");
-        window.setTimeout(() => job.classList.remove("job-focused"), 1200);
-        setDownloadStatus(`Showing job #${jobId}.`, "ok");
-        return true;
-      };
-
-      const applyCardQueueState = (...args) => tvApi?.applyCardQueueState?.(...args);
-
-      const bindQueueManageButtons = (root = document) => {
-        root.querySelectorAll(".queue-manage-btn, .tv-manage-btn").forEach((btn) => {
-          if (btn.dataset.bound === "1") return;
-          btn.dataset.bound = "1";
-          btn.addEventListener("click", () => {
-            const jobId = Number(btn.dataset.jobId || 0);
-            focusDownloadJob(jobId);
-          });
-        });
-      };
-
-      const buildCurrentTvShowAliasKeys = () => {
-        const titleMetadata = tvResultsState?.title_metadata || tvLookupState?.title_metadata || null;
-        const candidates = [
-          tvResultsState?.show?.name,
-          tvLookupState?.show?.name,
-          ...(Array.isArray(tvResultsState?.aliases) ? tvResultsState.aliases : []),
-          ...(Array.isArray(tvLookupState?.aliases) ? tvLookupState.aliases : []),
-          ...(Array.isArray(tvResultsState?.all_search_aliases) ? tvResultsState.all_search_aliases : []),
-          ...(Array.isArray(tvLookupState?.all_search_aliases) ? tvLookupState.all_search_aliases : []),
-          ...(Array.isArray(tvResultsState?.search_aliases) ? tvResultsState.search_aliases : []),
-          ...(Array.isArray(tvLookupState?.search_aliases) ? tvLookupState.search_aliases : []),
-          titleMetadata?.canonical_title,
-          titleMetadata?.original_title,
-          ...(Array.isArray(titleMetadata?.local_titles) ? titleMetadata.local_titles : []),
-          ...(Array.isArray(titleMetadata?.aliases) ? titleMetadata.aliases : []),
-        ];
-        return new Set(candidates.map((value) => normalizeQueueTextKey(value)).filter(Boolean));
-      };
-
-      const buildDownloadedTvEpisodesFromJobs = (jobs) => {
-        const aliasKeys = buildCurrentTvShowAliasKeys();
-        if (!aliasKeys.size) return new Map();
-
-        const downloadedEpisodes = new Map();
-        (Array.isArray(jobs) ? jobs : []).forEach((job) => {
-          if (String(job?.status || "") !== "done") return;
-          if (String(job?.media_kind || "") !== "tv") return;
-
-          const normalizedSeries = normalizeQueueTextKey(job?.series_name);
-          if (!normalizedSeries || !aliasKeys.has(normalizedSeries)) return;
-
-          const episodeKey = buildTvEpisodeKey({
-            seasonNumber: job?.season_number,
-            episodeNumber: job?.episode_number,
-          });
-          if (!episodeKey) return;
-
-          const label =
-            basenameFromPath(job?.save_path) ||
-            basenameFromPath(job?.working_path) ||
-            String(job?.title || "").trim() ||
-            `S${String(job?.season_number || "").padStart(2, "0")}E${String(job?.episode_number || "").padStart(2, "0")}`;
-
-          const current = downloadedEpisodes.get(episodeKey) || [];
-          if (!current.includes(label)) {
-            current.push(label);
-            downloadedEpisodes.set(episodeKey, current);
-          }
-        });
-
-        return downloadedEpisodes;
-      };
-
-      const buildDownloadedEpisodeState = (episode, downloadedFiles) => ({
-        ...episode,
-        status: "downloaded",
-        result_count: 0,
-        results: [],
-        downloaded_files: Array.isArray(downloadedFiles) ? [...downloadedFiles] : [],
+      const queueUi = createQueueUiHelpers({
+        downloadJobsEl,
+        setDownloadStatus,
       });
-
-      const choosePreferredActiveJob = (current, candidate) => {
-        if (!current) return candidate;
-        if (!candidate) return current;
-        if (current.status !== "running" && candidate.status === "running") return candidate;
-        if (current.status === "running" && candidate.status !== "running") return current;
-        return Number(candidate.id || 0) > Number(current.id || 0) ? candidate : current;
-      };
-
-      const buildActiveQueueStateFromJobs = (jobs) => {
-        const fileJobs = new Map();
-        const episodeJobs = new Map();
-        const jobsById = new Map();
-
-        (Array.isArray(jobs) ? jobs : []).forEach((job) => {
-          const status = String(job?.status || "");
-          if (!ACTIVE_QUEUE_STATUSES.has(status)) return;
-
-          jobsById.set(String(job.id), job);
-
-          const fileKey = buildFileQueueKey({ fileId: job.file_id, detailUrl: job.detail_url });
-          if (fileKey) {
-            fileJobs.set(fileKey, choosePreferredActiveJob(fileJobs.get(fileKey), job));
-          }
-
-          const episodeKey = buildEpisodeQueueKey({
-            seriesName: job.series_name,
-            seasonNumber: job.season_number,
-            episodeNumber: job.episode_number,
-          });
-          if (episodeKey) {
-            const current = episodeJobs.get(episodeKey);
-            const summary = current || { jobs: [], primaryJob: job, status: status };
-            summary.jobs.push(job);
-            summary.primaryJob = choosePreferredActiveJob(summary.primaryJob, job);
-            summary.status = summary.primaryJob.status;
-            episodeJobs.set(episodeKey, summary);
-          }
-        });
-
-        return { fileJobs, episodeJobs, jobsById };
-      };
+      const {
+        focusDownloadJob,
+        bindQueueManageButtons,
+        applyCardQueueState,
+        buildActiveQueueStateFromJobs,
+      } = queueUi;
 
       const setActiveQueueStateFromJobs = (jobs) => {
         activeQueueState = buildActiveQueueStateFromJobs(jobs);
