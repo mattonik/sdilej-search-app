@@ -461,6 +461,92 @@ def test_tv_polling_preserves_open_season_and_selected_filter(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_tv_show_summary_persists_without_re_rendering_poster(tmp_path) -> None:
+    media_root = tmp_path / "media"
+    os.environ["DOWNLOAD_DIR"] = str(media_root)
+    (media_root / "kids" / "tv" / "Bluey" / "S01").mkdir(parents=True, exist_ok=True)
+    (media_root / "kids" / "tv" / "Bluey" / "S01" / "Bluey.S01E01.mkv").write_text("video", encoding="utf-8")
+
+    storage = Storage(db_path=str(tmp_path / "tv-summary.db"))
+    storage.init_db()
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Bluey",
+        original_title="Bluey",
+        local_titles=["Bluey"],
+        aliases=["Bluey"],
+        genres=["Children", "Family"],
+        summary="A family-friendly animated series.",
+        content_type="Animation",
+        year=2018,
+        source="test",
+        source_ids={},
+    )
+    app = create_app(
+        storage_instance=storage,
+        client_instance=FakeSdilejClient(
+            responses_by_query={
+                "Bluey S01E02": [build_search_result(file_id=202, title="Bluey S01E02 Hospital")]
+            }
+        ),
+        tv_client_instance=FakeTvMazeClient(
+            show=TvShowSummary(
+                id=321,
+                name="Bluey",
+                premiered="2018-10-01",
+                language="English",
+                image_url="https://example.com/bluey-poster.jpg",
+                type="Animation",
+                genres=["Children", "Family"],
+                summary="A family-friendly animated series.",
+            )
+        ),
+        metadata_resolver_instance=E2EMetadataResolver(metadata),
+        start_workers=False,
+    )
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "Bluey")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowSummaryCard img")
+        page.click("#tvSelectAllSeasons")
+        page.click("#tvSearchBtn")
+        page.wait_for_selector("#tvResults details.tv-season")
+        page.locator("#tvResults details.tv-season summary").first.click()
+        page.wait_for_selector("#tvResults details.tv-season[open] .tv-episode-card")
+
+        poster_src = page.locator("#tvShowSummaryCard img").get_attribute("src")
+        assert poster_src == "https://example.com/bluey-poster.jpg"
+        page.evaluate("window.__tvPosterNode = document.querySelector('#tvShowSummaryCard img')")
+
+        job_id = storage.list_tv_search_jobs(limit=10)[0]["id"]
+        storage.mark_tv_search_episode_running(job_id, 1, 2)
+        storage.complete_tv_search_episode(
+            job_id,
+            season_number=1,
+            episode_number=2,
+            query_variants=["Bluey S01E02"],
+            query_errors=[],
+            results=[dump_search_result(build_search_result(file_id=202, title="Bluey S01E02 Hospital"))],
+        )
+        storage.finalize_tv_search_job(job_id)
+
+        page.wait_for_function(
+            """() => {
+              const summary = document.querySelector('#tvShowSummaryCard');
+              return Boolean(summary && /Bluey/.test(summary.textContent || '') && /family-friendly/i.test(summary.textContent || ''));
+            }""",
+            timeout=10000,
+        )
+        assert page.evaluate(
+            """() => window.__tvPosterNode === document.querySelector('#tvShowSummaryCard img')"""
+        )
+
+
+@pytest.mark.e2e
 def test_tv_episode_queue_state_transitions_to_downloaded(tmp_path) -> None:
     app, storage, media_root = _build_tv_polling_app(tmp_path)
 

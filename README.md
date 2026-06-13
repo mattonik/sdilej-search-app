@@ -11,7 +11,7 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
   - per-season mode: search all episodes or only selected episodes
   - grouped results by season/episode (`SxxExx`)
   - multi-pattern episode queries (`SxxExx`, `x`, `Season N Episode M`)
-  - result ranking: language-priority first (if language set), then larger file size
+  - result ranking: precision-first alias matching with episode-title boosts and language-aware tie breaking
 - Category filters: all, video, audio, archive, image
 - Sort options: relevance, most downloaded, newest, largest, smallest
 - Language-aware filtering with filename heuristics (e.g. `SK`, `(sk)`, `CZ EN SK`, `SKtit`, `SK dabing`)
@@ -256,6 +256,6 @@ curl -X POST http://localhost:8080/api/downloads \\
 curl http://localhost:8080/api/downloads
 ```
 
-## Next step
+## Backlog
 
-This app already exposes stable search metadata and file detail URLs, which is the base needed for a queued download manager in the next iteration.
+See [docs/ux-backlog.md](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/docs/ux-backlog.md) for the current prioritized UX and stability backlog.

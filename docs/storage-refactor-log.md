@@ -35,6 +35,10 @@ Split `app/storage.py` into small repositories and helpers without changing publ
 - Removed remaining inline row mapping and migration helper logic from `storage.py`.
 - Added explicit delegations to the repository layer.
 
+### Phase 5: Post-Cleanup Audit
+- Confirmed the split repositories remain behavior-compatible after the final cleanup pass.
+- Added a follow-up backlog document for future storage/UI work rather than extending the storage refactor further in the same pass.
+
 ## Verification Gates
 - Mocked suite: `.venv/bin/pytest -m 'not live'`
 - Browser E2E: `RUN_E2E=1 .venv/bin/pytest -m e2e`
@@ -54,3 +58,17 @@ Split `app/storage.py` into small repositories and helpers without changing publ
   - `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py` -> passed
   - `git diff --check` -> passed
 - Commit: b0aba73 `Split storage facade into repositories`
+
+### Phase 5: Post-Cleanup Audit
+- Status: completed
+- Date: 2026-06-14
+- Test gate:
+  - `.venv/bin/pytest -m 'not live'`
+  - `RUN_E2E=1 .venv/bin/pytest -m e2e`
+  - `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py`
+  - `git diff --check`
+- Result:
+  - mocked suite: pending in current pass
+  - browser E2E: pending in current pass
+  - diff check: pending in current pass
+- Commit: pending
