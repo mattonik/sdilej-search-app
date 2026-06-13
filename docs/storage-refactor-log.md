@@ -53,4 +53,4 @@ Split `app/storage.py` into small repositories and helpers without changing publ
   - `RUN_LIVE_SMOKE=1 .venv/bin/pytest -m live` -> `3 passed, 1 skipped, 49 deselected`
   - `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py` -> passed
   - `git diff --check` -> passed
-- Commit: pending
+- Commit: b0aba73 `Split storage facade into repositories`
