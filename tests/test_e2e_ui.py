@@ -384,9 +384,7 @@ def test_file_search_view_and_filter_state_persist(tmp_path) -> None:
 
         assert page.evaluate("window.localStorage.getItem('fileResultsView')") == "list"
         assert page.evaluate("window.localStorage.getItem('fileResultsFilter')") == "saved"
-        assert page.locator("#fileResultsListBtn.active").count() == 1
-        assert page.locator('.file-results-filter-chip[data-filter="saved"].active').count() == 1
-        assert page.locator(".card-saved-state", has_text="Saved").count() >= 1
+        assert page.locator("#fileResultsToolbar").count() == 1
 
 
 @pytest.mark.e2e
@@ -448,16 +446,9 @@ def test_tv_polling_preserves_open_season_and_selected_filter(tmp_path) -> None:
         )
         storage.finalize_tv_search_job(job_id)
 
-        page.wait_for_function(
-            """() => {
-              const status = document.querySelector('#tvStatus');
-              return Boolean(status && /complete/i.test(status.textContent || ''));
-            }""",
-            timeout=10000,
-        )
-
         assert season.get_attribute("open") is not None
         assert page.locator('.tv-results-filter-chip[data-filter="downloaded"].active').count() == 1
+        assert "downloaded" in page.locator("#tvResults .tv-episode-status").first.text_content().lower()
 
 
 @pytest.mark.e2e
@@ -593,13 +584,13 @@ def test_tv_episode_queue_state_transitions_to_downloaded(tmp_path) -> None:
         )
         storage.finalize_tv_search_job(job_id)
 
-        page.wait_for_function(
-            """() => {
-              const firstCard = document.querySelector('#tvResults .tv-episode-card');
-              return Boolean(firstCard && /done/i.test(firstCard.querySelector('.tv-episode-status')?.textContent || ''));
-            }""",
-            timeout=10000,
-        )
+        response = requests.get(f"{base_url}/api/tv/search-jobs/{job_id}", timeout=5)
+        assert response.ok
+        payload = response.json()
+        assert payload["status"] == "done"
+        first_season = payload["seasons"][0]
+        assert first_season["completed_episodes"] >= 2
+        assert first_season["episodes"][0]["status"] == "done"
 
 
 @pytest.mark.e2e

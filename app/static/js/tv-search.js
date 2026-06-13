@@ -14,6 +14,14 @@ import {
   writeSearchMode,
 } from "./storage-state.js";
 import { createTvViewHelpers } from "./tv-view.js";
+import {
+  buildDownloadedEpisodeState,
+  buildDownloadedTvEpisodesFromJobs,
+  buildTvEpisodeOutcome,
+  formatTvAliasSummary,
+  matchesTvResultsFilter,
+  sameTvDownloadedEpisodeState,
+} from "./tv-state.js";
 
 export const initTvSearch = ({
   elements,
@@ -68,22 +76,8 @@ export const initTvSearch = ({
 
   const tvView = createTvViewHelpers({
     state,
-    getTvEpisodeOutcome: (episode, episodeQueueSummary) => {
-      const status = String(episode?.status || "pending");
-      const resultCount = Number(episode?.result_count || 0);
-      const hasMatches = resultCount > 0;
-      const hasActiveQueue = Boolean(episodeQueueSummary && Array.isArray(episodeQueueSummary.jobs) && episodeQueueSummary.jobs.length);
-      const isDownloaded = status === "downloaded";
-      const isNoMatch = !hasMatches && ["done", "failed", "canceled"].includes(status);
-      return { status, resultCount, hasMatches, hasActiveQueue, isNoMatch, isDownloaded };
-    },
-    matchesTvResultsFilter: (outcome) => {
-      if (state.tvResultsFilter === "matches") return outcome.hasMatches;
-      if (state.tvResultsFilter === "queued") return outcome.hasActiveQueue;
-      if (state.tvResultsFilter === "downloaded") return outcome.isDownloaded;
-      if (state.tvResultsFilter === "unmatched") return outcome.isNoMatch;
-      return true;
-    },
+    getTvEpisodeOutcome: buildTvEpisodeOutcome,
+    matchesTvResultsFilter: (outcome) => matchesTvResultsFilter(outcome, state.tvResultsFilter),
     buildActiveSearchAliases: (payload) => {
       const aliases = [
         ...(Array.isArray(payload?.all_search_aliases) ? payload.all_search_aliases : []),
@@ -109,15 +103,6 @@ export const initTvSearch = ({
         `;
       };
 
-      const formatTvAliasSummary = (knownAliases, searchAliases) => {
-        const knownCount = Array.isArray(knownAliases) ? knownAliases.length : 0;
-        const searchCount = Array.isArray(searchAliases) ? searchAliases.length : 0;
-        if (searchCount > 0 && knownCount > 0 && searchCount !== knownCount) {
-          return `using ${searchCount} safe search aliases from ${knownCount} known aliases`;
-        }
-        const count = searchCount || knownCount;
-        return `${count} aliases`;
-      };
 
       const renderTvShowSummary = (state) => {
         const show = state?.show || null;
@@ -598,60 +583,6 @@ export const initTvSearch = ({
         bindQueueManageButtons(document);
       };
 
-      const syncTvResultsDownloadedStateFromJobs = (jobs) => {
-        if (!tvResultsState) return false;
-
-        const downloadedEpisodes = buildDownloadedTvEpisodesFromJobs(jobs, tvLookupState, tvResultsState);
-        if (!downloadedEpisodes.size) return false;
-
-        let changed = false;
-
-        if (Array.isArray(tvResultsState.seasons)) {
-          tvResultsState.seasons = tvResultsState.seasons.map((season) => {
-            if (!Array.isArray(season?.episodes)) return season;
-
-            let seasonChanged = false;
-            const nextEpisodes = season.episodes.map((episode) => {
-              const episodeKey = buildTvEpisodeKey({
-                seasonNumber: episode?.season_number,
-                episodeNumber: episode?.episode_number,
-              });
-              const downloadedFiles = episodeKey ? downloadedEpisodes.get(episodeKey) : null;
-              if (!downloadedFiles) return episode;
-              const currentOverride = tvEpisodeSearchOverrides.get(episodeKey);
-              if (currentOverride && currentOverride._manualSearchOverride) return episode;
-
-              const alreadyDownloaded =
-                String(episode?.status || "") === "downloaded" && sameStringList(episode?.downloaded_files, downloadedFiles);
-              if (alreadyDownloaded) return episode;
-
-              seasonChanged = true;
-              changed = true;
-              return buildDownloadedEpisodeState(episode, downloadedFiles);
-            });
-
-            return seasonChanged ? { ...season, episodes: nextEpisodes } : season;
-          });
-        }
-
-        Array.from(tvEpisodeSearchOverrides.entries()).forEach(([episodeKey, episode]) => {
-          const downloadedFiles = downloadedEpisodes.get(String(episodeKey));
-          if (!downloadedFiles) return;
-          if (episode && episode._manualSearchOverride) return;
-
-          const alreadyDownloaded =
-            String(episode?.status || "") === "downloaded" && sameStringList(episode?.downloaded_files, downloadedFiles);
-          if (alreadyDownloaded) return;
-
-          tvEpisodeSearchOverrides.set(episodeKey, buildDownloadedEpisodeState(episode, downloadedFiles));
-          changed = true;
-        });
-
-        return changed;
-      };
-
-      const getTvEpisodeOutcome = tvView.getTvEpisodeOutcome;
-      const matchesTvResultsFilter = tvView.matchesTvResultsFilter;
       const buildTvResultsStatsHtml = tvView.buildTvResultsStatsHtml;
       const buildTvResultsFilterChipsHtml = tvView.buildTvResultsFilterChipsHtml;
       const buildTvResultsToolbarHtml = tvView.buildTvResultsToolbarHtml;
@@ -661,6 +592,7 @@ export const initTvSearch = ({
       const renderTvSearchDetails = tvView.renderTvSearchDetails;
 
       const bindTvResultsToolbar = () => {
+
         tvResults.querySelectorAll(".tv-results-filter-chip").forEach((btn) => {
           if (btn.dataset.bound === "1") return;
           btn.dataset.bound = "1";
