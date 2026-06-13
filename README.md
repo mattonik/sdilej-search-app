@@ -50,9 +50,16 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - `app/main.py` - FastAPI app factory + route registration
 - `app/db.py` - shared SQLite connection policy + retry helpers
 - `app/sdilej_client.py` - HTTP client + parser + URL mapping
+- `app/routes/` - domain route modules (`search`, `tv`, `downloads`, `health`)
 - `app/templates/index.html` - UI shell
 - `app/static/js/app.js` - main browser runtime
 - `app/static/js/saved.js` - saved-picks browser runtime
+- `app/static/js/file-search.js` - file-search runtime
+- `app/static/js/tv-search.js` - TV runtime
+- `app/static/js/queue-ui.js` - shared queue rendering/actions
+- `app/static/js/tv-view.js` - TV rendering helpers
+- `app/static/js/api.js` - browser API wrapper
+- `app/static/js/runtime-state.js` - shared browser runtime state
 - `app/static/style.css` - styling
 - `docs/reverse-engineering.md` - endpoint and URL analysis notes
 

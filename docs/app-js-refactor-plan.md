@@ -259,6 +259,35 @@ Move the most complex feature last, once the shared runtime and lower-risk extra
 - polling and rerender behavior remain stable
 - existing E2E coverage stays green
 
+## Post-Refactor Cleanup
+
+The refactor is complete and the app remains behavior-compatible with the pre-split runtime.
+
+### Final State
+
+- [`app/static/js/app.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/app.js) is now a thin bootstrap/orchestration entrypoint.
+- TV rendering helpers live in [`app/static/js/tv-view.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/tv-view.js).
+- Queue rendering logic is centralized in [`app/static/js/queue-ui.js`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/static/js/queue-ui.js).
+- The current validated refactor endpoint is commit [`a9c3eea`](https://github.com/mattonik/sdilej-search-app/commit/a9c3eea) `Fix TV search-anyway state handling`.
+
+### Verified Gates
+
+- `pytest -m "not live"` passed
+- `RUN_E2E=1 pytest -m e2e` passed
+- `RUN_LIVE_SMOKE=1 pytest -m live` passed
+- `git diff --check` passed
+
+### Remaining Operational Note
+
+- `docker build -t sdilej-search:test .` requires a running Docker daemon / Colima instance.
+- The code path itself is verified; only local container availability was blocking the last build smoke at the time of cleanup.
+
+### Next Suggested Maintenance Work
+
+- consider a small `queue-ui.js` cleanup if further TV/file queue coupling appears
+- keep the TV E2E cases as the regression gate for future UI refactors
+- later, split `storage.py` into domain repositories if backend maintainability becomes the next priority
+
 ## Phase 5: Final Bootstrap Cleanup
 
 ### Goal
