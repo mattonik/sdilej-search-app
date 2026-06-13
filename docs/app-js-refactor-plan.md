@@ -288,6 +288,34 @@ The refactor is complete and the app remains behavior-compatible with the pre-sp
 - keep the TV E2E cases as the regression gate for future UI refactors
 - later, split `storage.py` into domain repositories if backend maintainability becomes the next priority
 
+## Storage Split Log
+
+This section tracks the incremental decomposition of `app/storage.py` into smaller repositories without changing the public `Storage` facade.
+
+### Stage 1: Settings And Metadata Repositories
+
+**Outcome**
+
+- extracted [`app/storage_settings.py`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/storage_settings.py)
+- extracted [`app/storage_metadata.py`](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/app/storage_metadata.py)
+- `Storage` now delegates download/library settings and metadata cache access to dedicated repositories
+
+**Verification**
+
+- `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py`
+- `.venv/bin/pytest -m 'not live'`
+- `RUN_E2E=1 .venv/bin/pytest -m e2e`
+- `RUN_LIVE_SMOKE=1 .venv/bin/pytest -m live`
+
+**Result**
+
+- all gates passed
+- no public API or runtime behavior changes detected
+
+**Commit**
+
+- pending at the time of this document update
+
 ## Phase 5: Final Bootstrap Cleanup
 
 ### Goal

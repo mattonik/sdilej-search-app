@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from .db import connect_sqlite, run_with_sqlite_retry
-from .media_routing import default_library_paths
 from .models import SearchResponse
+from .storage_metadata import StorageMetadataRepository
+from .storage_settings import StorageSettingsRepository
 
 DEFAULT_DB_PATH = "./data/app.db"
-DEFAULT_LIBRARY_PATHS = default_library_paths()
 
 
 class Storage:
@@ -19,6 +19,8 @@ class Storage:
         configured_path = db_path or os.getenv("APP_DB_PATH", DEFAULT_DB_PATH)
         self.db_path = Path(configured_path).expanduser().resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.metadata = StorageMetadataRepository(self)
+        self.settings = StorageSettingsRepository(self)
 
     def _connect(self) -> sqlite3.Connection:
         return connect_sqlite(self.db_path)
@@ -501,22 +503,7 @@ class Storage:
         lookup_key: str,
         lookup_year: int | None,
     ) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                """
-                SELECT payload_json, source, updated_at
-                FROM title_metadata_cache
-                WHERE lookup_kind = ? AND lookup_key = ? AND lookup_year_key = ?
-                """,
-                (lookup_kind, lookup_key, self._year_key(lookup_year)),
-            ).fetchone()
-        if row is None:
-            return None
-        return {
-            "payload": json.loads(row["payload_json"]),
-            "source": row["source"],
-            "updated_at": row["updated_at"],
-        }
+        return self.metadata.get_title_metadata_cache_entry(lookup_kind, lookup_key, lookup_year)
 
     def get_title_metadata_cache(
         self,
@@ -537,36 +524,7 @@ class Storage:
         payload: dict[str, Any],
         source: str,
     ) -> None:
-        def operation() -> None:
-            with self._connect() as conn:
-                conn.execute(
-                    """
-                    INSERT INTO title_metadata_cache (
-                        lookup_kind,
-                        lookup_key,
-                        lookup_year_key,
-                        lookup_year,
-                        payload_json,
-                        source,
-                        updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-                    ON CONFLICT(lookup_kind, lookup_key, lookup_year_key) DO UPDATE SET
-                        lookup_year=excluded.lookup_year,
-                        payload_json=excluded.payload_json,
-                        source=excluded.source,
-                        updated_at=datetime('now')
-                    """,
-                    (
-                        lookup_kind,
-                        lookup_key,
-                        self._year_key(lookup_year),
-                        lookup_year,
-                        json.dumps(payload),
-                        source,
-                    ),
-                )
-
-        self._with_write_retry(operation)
+        self.metadata.set_title_metadata_cache(lookup_kind, lookup_key, lookup_year, payload, source)
 
     def enqueue_tv_search_job(
         self,
@@ -1621,36 +1579,7 @@ class Storage:
         return summary
 
     def get_download_settings(self) -> dict[str, int]:
-        defaults = {
-            "max_concurrent_jobs": 1,
-            "default_chunk_count": 1,
-            "bandwidth_limit_kbps": 0,
-        }
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT key, value
-                FROM app_settings
-                WHERE key IN ('download_max_concurrent_jobs', 'download_default_chunk_count', 'download_bandwidth_limit_kbps')
-                """
-            ).fetchall()
-
-        mapping = {row["key"]: row["value"] for row in rows}
-        settings = dict(defaults)
-        try:
-            if "download_max_concurrent_jobs" in mapping:
-                settings["max_concurrent_jobs"] = int(mapping["download_max_concurrent_jobs"])
-            if "download_default_chunk_count" in mapping:
-                settings["default_chunk_count"] = int(mapping["download_default_chunk_count"])
-            if "download_bandwidth_limit_kbps" in mapping:
-                settings["bandwidth_limit_kbps"] = int(mapping["download_bandwidth_limit_kbps"])
-        except ValueError:
-            return defaults
-
-        settings["max_concurrent_jobs"] = max(1, min(settings["max_concurrent_jobs"], 8))
-        settings["default_chunk_count"] = max(1, min(settings["default_chunk_count"], 8))
-        settings["bandwidth_limit_kbps"] = max(0, settings["bandwidth_limit_kbps"])
-        return settings
+        return self.settings.get_download_settings()
 
     def set_download_settings(
         self,
@@ -1659,84 +1588,14 @@ class Storage:
         default_chunk_count: int,
         bandwidth_limit_kbps: int,
     ) -> dict[str, int]:
-        max_concurrent_jobs = max(1, min(int(max_concurrent_jobs), 8))
-        default_chunk_count = max(1, min(int(default_chunk_count), 8))
-        bandwidth_limit_kbps = max(0, int(bandwidth_limit_kbps))
-
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO app_settings (key, value, updated_at)
-                VALUES ('download_max_concurrent_jobs', ?, datetime('now'))
-                ON CONFLICT(key) DO UPDATE SET
-                    value=excluded.value,
-                    updated_at=datetime('now')
-                """,
-                (str(max_concurrent_jobs),),
-            )
-            conn.execute(
-                """
-                INSERT INTO app_settings (key, value, updated_at)
-                VALUES ('download_default_chunk_count', ?, datetime('now'))
-                ON CONFLICT(key) DO UPDATE SET
-                    value=excluded.value,
-                    updated_at=datetime('now')
-                """,
-                (str(default_chunk_count),),
-            )
-            conn.execute(
-                """
-                INSERT INTO app_settings (key, value, updated_at)
-                VALUES ('download_bandwidth_limit_kbps', ?, datetime('now'))
-                ON CONFLICT(key) DO UPDATE SET
-                    value=excluded.value,
-                    updated_at=datetime('now')
-                """,
-                (str(bandwidth_limit_kbps),),
-            )
-        return {
-            "max_concurrent_jobs": max_concurrent_jobs,
-            "default_chunk_count": default_chunk_count,
-            "bandwidth_limit_kbps": bandwidth_limit_kbps,
-        }
+        return self.settings.set_download_settings(
+            max_concurrent_jobs=max_concurrent_jobs,
+            default_chunk_count=default_chunk_count,
+            bandwidth_limit_kbps=bandwidth_limit_kbps,
+        )
 
     def get_library_paths(self) -> dict[str, Any]:
-        defaults: dict[str, Any] = {
-            **DEFAULT_LIBRARY_PATHS,
-            "confirm_on_uncertain": True,
-        }
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT key, value
-                FROM app_settings
-                WHERE key IN (
-                    'library_movies_dir',
-                    'library_tv_dir',
-                    'library_kids_movies_dir',
-                    'library_kids_tv_dir',
-                    'library_unsorted_dir',
-                    'library_confirm_on_uncertain'
-                )
-                """
-            ).fetchall()
-
-        mapping = {row["key"]: row["value"] for row in rows}
-        result = dict(defaults)
-        if "library_movies_dir" in mapping:
-            result["movies_dir"] = mapping["library_movies_dir"]
-        if "library_tv_dir" in mapping:
-            result["tv_dir"] = mapping["library_tv_dir"]
-        if "library_kids_movies_dir" in mapping:
-            result["kids_movies_dir"] = mapping["library_kids_movies_dir"]
-        if "library_kids_tv_dir" in mapping:
-            result["kids_tv_dir"] = mapping["library_kids_tv_dir"]
-        if "library_unsorted_dir" in mapping:
-            result["unsorted_dir"] = mapping["library_unsorted_dir"]
-        if "library_confirm_on_uncertain" in mapping:
-            result["confirm_on_uncertain"] = mapping["library_confirm_on_uncertain"] in {"1", "true", "yes", "on"}
-
-        return result
+        return self.settings.get_library_paths()
 
     def set_library_paths(
         self,
@@ -1748,28 +1607,14 @@ class Storage:
         unsorted_dir: str,
         confirm_on_uncertain: bool,
     ) -> dict[str, Any]:
-        value_map = {
-            "library_movies_dir": movies_dir,
-            "library_tv_dir": tv_dir,
-            "library_kids_movies_dir": kids_movies_dir,
-            "library_kids_tv_dir": kids_tv_dir,
-            "library_unsorted_dir": unsorted_dir,
-            "library_confirm_on_uncertain": "1" if confirm_on_uncertain else "0",
-        }
-        with self._connect() as conn:
-            for key, value in value_map.items():
-                conn.execute(
-                    """
-                    INSERT INTO app_settings (key, value, updated_at)
-                    VALUES (?, ?, datetime('now'))
-                    ON CONFLICT(key) DO UPDATE SET
-                        value=excluded.value,
-                        updated_at=datetime('now')
-                    """,
-                    (key, str(value)),
-                )
-
-        return self.get_library_paths()
+        return self.settings.set_library_paths(
+            movies_dir=movies_dir,
+            tv_dir=tv_dir,
+            kids_movies_dir=kids_movies_dir,
+            kids_tv_dir=kids_tv_dir,
+            unsorted_dir=unsorted_dir,
+            confirm_on_uncertain=confirm_on_uncertain,
+        )
 
     def _row_to_saved_candidate(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
