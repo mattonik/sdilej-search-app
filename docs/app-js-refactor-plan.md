@@ -508,7 +508,7 @@ The following behaviors must be preserved unless a separate task changes them in
 ### Entry 4.1
 
 - Date: 2026-06-13
-- Commit: pending
+- Commit: `82b5e1f`
 - Scope: extracted the TV runtime from `app.js` into `app/static/js/tv-search.js`, kept the TV lookup/search/polling/downloaded-state behavior intact, and wired the bootstrap to the extracted module.
 - Verification:
   - `PYTHONPYCACHEPREFIX=/tmp/pycache .venv/bin/python -m py_compile app/*.py tests/*.py`
