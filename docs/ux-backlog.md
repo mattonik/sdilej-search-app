@@ -43,6 +43,19 @@ Goal: avoid re-growing the old monoliths.
 
 Goal: pick only low-risk improvements that are clearly useful.
 
+Completed in this pass:
+- File search scan flow:
+  - compact list readability was improved
+  - saved/queued/playable markers are easier to scan
+  - copy-link shortcut was added
+- TV scan flow:
+  - summary and badge spacing was tightened
+  - copy-link shortcut was added to episode results
+- Downloads panel:
+  - job metadata pills were tightened
+  - copy-path/copy-link shortcut was added
+
+Remaining low-risk polish candidates:
 - File search scan flow:
   - keep the compact list readable at larger result counts
   - make sure saved/queued/playable markers stay easy to scan
