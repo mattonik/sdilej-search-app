@@ -94,6 +94,14 @@ export const createTvViewHelpers = ({
           </button>
           <button
             type="button"
+            class="tv-copy-link-btn btn btn-secondary btn-sm"
+            data-copy-value="${esc(item?.detail_url || "")}"
+            data-copy-label="Copy link"
+          >
+            Copy link
+          </button>
+          <button
+            type="button"
             class="queue-manage-btn btn btn-secondary btn-sm hidden"
             data-job-id=""
             aria-label="Manage queue item"

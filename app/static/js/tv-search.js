@@ -841,6 +841,41 @@ export const initTvSearch = ({
         });
       };
 
+      const copyTextToClipboard = async (text) => {
+        const value = String(text || "").trim();
+        if (!value) return false;
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(value);
+          return true;
+        }
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "true");
+        textarea.style.position = "fixed";
+        textarea.style.top = "-9999px";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return ok;
+      };
+
+      const bindTvCopyButtons = () => {
+        tvResults.querySelectorAll("button.tv-copy-link-btn").forEach((btn) => {
+          if (btn.dataset.bound === "1") return;
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", async () => {
+            const originalLabel = btn.dataset.copyLabel || "Copy link";
+            const copied = await copyTextToClipboard(btn.dataset.copyValue || "");
+            btn.textContent = copied ? "Copied" : "Copy failed";
+            window.setTimeout(() => {
+              btn.textContent = originalLabel;
+            }, 1200);
+          });
+        });
+      };
+
       const bindTvEpisodeAliasButtons = () => {
         tvResults.querySelectorAll(".tv-episode-alias-btn, .tv-episode-search-anyway-btn").forEach((btn) => {
           if (btn.dataset.bound === "1") return;
@@ -1090,6 +1125,7 @@ export const initTvSearch = ({
         restoreTvResultsUiState(uiState);
         bindTvResultsToolbar();
         bindTvQueueButtons();
+        bindTvCopyButtons();
         bindTvEpisodeSearchAnywayButtons();
         bindTvEpisodeAliasButtons();
         applyActiveQueueStateToSearchResults();
@@ -1204,6 +1240,7 @@ export const initTvSearch = ({
     bindTvEpisodeSearchAnywayButtons,
     renderTvSeasonPicker,
     bindTvQueueButtons,
+    bindTvCopyButtons,
     bindTvEpisodeAliasButtons,
     renderTvResults,
     refreshTvResultsQueueUi,

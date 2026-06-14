@@ -638,8 +638,9 @@ def test_tv_search_anyway_replaces_downloaded_state_with_live_results(tmp_path) 
         page.wait_for_function(
             """() => {
               const link = document.querySelector('#tvResults details.tv-season[open] .tv-episode-card .tv-result-item a');
+              const copyBtn = document.querySelector('#tvResults details.tv-season[open] .tv-episode-card .tv-copy-link-btn');
               const status = document.querySelector('#tvResults details.tv-season[open] .tv-episode-card .tv-episode-status');
-              return Boolean(link && /Bluey S01E01 Magic Xylophone/i.test(link.textContent || '') && status && /done/i.test(status.textContent || ''));
+              return Boolean(link && copyBtn && /Bluey S01E01 Magic Xylophone/i.test(link.textContent || '') && status && /done/i.test(status.textContent || ''));
             }""",
             timeout=10000,
         )
