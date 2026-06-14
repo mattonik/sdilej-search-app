@@ -14,14 +14,7 @@ import {
   writeSearchMode,
 } from "./storage-state.js";
 import { createTvViewHelpers } from "./tv-view.js";
-import {
-  buildDownloadedEpisodeState,
-  buildDownloadedTvEpisodesFromJobs,
-  buildTvEpisodeOutcome,
-  formatTvAliasSummary,
-  matchesTvResultsFilter,
-  sameTvDownloadedEpisodeState,
-} from "./tv-state.js";
+import { buildTvEpisodeOutcome, formatTvAliasSummary, matchesTvResultsFilter } from "./tv-state.js";
 
 export const initTvSearch = ({
   elements,

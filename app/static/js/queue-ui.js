@@ -1,5 +1,6 @@
-import { buildEpisodeQueueKey, buildFileQueueKey, buildTvEpisodeKey, normalizeQueueTextKey } from "./keys.js";
+import { buildEpisodeQueueKey, buildFileQueueKey, buildTvEpisodeKey } from "./keys.js";
 import { queueBadgeLabelForStatus, queueButtonLabelForStatus } from "./formatters.js";
+import { buildDownloadedTvEpisodesFromJobs } from "./tv-state.js";
 
 const choosePreferredActiveJob = (current, candidate) => {
   if (!current) return candidate;
@@ -106,58 +107,6 @@ export const createQueueUiHelpers = ({ downloadJobsEl, setDownloadStatus } = {})
     });
 
     return { fileJobs, episodeJobs, jobsById };
-  };
-
-  const buildDownloadedTvEpisodesFromJobs = (jobs, tvLookupState, tvResultsState) => {
-    const candidates = [
-      tvResultsState?.show?.name,
-      tvLookupState?.show?.name,
-      ...(Array.isArray(tvResultsState?.aliases) ? tvResultsState.aliases : []),
-      ...(Array.isArray(tvLookupState?.aliases) ? tvLookupState.aliases : []),
-      ...(Array.isArray(tvResultsState?.all_search_aliases) ? tvResultsState.all_search_aliases : []),
-      ...(Array.isArray(tvLookupState?.all_search_aliases) ? tvLookupState.all_search_aliases : []),
-      ...(Array.isArray(tvResultsState?.search_aliases) ? tvResultsState.search_aliases : []),
-      ...(Array.isArray(tvLookupState?.search_aliases) ? tvLookupState.search_aliases : []),
-      tvResultsState?.title_metadata?.canonical_title,
-      tvLookupState?.title_metadata?.canonical_title,
-      tvResultsState?.title_metadata?.original_title,
-      tvLookupState?.title_metadata?.original_title,
-      ...(Array.isArray(tvResultsState?.title_metadata?.local_titles) ? tvResultsState.title_metadata.local_titles : []),
-      ...(Array.isArray(tvLookupState?.title_metadata?.local_titles) ? tvLookupState.title_metadata.local_titles : []),
-      ...(Array.isArray(tvResultsState?.title_metadata?.aliases) ? tvResultsState.title_metadata.aliases : []),
-      ...(Array.isArray(tvLookupState?.title_metadata?.aliases) ? tvLookupState.title_metadata.aliases : []),
-    ];
-    const aliasKeys = new Set(candidates.map((value) => normalizeQueueTextKey(value)).filter(Boolean));
-    if (!aliasKeys.size) return new Map();
-
-    const downloadedEpisodes = new Map();
-    (Array.isArray(jobs) ? jobs : []).forEach((job) => {
-      if (String(job?.status || "") !== "done") return;
-      if (String(job?.media_kind || "") !== "tv") return;
-
-      const normalizedSeries = normalizeQueueTextKey(job?.series_name);
-      if (!normalizedSeries || !aliasKeys.has(normalizedSeries)) return;
-
-      const episodeKey = buildTvEpisodeKey({
-        seasonNumber: job?.season_number,
-        episodeNumber: job?.episode_number,
-      });
-      if (!episodeKey) return;
-
-      const label =
-        job?.save_path ||
-        job?.working_path ||
-        String(job?.title || "").trim() ||
-        `S${String(job?.season_number || "").padStart(2, "0")}E${String(job?.episode_number || "").padStart(2, "0")}`;
-
-      const current = downloadedEpisodes.get(episodeKey) || [];
-      if (!current.includes(label)) {
-        current.push(label);
-        downloadedEpisodes.set(episodeKey, current);
-      }
-    });
-
-    return downloadedEpisodes;
   };
 
   const applyTvResultQueueState = (row, job) => {
