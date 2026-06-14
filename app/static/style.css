@@ -623,6 +623,10 @@ textarea {
   font-size: 0.84rem;
 }
 
+.file-results-sort-shortcut strong {
+  color: var(--text);
+}
+
 .file-results-debug {
   border-top: 1px solid #e5edf5;
   padding-top: 0.5rem;
@@ -1441,6 +1445,16 @@ textarea {
   font-size: 0.84rem;
 }
 
+.tv-results-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid #dbe8ef;
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  background: #f8fbfd;
+}
+
 .tv-results-stats strong {
   color: var(--text);
 }
@@ -1545,9 +1559,17 @@ textarea {
 }
 
 .tv-summary-count {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.4rem;
+  align-items: center;
   color: var(--muted);
   font-weight: 500;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
+}
+
+.tv-summary-count::after {
+  content: "";
 }
 
 .tv-season-queue-badge,
@@ -1557,7 +1579,7 @@ textarea {
   gap: 0.35rem;
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 0.12rem 0.5rem;
+  padding: 0.14rem 0.52rem;
   font-size: 0.74rem;
   font-weight: 600;
   color: var(--muted);
@@ -1625,7 +1647,7 @@ textarea {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  padding: 0.15rem 0.5rem;
+  padding: 0.16rem 0.52rem;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
