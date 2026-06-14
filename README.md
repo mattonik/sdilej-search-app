@@ -258,4 +258,4 @@ curl http://localhost:8080/api/downloads
 
 ## Backlog
 
-See [docs/ux-backlog.md](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/docs/ux-backlog.md) for the current prioritized UX and stability backlog.
+See [docs/ux-backlog.md](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/docs/ux-backlog.md) for the closed UX and stability log.
