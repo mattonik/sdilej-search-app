@@ -110,6 +110,8 @@ Recommended local release gate before pushing or building for the server:
 
 This gate expects a running Docker daemon (for example Colima or Docker Desktop) so the final image build step can complete.
 
+GitHub Actions mirrors that release gate in `.github/workflows/ci.yml` on pull requests and pushes to `main`/`master`. A separate manual live smoke workflow lives in `.github/workflows/live-smoke.yml`.
+
 Optional config:
 
 - `TITLE_METADATA_CACHE_TTL_HOURS`
@@ -128,6 +130,8 @@ Open: `http://localhost:8080`
 
 This repo now includes workflow:
 - `.github/workflows/docker-publish.yml`
+- `.github/workflows/ci.yml`
+- `.github/workflows/live-smoke.yml`
 
 It publishes ARM image (`linux/arm64`) to:
 - `ghcr.io/<github-user-or-org>/<repo-name>`
