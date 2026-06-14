@@ -376,6 +376,7 @@ def test_file_search_view_and_filter_state_persist(tmp_path) -> None:
         page = browser.new_page()
         page.goto(f"{base_url}/?query=Bluey&category=video", wait_until="networkidle")
         page.wait_for_selector("#fileResultsToolbar")
+        page.wait_for_selector(".result-card .copy-link-btn")
 
         page.click("#fileResultsListBtn")
         page.locator('.file-results-filter-chip[data-filter="saved"]').click()

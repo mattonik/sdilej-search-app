@@ -440,6 +440,14 @@
                   {% endif %}
                   <button
                     type="button"
+                    class="copy-link-btn btn btn-secondary btn-sm"
+                    data-url="{{ item.detail_url }}"
+                    data-default-label="Copy link"
+                  >
+                    Copy link
+                  </button>
+                  <button
+                    type="button"
                     class="save-btn btn btn-soft btn-sm"
                     data-default-label="Save pick"
                     data-file-id="{{ item.file_id if item.file_id is not none else '' }}"

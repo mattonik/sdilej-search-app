@@ -229,6 +229,26 @@ export const initFileSearch = ({
     statusEl.dataset.mode = mode;
   };
 
+  const copyTextToClipboard = async (text) => {
+    const value = String(text || "").trim();
+    if (!value) return false;
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-9999px";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return ok;
+  };
+
   document.querySelectorAll(".movie-info-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const cardBody = btn.closest(".card-body");
@@ -279,6 +299,28 @@ export const initFileSearch = ({
         setMovieInfoStatus(statusEl, "Movie info lookup failed.", "error");
       } finally {
         btn.disabled = false;
+      }
+    });
+  });
+
+  document.querySelectorAll(".copy-link-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const originalLabel = btn.dataset.defaultLabel || "Copy link";
+      const copiedLabel = "Copied";
+      const failedLabel = "Copy failed";
+      const url = btn.dataset.url || "";
+
+      btn.disabled = true;
+      try {
+        const ok = await copyTextToClipboard(url);
+        btn.textContent = ok ? copiedLabel : failedLabel;
+      } catch (_) {
+        btn.textContent = failedLabel;
+      } finally {
+        window.setTimeout(() => {
+          btn.textContent = originalLabel;
+          btn.disabled = false;
+        }, 1200);
       }
     });
   });
