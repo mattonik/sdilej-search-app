@@ -269,6 +269,7 @@ textarea {
 .download-job.queue-job-highlight {
   border-color: #38bdf8;
   box-shadow: 0 0 0 3px rgb(56 189 248 / 0.22);
+  background: #f0fbff;
 }
 
 .job-head {
@@ -276,12 +277,14 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 0.7rem;
+  flex-wrap: wrap;
 }
 
 .job-head a {
   font-weight: 600;
   text-decoration: none;
   color: var(--text);
+  word-break: break-word;
 }
 
 .job-status {
@@ -338,9 +341,20 @@ textarea {
 .job-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 0.9rem;
+  gap: 0.35rem 0.45rem;
   color: var(--muted);
-  font-size: 0.83rem;
+  font-size: 0.78rem;
+}
+
+.job-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid #dbe4ee;
+  border-radius: 999px;
+  padding: 0.16rem 0.5rem;
+  background: #f8fbfd;
+  white-space: nowrap;
 }
 
 .job-error {
@@ -857,24 +871,58 @@ textarea {
 
 .results-grid[data-view="list"] .result-card {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 0.65rem;
+  padding: 0.65rem;
   align-items: stretch;
 }
 
 .results-grid[data-view="list"] .thumb-wrap {
   height: 100%;
   min-height: 100%;
-  aspect-ratio: auto;
+  aspect-ratio: 16 / 10;
 }
 
 .results-grid[data-view="list"] .card-body {
   display: grid;
   align-content: start;
-  gap: 0.7rem;
+  gap: 0.45rem;
 }
 
 .results-grid[data-view="list"] .card-body h3 {
   margin-bottom: 0;
+}
+
+.results-grid[data-view="list"] .result-card-head {
+  gap: 0.35rem;
+}
+
+.results-grid[data-view="list"] .result-state-badges {
+  gap: 0.3rem;
+}
+
+.results-grid[data-view="list"] .result-badge {
+  padding: 0.16rem 0.45rem;
+}
+
+.results-grid[data-view="list"] .result-primary-meta {
+  gap: 0.25rem 0.55rem;
+  font-size: 0.79rem;
+}
+
+.results-grid[data-view="list"] .card-actions {
+  margin-top: 0.2rem;
+  gap: 0.42rem;
+}
+
+.results-grid[data-view="list"] .card-actions .btn {
+  min-height: 32px;
+  padding: 0.38rem 0.62rem;
+  font-size: 0.78rem;
+}
+
+.results-grid[data-view="list"] .result-details {
+  padding-top: 0.4rem;
 }
 
 .saved-grid {
@@ -1380,7 +1428,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.75rem 0.8rem;
-  background: #fff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   display: grid;
   gap: 0.65rem;
 }
@@ -1391,6 +1439,10 @@ textarea {
   gap: 0.55rem 0.9rem;
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.tv-results-stats strong {
+  color: var(--text);
 }
 
 .tv-results-filters {
