@@ -43,9 +43,18 @@ Goal: avoid re-growing the old monoliths.
 
 Goal: pick only low-risk improvements that are clearly useful.
 
-- Consider a small TV summary polish only if it reduces scanning time.
-- Consider a file-search density tweak only if it makes result comparison faster.
-- Consider a downloads-panel polish only if queue management becomes harder to read.
+- File search scan flow:
+  - keep the compact list readable at larger result counts
+  - make sure saved/queued/playable markers stay easy to scan
+  - avoid changing ranking or search behavior
+- TV scan flow:
+  - keep the summary-first layout easy to read during polling
+  - preserve open season/episode state during refreshes
+  - avoid adding more technical noise to the default view
+- Downloads panel:
+  - keep queue actions easy to find and compare
+  - preserve stable job focus/highlight behavior
+  - avoid content shift while queue state updates
 - Do not add new feature scope here unless it clearly improves an existing flow.
 - Acceptance: any UX tweak should be explainable in one sentence and should not require API changes.
 
