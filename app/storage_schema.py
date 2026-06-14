@@ -34,9 +34,11 @@ class StorageSchemaRepository:
         self._ensure_index(conn, name="idx_download_jobs_status_priority_id", table="download_jobs", columns="status, priority DESC, id ASC")
         self._ensure_index(conn, name="idx_download_jobs_file_status_id", table="download_jobs", columns="file_id, status, id DESC")
         self._ensure_index(conn, name="idx_download_jobs_detail_status_id", table="download_jobs", columns="detail_url, status, id DESC")
+        self._ensure_index(conn, name="idx_download_attempts_job_id_id_desc", table="download_attempts", columns="job_id, id DESC")
         self._ensure_index(conn, name="idx_tv_search_jobs_status_priority_id", table="tv_search_jobs", columns="status, priority DESC, id ASC")
         self._ensure_index(conn, name="idx_tv_search_job_episodes_job_status_season_episode", table="tv_search_job_episodes", columns="job_id, status, season_number ASC, episode_number ASC")
         self._ensure_index(conn, name="idx_title_metadata_cache_lookup_updated_at", table="title_metadata_cache", columns="lookup_kind, lookup_key, lookup_year_key, updated_at DESC")
+        self._ensure_index(conn, name="idx_saved_candidates_updated_at_file_id", table="saved_candidates", columns="updated_at DESC, file_id DESC")
 
     def year_key(self, value: int | None) -> str:
         return "" if value is None else str(int(value))
