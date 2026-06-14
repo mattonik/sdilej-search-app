@@ -389,6 +389,20 @@ def test_file_search_view_and_filter_state_persist(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_download_job_card_exposes_copy_action(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.wait_for_selector("#refreshDownloadsBtn")
+        page.click("#refreshDownloadsBtn")
+        page.wait_for_selector('#downloadJobs [data-action="copy"]', state="attached")
+        assert page.locator('#downloadJobs [data-action="copy"]').count() >= 1
+
+
+@pytest.mark.e2e
 def test_tv_search_marks_downloaded_episode_without_searching(tmp_path) -> None:
     app = _build_tv_search_app(tmp_path)
 

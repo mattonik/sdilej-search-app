@@ -43,6 +43,26 @@ export const initDownloads = ({
     accountStatus.dataset.mode = mode;
   };
 
+  const copyTextToClipboard = async (text) => {
+    const value = String(text || "").trim();
+    if (!value) return false;
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-9999px";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return ok;
+  };
+
   const resolveKidsValue = (rawValue) => {
     if (rawValue === "yes") return true;
     if (rawValue === "no") return false;
@@ -85,6 +105,8 @@ export const initDownloads = ({
         const eta = formatEta(done, total, job.speed_bps);
         const savePath = job.save_path ? `<div><strong>Saved:</strong> <code>${esc(job.save_path)}</code></div>` : "";
         const error = job.error ? `<div class="job-error"><strong>Error:</strong> ${esc(job.error)}</div>` : "";
+        const copyValue = job.save_path || job.working_path || job.detail_url || "";
+        const copyLabel = job.save_path ? "Copy path" : "Copy link";
         return `
           <article class="download-job" data-job-id="${esc(job.id)}">
             <div class="job-head">
@@ -116,6 +138,7 @@ export const initDownloads = ({
               ${canRetry ? `<button type="button" class="btn btn-secondary btn-sm" data-action="retry" data-id="${job.id}">Retry</button>` : ""}
               ${canMoveTop ? `<button type="button" class="btn btn-secondary btn-sm" data-action="top" data-id="${job.id}">Move top</button>` : ""}
               ${(job.status === "queued" || job.status === "running") ? `<button type="button" class="btn btn-secondary btn-sm" data-action="priority" data-id="${job.id}" data-priority="${esc(job.priority)}">Set priority</button>` : ""}
+              <button type="button" class="btn btn-soft btn-sm" data-action="copy" data-id="${job.id}" data-copy-value="${esc(copyValue)}" data-copy-label="${esc(copyLabel)}">${esc(copyLabel)}</button>
               ${canRemove ? `<button type="button" class="btn btn-danger btn-sm" data-action="remove" data-id="${job.id}">Remove job</button>` : ""}
               ${canRemove ? `<button type="button" class="btn btn-danger btn-sm" data-action="remove_data" data-id="${job.id}">Remove job + data</button>` : ""}
             </div>
@@ -189,6 +212,20 @@ export const initDownloads = ({
               return;
             }
             setDownloadStatus(`Priority updated for job #${jobId}.`, "ok");
+          } else if (action === "copy") {
+            const value = btn.dataset.copyValue || "";
+            const copied = await copyTextToClipboard(value);
+            setDownloadStatus(
+              copied ? `Copied ${btn.dataset.copyLabel || "job value"} for job #${jobId}.` : `Copy failed for job #${jobId}.`,
+              copied ? "ok" : "error"
+            );
+            if (copied) {
+              const original = btn.textContent;
+              btn.textContent = "Copied";
+              window.setTimeout(() => {
+                btn.textContent = original || btn.dataset.copyLabel || "Copy link";
+              }, 1200);
+            }
           }
         } catch (_) {
           setDownloadStatus(`Action failed for job #${jobId}.`, "error");
