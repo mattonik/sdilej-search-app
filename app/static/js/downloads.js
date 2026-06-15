@@ -44,6 +44,10 @@ export const initDownloads = ({
     accountStatus.dataset.mode = mode;
   };
 
+  let refreshDownloadsInFlight = false;
+  let refreshDownloadsQueued = false;
+  let refreshDownloadsFailures = 0;
+
   const copyTextToClipboard = async (text) => {
     const value = String(text || "").trim();
     if (!value) return false;
@@ -237,20 +241,40 @@ export const initDownloads = ({
     });
   };
 
-  const refreshDownloads = async () => {
+  const refreshDownloads = async ({ notifyOnFailure = false } = {}) => {
+    if (refreshDownloadsInFlight) {
+      refreshDownloadsQueued = true;
+      return;
+    }
+    refreshDownloadsInFlight = true;
     try {
       const { ok, data } = await api.listDownloads(200);
       if (!ok) {
-        setDownloadStatus(data.error || "Failed to refresh download queue.", "error");
+        refreshDownloadsFailures += 1;
+        if (notifyOnFailure && refreshDownloadsFailures === 1) {
+          setDownloadStatus("Queue refresh failed. Retrying in background.", "neutral");
+        }
         return;
       }
+      refreshDownloadsFailures = 0;
       const summary = data.summary || {};
       downloadWorkerState.textContent = data.worker_alive ? "Worker: online" : "Worker: offline";
       downloadSummary.textContent = `Queue: ${summary.queued || 0} queued, ${summary.running || 0} running, ${summary.done || 0} done, ${summary.failed || 0} failed, ${summary.canceled || 0} canceled`;
       renderDownloadJobs(data.items || [], { refreshDownloads, enqueueDownload });
       setActiveQueueStateFromJobs(data.items || []);
     } catch (_) {
-      setDownloadStatus("Queue status unavailable.", "error");
+      refreshDownloadsFailures += 1;
+      if (notifyOnFailure && refreshDownloadsFailures === 1) {
+        setDownloadStatus("Queue refresh failed. Retrying in background.", "neutral");
+      }
+    } finally {
+      refreshDownloadsInFlight = false;
+      if (refreshDownloadsQueued) {
+        refreshDownloadsQueued = false;
+        window.setTimeout(() => {
+          refreshDownloads();
+        }, 0);
+      }
     }
   };
 
@@ -348,7 +372,7 @@ export const initDownloads = ({
 
   refreshDownloadsBtn.addEventListener("click", async () => {
     setDownloadStatus("Refreshing queue...", "neutral");
-    await refreshDownloads();
+    await refreshDownloads({ notifyOnFailure: true });
   });
 
   clearFinishedBtn.addEventListener("click", async () => {
