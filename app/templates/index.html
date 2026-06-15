@@ -15,41 +15,10 @@
 
       <nav class="workspace-tabs">
         <button type="button" class="workspace-tab btn btn-pill active" data-tab="search">Search</button>
-        <button type="button" class="workspace-tab btn btn-pill" data-tab="downloads">Account + Downloads</button>
+        <button type="button" class="workspace-tab btn btn-pill" data-tab="downloads">Downloads</button>
+        <button type="button" class="workspace-tab btn btn-pill" data-tab="account">Account</button>
         <a href="/saved" class="workspace-tab-link btn btn-pill">Saved Picks</a>
       </nav>
-
-      <section class="panel account-panel tab-section tab-downloads">
-        <div class="account-header">
-          <h2>Account Credentials</h2>
-          <div id="accountStatus" class="account-status">Checking account status...</div>
-        </div>
-
-        <form id="accountForm" class="account-form">
-          <label>
-            Login (email or username)
-            <input id="accountLogin" type="text" autocomplete="username" placeholder="your@email.com" required />
-          </label>
-
-          <label>
-            Password
-            <input id="accountPassword" type="password" autocomplete="current-password" placeholder="Your password" required />
-          </label>
-
-          <label class="checkbox-field">
-            Verify credentials
-            <span>
-              <input id="accountVerify" type="checkbox" checked />
-              validate by real login request
-            </span>
-          </label>
-
-          <div class="account-actions">
-            <button type="submit" class="btn btn-primary">Save credentials</button>
-            <button id="accountClearBtn" type="button" class="secondary-btn btn btn-secondary">Clear credentials</button>
-          </div>
-        </form>
-      </section>
 
       <section class="panel downloader-panel tab-section tab-downloads">
         <div class="downloader-header">
@@ -57,6 +26,9 @@
           <div class="downloader-meta">
             <span id="downloadWorkerState">Worker: checking...</span>
             <span id="downloadSummary">Queue: checking...</span>
+          </div>
+          <div class="downloader-actions">
+            <button type="button" id="openAccountTabBtn" class="secondary-btn btn btn-secondary btn-sm">Account</button>
           </div>
         </div>
 
@@ -146,6 +118,43 @@
 
         <div id="downloadStatus" class="download-status">Queue idle.</div>
         <div id="downloadJobs" class="download-jobs"></div>
+      </section>
+
+      <section class="panel account-panel tab-section tab-account">
+        <details id="accountDetails" class="account-details">
+          <summary class="account-summary">
+            <div class="account-summary-copy">
+              <h2>Account Credentials</h2>
+              <div id="accountStatus" class="account-status">Checking account status...</div>
+            </div>
+            <span class="account-summary-action btn btn-secondary btn-sm">Manage</span>
+          </summary>
+
+          <form id="accountForm" class="account-form">
+            <label>
+              Login (email or username)
+              <input id="accountLogin" type="text" autocomplete="username" placeholder="your@email.com" required />
+            </label>
+
+            <label>
+              Password
+              <input id="accountPassword" type="password" autocomplete="current-password" placeholder="Your password" required />
+            </label>
+
+            <label class="checkbox-field">
+              Verify credentials
+              <span>
+                <input id="accountVerify" type="checkbox" checked />
+                validate by real login request
+              </span>
+            </label>
+
+            <div class="account-actions">
+              <button type="submit" class="btn btn-primary">Save credentials</button>
+              <button id="accountClearBtn" type="button" class="secondary-btn btn btn-secondary">Clear credentials</button>
+            </div>
+          </form>
+        </details>
       </section>
 
       <section class="panel tab-section tab-search">

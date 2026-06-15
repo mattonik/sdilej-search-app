@@ -14,7 +14,14 @@ import {
   writeSearchMode,
 } from "./storage-state.js";
 import { createTvViewHelpers } from "./tv-view.js";
-import { buildTvEpisodeOutcome, formatTvAliasSummary, matchesTvResultsFilter } from "./tv-state.js";
+import {
+  buildDownloadedEpisodeState,
+  buildDownloadedTvEpisodesFromJobs,
+  buildTvEpisodeOutcome,
+  formatTvAliasSummary,
+  matchesTvResultsFilter,
+  sameTvDownloadedEpisodeState,
+} from "./tv-state.js";
 
 export const initTvSearch = ({
   elements,
@@ -1207,6 +1214,54 @@ export const initTvSearch = ({
         if (emptyState) {
           emptyState.classList.toggle("hidden", viewModel.visibleSeasons.length > 0);
         }
+      };
+
+      const syncTvResultsDownloadedStateFromJobs = (jobs) => {
+        if (!tvResultsState || !tvLookupState) return false;
+
+        const downloadedEpisodes = buildDownloadedTvEpisodesFromJobs(jobs, tvLookupState, tvResultsState);
+        const seasons = Array.isArray(tvResultsState.seasons) ? tvResultsState.seasons : [];
+        const nextOverrides = new Map(tvEpisodeSearchOverrides);
+        let changed = false;
+
+        seasons.forEach((season) => {
+          const episodes = Array.isArray(season.episodes) ? season.episodes : [];
+          episodes.forEach((episode) => {
+            const episodeKey = `${season.season_number}:${episode?.episode_number}`;
+            const queueEpisodeKey = buildEpisodeQueueKey({
+              seriesName: tvLookupState?.show?.name,
+              seasonNumber: season.season_number,
+              episodeNumber: episode?.episode_number,
+            });
+            const downloadedFiles = downloadedEpisodes.get(queueEpisodeKey || buildTvEpisodeKey({
+              seasonNumber: season.season_number,
+              episodeNumber: episode?.episode_number,
+            })) || [];
+            const current = nextOverrides.get(episodeKey) || episode;
+
+            if (current?._manualSearchOverride) return;
+
+            if (downloadedFiles.length > 0) {
+              const nextState = buildDownloadedEpisodeState(episode, downloadedFiles);
+              if (!sameTvDownloadedEpisodeState(current, downloadedFiles)) {
+                nextOverrides.set(episodeKey, nextState);
+                changed = true;
+              }
+              return;
+            }
+
+            if (String(current?.status || "") === "downloaded") {
+              nextOverrides.delete(episodeKey);
+              changed = true;
+            }
+          });
+        });
+
+        if (changed) {
+          tvEpisodeSearchOverrides = nextOverrides;
+          state.tvEpisodeSearchOverrides = tvEpisodeSearchOverrides;
+        }
+        return changed;
       };
 
   return {

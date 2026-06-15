@@ -91,6 +91,7 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
       const clearFinishedBtn = document.getElementById("clearFinishedBtn");
       const downloadSummary = document.getElementById("downloadSummary");
       const downloadWorkerState = document.getElementById("downloadWorkerState");
+      const openAccountTabBtn = document.getElementById("openAccountTabBtn");
       const workspaceTabs = Array.from(document.querySelectorAll(".workspace-tab"));
       const tabSections = Array.from(document.querySelectorAll(".tab-section"));
       const queueDialogBackdrop = document.getElementById("queueDialogBackdrop");
@@ -167,12 +168,13 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
 
       const initialTab = (() => {
         const hash = (window.location.hash || "").replace("#", "").trim();
-        if (hash === "search" || hash === "downloads") return hash;
+        if (hash === "search" || hash === "downloads" || hash === "account") return hash;
         const saved = readActiveWorkspaceTab();
-        if (saved === "search" || saved === "downloads") return saved;
+        if (saved === "search" || saved === "downloads" || saved === "account") return saved;
         return "search";
       })();
 
+      let setWorkspaceTab = null;
       let tvApi = null;
 
       let downloadsApi = null;
@@ -232,6 +234,7 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
           clearFinishedBtn,
           downloadSummary,
           downloadWorkerState,
+          openAccountTabBtn,
         },
         api,
         setActiveQueueStateFromJobs,
@@ -323,6 +326,7 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
         renderTvActiveFilters,
         syncFileFiltersToTvEditor,
         syncTvEditorToFileFilters,
+        syncTvResultsDownloadedStateFromJobs,
         setSearchMode,
         refreshActiveTvSearchJob,
       } = tvApi;
@@ -372,7 +376,7 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
       syncFileFiltersToTvEditor();
       renderFileSearchActiveFilters();
       renderTvActiveFilters();
-      initWorkspaceTabs({
+      const workspaceTabsApi = initWorkspaceTabs({
         workspaceTabs,
         tabSections,
         initialTab,
@@ -381,6 +385,8 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
           writeActiveWorkspaceTab(resolved);
         },
       });
+      setWorkspaceTab = workspaceTabsApi.setActiveTab;
+      openAccountTabBtn?.addEventListener("click", () => setWorkspaceTab?.("account"));
       setSearchMode(initialMode);
       setFileResultsView(state.fileResultsView);
       setFileResultsFilter(state.fileResultsFilter);

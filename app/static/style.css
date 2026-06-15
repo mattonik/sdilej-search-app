@@ -99,28 +99,61 @@ textarea {
   font-size: 1.1rem;
 }
 
-.account-header {
+.account-details {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fbfdff;
+  padding: 0.85rem;
+}
+
+.account-details > summary {
+  list-style: none;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.7rem;
+  cursor: pointer;
+}
+
+.account-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-summary-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.account-summary-action {
+  flex: 0 0 auto;
 }
 
 .account-status {
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+  font-size: 0.86rem;
   color: var(--muted);
+  background: #f8fafc;
 }
 
 .account-status[data-mode="ok"] {
   color: #166534;
+  background: #ecfdf5;
+  border-color: #86efac;
 }
 
 .account-status[data-mode="error"] {
   color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
 }
 
 .account-form {
+  margin-top: 0.85rem;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 0.8rem;
@@ -166,6 +199,7 @@ textarea {
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .downloader-header h2 {
@@ -179,6 +213,14 @@ textarea {
   justify-items: end;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.downloader-actions {
+  margin-left: auto;
+}
+
+.downloader-actions .btn {
+  white-space: nowrap;
 }
 
 .download-form {

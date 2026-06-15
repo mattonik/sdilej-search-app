@@ -403,6 +403,29 @@ def test_download_job_card_exposes_copy_action(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_account_tab_is_separate_and_collapsed_by_default(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.wait_for_selector("#openAccountTabBtn")
+        assert page.locator("#accountForm").is_hidden()
+
+        page.click("#openAccountTabBtn")
+        page.wait_for_selector('.workspace-tab.active[data-tab="account"]')
+        page.wait_for_selector("#accountStatus")
+        assert "Free" in page.locator("#accountStatus").text_content()
+        assert page.locator("#accountDetails").get_attribute("open") is None
+
+        page.locator("#accountDetails > summary").click()
+        page.wait_for_selector("#accountForm")
+        assert page.locator("#accountForm").is_visible()
+
+
+@pytest.mark.e2e
 def test_tv_search_marks_downloaded_episode_without_searching(tmp_path) -> None:
     app = _build_tv_search_app(tmp_path)
 

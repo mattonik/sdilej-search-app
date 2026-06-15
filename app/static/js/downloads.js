@@ -35,6 +35,7 @@ export const initDownloads = ({
     clearFinishedBtn,
     downloadSummary,
     downloadWorkerState,
+    openAccountTabBtn,
   } = elements;
 
   const setAccountStatus = (text, mode = "neutral") => {
@@ -310,10 +311,10 @@ export const initDownloads = ({
       }
       if (data.configured) {
         accountLogin.value = data.login || "";
-        setAccountStatus(`Configured for: ${data.login}`, "ok");
+        setAccountStatus(`Premium - ${data.login}`, "ok");
       } else {
         accountLogin.value = "";
-        setAccountStatus("Not configured", "neutral");
+        setAccountStatus("Free", "neutral");
       }
     } catch (_) {
       setAccountStatus("Status unavailable", "error");
