@@ -773,6 +773,11 @@ export const initTvSearch = ({
           });
         };
 
+        tvSeasonPicker.querySelectorAll("input.tv-season-check").forEach((el) => {
+          el.checked = true;
+        });
+        updateSeasonRowsState();
+
         document.getElementById("tvSelectAllSeasons")?.addEventListener("click", () => {
           tvSeasonPicker.querySelectorAll("input.tv-season-check").forEach((el) => {
             el.checked = true;

@@ -436,7 +436,7 @@ def test_tv_search_marks_downloaded_episode_without_searching(tmp_path) -> None:
         page.fill("#tvShowName", "Bluey")
         page.press("#tvShowName", "Enter")
         page.wait_for_selector("#tvShowSummaryCard")
-        page.click("#tvSelectAllSeasons")
+        assert page.locator("#tvSearchBtn").is_enabled()
         page.click("#tvSearchBtn")
         page.wait_for_selector("#tvResults details.tv-season")
         page.locator("#tvResults details.tv-season summary").first.click()
