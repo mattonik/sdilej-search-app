@@ -30,9 +30,21 @@ export const createTvViewHelpers = ({
       .join("");
   };
 
+  const buildTvResultsSortHtml = () => `
+    <label class="tv-results-sort">
+      <span>Sort results</span>
+      <select class="tv-results-sort-select">
+        <option value="best"${state.tvEpisodeResultsSortMode === "best" ? " selected" : ""}>Best match</option>
+        <option value="size_desc"${state.tvEpisodeResultsSortMode === "size_desc" ? " selected" : ""}>Largest first</option>
+        <option value="size_asc"${state.tvEpisodeResultsSortMode === "size_asc" ? " selected" : ""}>Smallest first</option>
+      </select>
+    </label>
+  `;
+
   const buildTvResultsToolbarHtml = (overview) => `
     <div class="tv-results-toolbar">
       <div class="tv-results-stats">${buildTvResultsStatsHtml(overview)}</div>
+      ${buildTvResultsSortHtml()}
       <div class="tv-results-filters">${buildTvResultsFilterChipsHtml(overview)}</div>
     </div>
   `;
@@ -117,7 +129,6 @@ export const createTvViewHelpers = ({
     seasonNumber,
     episodeNumber,
     actionLabel,
-    sortMode = "best",
     showQueries = false,
     isPrimary = false,
   }) => {
@@ -242,8 +253,8 @@ export const createTvViewHelpers = ({
             `${season.season_number}:${episode?.episode_number}`
           ) || episode;
           const outcome = getTvEpisodeOutcome(effectiveEpisode, episodeQueueSummary);
-          const sortMode = state.tvEpisodeResultSorts.get(`${season.season_number}:${episode?.episode_number}`) || "best";
-          const results = sortTvResults(Array.isArray(effectiveEpisode?.results) ? effectiveEpisode.results : [], sortMode);
+          const resultsSortMode = state.tvEpisodeResultsSortMode || "best";
+          const results = sortTvResults(Array.isArray(effectiveEpisode?.results) ? effectiveEpisode.results : [], resultsSortMode);
           const bestResult = results[0] || null;
           const alternativeResults = results.slice(1);
         return {
@@ -251,7 +262,6 @@ export const createTvViewHelpers = ({
           queueEpisodeKey,
           effectiveEpisode,
           outcome,
-          sortMode,
           bestResult,
           alternativeResults,
           episodeQueueSummary,

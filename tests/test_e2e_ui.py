@@ -685,9 +685,9 @@ def test_tv_episode_results_show_size_and_sort_by_size(tmp_path) -> None:
         episode_card = page.locator("#tvResults details.tv-season[open] .tv-episode-card").first
         assert "Size:" in (episode_card.locator(".tv-result-size").first.text_content() or "")
 
-        episode_card.locator('.tv-episode-sort-btn[data-sort-mode="size_desc"]').click()
+        page.locator("#tvResults .tv-results-sort-select").select_option("size_desc")
         page.wait_for_function(
-            """() => Boolean(document.querySelector('#tvResults details.tv-season[open] .tv-episode-sort-btn[data-sort-mode="size_desc"]')?.classList.contains('active'))""",
+            """() => document.querySelector('#tvResults .tv-results-sort-select')?.value === 'size_desc'""",
             timeout=3000,
         )
         page.wait_for_timeout(500)

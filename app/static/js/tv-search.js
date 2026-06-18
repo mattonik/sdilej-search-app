@@ -72,7 +72,7 @@ export const initTvSearch = ({
   let tvJobPollInFlight = state.tvJobPollInFlight;
   let tvEpisodeSearchOverrides = state.tvEpisodeSearchOverrides;
   let tvEpisodeSearchesInFlight = state.tvEpisodeSearchesInFlight;
-  let tvEpisodeResultSorts = state.tvEpisodeResultSorts;
+  let tvEpisodeResultsSortMode = state.tvEpisodeResultsSortMode || "best";
   let tvShowSummarySignature = state.tvShowSummarySignature;
   let searchMode = state.searchMode;
   let activeQueueState = state.activeQueueState;
@@ -233,9 +233,9 @@ export const initTvSearch = ({
         state.timer = timer;
       });
 
-      const resetTvEpisodeResultSorts = () => {
-        tvEpisodeResultSorts = new Map();
-        state.tvEpisodeResultSorts = tvEpisodeResultSorts;
+      const resetTvEpisodeResultsSortMode = () => {
+        tvEpisodeResultsSortMode = "best";
+        state.tvEpisodeResultsSortMode = tvEpisodeResultsSortMode;
       };
 
       const runTvLookup = async () => {
@@ -262,7 +262,7 @@ export const initTvSearch = ({
         state.tvEpisodeSearchOverrides = tvEpisodeSearchOverrides;
         tvEpisodeSearchesInFlight = new Set();
         state.tvEpisodeSearchesInFlight = tvEpisodeSearchesInFlight;
-        resetTvEpisodeResultSorts();
+        resetTvEpisodeResultsSortMode();
         tvLookupState = null;
         state.tvLookupState = tvLookupState;
         updateTvSearchButtonState();
@@ -344,7 +344,7 @@ export const initTvSearch = ({
         state.tvEpisodeSearchOverrides = tvEpisodeSearchOverrides;
         tvEpisodeSearchesInFlight = new Set();
         state.tvEpisodeSearchesInFlight = tvEpisodeSearchesInFlight;
-        resetTvEpisodeResultSorts();
+        resetTvEpisodeResultsSortMode();
         const maxPerVariantRaw = Number(maxResultsInput.value || 120);
         const maxPerVariant = Number.isFinite(maxPerVariantRaw) && maxPerVariantRaw > 0 ? Math.min(500, maxPerVariantRaw) : 120;
         try {
@@ -640,7 +640,6 @@ export const initTvSearch = ({
       const renderTvSearchDetails = tvView.renderTvSearchDetails;
 
       const bindTvResultsToolbar = () => {
-
         tvResults.querySelectorAll(".tv-results-filter-chip").forEach((btn) => {
           if (btn.dataset.bound === "1") return;
           btn.dataset.bound = "1";
@@ -652,6 +651,18 @@ export const initTvSearch = ({
             if (tvResultsState) renderTvResults(tvResultsState);
           });
         });
+
+        const sortSelect = tvResults.querySelector(".tv-results-sort-select");
+        if (sortSelect && sortSelect.dataset.bound !== "1") {
+          sortSelect.dataset.bound = "1";
+          sortSelect.addEventListener("change", () => {
+            const nextSort = ["best", "size_desc", "size_asc"].includes(sortSelect.value) ? sortSelect.value : "best";
+            if (tvEpisodeResultsSortMode === nextSort) return;
+            tvEpisodeResultsSortMode = nextSort;
+            state.tvEpisodeResultsSortMode = tvEpisodeResultsSortMode;
+            if (tvResultsState) renderTvResults(tvResultsState);
+          });
+        }
       };
 
       const bindTvEpisodeSearchAnywayButtons = () => {
@@ -733,23 +744,6 @@ export const initTvSearch = ({
             if (tvResultsState) renderTvResults(tvResultsState);
           }
         }, true);
-      };
-
-      const bindTvEpisodeSortControls = () => {
-        tvResults.querySelectorAll(".tv-episode-sort-btn").forEach((btn) => {
-          if (btn.dataset.bound === "1") return;
-          btn.dataset.bound = "1";
-          btn.addEventListener("click", () => {
-            const episodeKey = String(btn.dataset.episodeKey || "");
-            if (!episodeKey) return;
-            const nextSort = ["best", "size_desc", "size_asc"].includes(btn.dataset.sortMode || "") ? btn.dataset.sortMode : "best";
-            const current = tvEpisodeResultSorts.get(episodeKey) || "best";
-            if (current === nextSort) return;
-            tvEpisodeResultSorts.set(episodeKey, nextSort);
-            state.tvEpisodeResultSorts = tvEpisodeResultSorts;
-            if (tvResultsState) renderTvResults(tvResultsState);
-          });
-        });
       };
 
       const focusDownloadJob = (jobId) => {
@@ -1075,10 +1069,15 @@ export const initTvSearch = ({
           .map((season) => {
             const seasonRows = season.visibleEpisodeViewModels
               .map((viewModel) => {
-                const { episodeKey, effectiveEpisode, queueEpisodeKey, outcome, bestResult, alternativeResults, sortMode } = viewModel;
+                const { episodeKey, effectiveEpisode, queueEpisodeKey, outcome, bestResult, alternativeResults } = viewModel;
                 const resultsLabel = `${outcome.resultCount} ${pluralize(outcome.resultCount, "result")}`;
-                const sortLabel = sortMode === "size_desc" ? "Largest first" : sortMode === "size_asc" ? "Smallest first" : "Best match";
-                const primaryActionLabel = sortMode === "best" ? "Add best to queue" : "Add to queue";
+                const sortLabel =
+                  tvEpisodeResultsSortMode === "size_desc"
+                    ? "Largest first"
+                    : tvEpisodeResultsSortMode === "size_asc"
+                      ? "Smallest first"
+                      : "Best match";
+                const primaryActionLabel = tvEpisodeResultsSortMode === "best" ? "Add best to queue" : "Add to queue";
                 const bestResultHtml = bestResult
                   ? renderTvResultItem({
                       item: bestResult,
@@ -1087,7 +1086,6 @@ export const initTvSearch = ({
                       seasonNumber: effectiveEpisode.season_number ?? season.season_number ?? "",
                       episodeNumber: effectiveEpisode.episode_number ?? "",
                       actionLabel: primaryActionLabel,
-                      sortMode,
                       isPrimary: true,
                     })
                   : outcome.isDownloaded
@@ -1164,14 +1162,6 @@ export const initTvSearch = ({
                         <div class="tv-episode-title-row">
                           <span class="tv-episode-code">${esc(effectiveEpisode.episode_code)}</span>
                           <span class="tv-episode-name">${esc(effectiveEpisode.episode_name || "")}</span>
-                          <div class="tv-episode-sort" role="group" aria-label="Sort episode results">
-                            <span>Sort</span>
-                            <div class="tv-episode-sort-toggle">
-                              <button type="button" class="btn btn-pill btn-sm tv-episode-sort-btn${sortMode === "best" ? " active" : ""}" data-episode-key="${esc(episodeKey)}" data-sort-mode="best">Best match</button>
-                              <button type="button" class="btn btn-pill btn-sm tv-episode-sort-btn${sortMode === "size_desc" ? " active" : ""}" data-episode-key="${esc(episodeKey)}" data-sort-mode="size_desc">Largest first</button>
-                              <button type="button" class="btn btn-pill btn-sm tv-episode-sort-btn${sortMode === "size_asc" ? " active" : ""}" data-episode-key="${esc(episodeKey)}" data-sort-mode="size_asc">Smallest first</button>
-                            </div>
-                          </div>
                         </div>
                         <div class="tv-episode-meta-row">
                           <span class="tv-episode-status" data-mode="${esc(outcome.status)}">${esc(outcome.status || "pending")}</span>
@@ -1227,7 +1217,6 @@ export const initTvSearch = ({
         bindTvResultsToolbar();
         bindTvQueueButtons();
         bindTvCopyButtons();
-        bindTvEpisodeSortControls();
         bindTvEpisodeSearchAnywayButtons();
         bindTvEpisodeAliasButtons();
         applyActiveQueueStateToSearchResults();
