@@ -343,6 +343,21 @@ def test_download_enqueue_returns_duplicate_job_for_active_match(app_factory) ->
     assert duplicate["status"] == "queued"
 
 
+def test_download_queue_refresh_error_returns_diagnostic_payload_and_request_id(app_factory) -> None:
+    app = app_factory()
+    app.state.services.storage.list_download_jobs = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom"))  # type: ignore[assignment]
+
+    with TestClient(app) as client:
+        response = client.get("/api/downloads")
+
+    assert response.status_code == 500
+    payload = response.json()
+    assert payload["error_code"] == "downloads_refresh_failed"
+    assert payload["request_id"]
+    assert response.headers["x-request-id"] == payload["request_id"]
+    assert payload["hint"]
+
+
 def test_media_classify_uses_movie_metadata_for_kids_detection(app_factory) -> None:
     resolver = StaticMetadataResolver(
         TitleMetadata(

@@ -1,6 +1,7 @@
 import { esc } from "./dom-utils.js";
 import { formatBytes, formatEta, formatSpeed } from "./formatters.js";
 import { ACTIVE_QUEUE_STATUSES } from "./keys.js";
+import { buildStatusErrorState } from "./status-ui.js";
 
 export const initDownloads = ({
   elements,
@@ -38,10 +39,12 @@ export const initDownloads = ({
     openAccountTabBtn,
   } = elements;
 
-  const setAccountStatus = (text, mode = "neutral") => {
+  const setAccountStatus = (value, mode = "neutral") => {
     if (!accountStatus) return;
-    accountStatus.textContent = text;
-    accountStatus.dataset.mode = mode;
+    const text = typeof value === "object" && value !== null ? value.message || value.text || value.error || "" : value;
+    const nextMode = typeof value === "object" && value !== null ? value.mode || mode : mode;
+    accountStatus.textContent = text || "";
+    accountStatus.dataset.mode = nextMode;
   };
 
   let refreshDownloadsInFlight = false;
@@ -66,6 +69,10 @@ export const initDownloads = ({
     const ok = document.execCommand("copy");
     document.body.removeChild(textarea);
     return ok;
+  };
+
+  const showDownloadError = (data, fallbackMessage, options = {}) => {
+    setDownloadStatus(buildStatusErrorState(data, fallbackMessage, options));
   };
 
   const resolveKidsValue = (rawValue) => {
@@ -190,14 +197,14 @@ export const initDownloads = ({
           } else if (action === "remove") {
             const { ok, data } = await api.deleteDownloadJob(jobId);
             if (!ok) {
-              setDownloadStatus(data.error || "Failed to remove job.", "error");
+              showDownloadError(data, "Failed to remove job.");
               return;
             }
             setDownloadStatus(`Removed job #${jobId}.`, "ok");
           } else if (action === "remove_data") {
             const { ok, data } = await api.deleteDownloadJob(jobId, { withData: true });
             if (!ok) {
-              setDownloadStatus(data.error || "Failed to remove job + data.", "error");
+              showDownloadError(data, "Failed to remove job + data.");
               return;
             }
             const deletedCount = Array.isArray(data.deleted_paths) ? data.deleted_paths.length : 0;
@@ -208,12 +215,18 @@ export const initDownloads = ({
             if (raw == null) return;
             const next = Number(raw);
             if (!Number.isFinite(next)) {
-              setDownloadStatus("Priority must be a number.", "error");
+              setDownloadStatus(
+                {
+                  message: "Priority must be a number.",
+                  mode: "error",
+                  details: { hint: "Enter an integer between -1000 and 1000." },
+                }
+              );
               return;
             }
             const { ok, data } = await api.updateDownloadJobPriority(jobId, { priority: next });
             if (!ok) {
-              setDownloadStatus(data.error || "Failed to set priority.", "error");
+              showDownloadError(data, "Failed to set priority.");
               return;
             }
             setDownloadStatus(`Priority updated for job #${jobId}.`, "ok");
@@ -233,7 +246,13 @@ export const initDownloads = ({
             }
           }
         } catch (_) {
-          setDownloadStatus(`Action failed for job #${jobId}.`, "error");
+          setDownloadStatus({
+            message: `Action failed for job #${jobId}.`,
+            mode: "error",
+            details: {
+              hint: "Retry the action or check the queue status.",
+            },
+          });
         } finally {
           await refreshDownloads();
         }
@@ -252,7 +271,10 @@ export const initDownloads = ({
       if (!ok) {
         refreshDownloadsFailures += 1;
         if (notifyOnFailure && refreshDownloadsFailures === 1) {
-          setDownloadStatus("Queue refresh failed. Retrying in background.", "neutral");
+          showDownloadError(data, "Queue refresh failed. Retrying in background.", {
+            mode: "warning",
+            hint: "The last known queue state is preserved while the app retries in the background.",
+          });
         }
         return;
       }
@@ -265,7 +287,13 @@ export const initDownloads = ({
     } catch (_) {
       refreshDownloadsFailures += 1;
       if (notifyOnFailure && refreshDownloadsFailures === 1) {
-        setDownloadStatus("Queue refresh failed. Retrying in background.", "neutral");
+        setDownloadStatus({
+          message: "Queue refresh failed. Retrying in background.",
+          mode: "warning",
+          details: {
+            hint: "The last known queue state is preserved while the app retries in the background.",
+          },
+        });
       }
     } finally {
       refreshDownloadsInFlight = false;
@@ -282,7 +310,7 @@ export const initDownloads = ({
     try {
       const { ok, data } = await api.getDownloadSettings();
       if (!ok) {
-        setDownloadStatus(data.error || "Failed to load download settings.", "error");
+        showDownloadError(data, "Failed to load download settings.");
         return;
       }
       settingsMaxConcurrent.value = data.max_concurrent_jobs ?? 1;
@@ -290,7 +318,13 @@ export const initDownloads = ({
       settingsBandwidth.value = data.bandwidth_limit_kbps ?? 0;
       downloadChunkCount.value = data.default_chunk_count ?? 1;
     } catch (_) {
-      setDownloadStatus("Download settings unavailable.", "error");
+      setDownloadStatus({
+        message: "Download settings unavailable.",
+        mode: "error",
+        details: {
+          hint: "Retry the request or check the storage layer.",
+        },
+      });
     }
   };
 
@@ -300,10 +334,17 @@ export const initDownloads = ({
       if (!ok) {
         if (status === 409 && data.duplicate_job) {
           const dup = data.duplicate_job;
-          setDownloadStatus(
-            `${data.error || "Duplicate download."} Existing job #${dup.id} is ${dup.status}.`,
-            "error"
-          );
+          setDownloadStatus({
+            message: `${data.error || "Duplicate download."} Existing job #${dup.id} is ${dup.status}.`,
+            mode: "error",
+            details: {
+              error_code: data.error_code || null,
+              request_id: data.request_id || null,
+              hint: data.hint || "Open the existing job instead of enqueueing another one.",
+              retryable: data.retryable ?? null,
+              details: `duplicate_job_id=${dup.id}; duplicate_status=${dup.status}`,
+            },
+          });
           return {
             ok: false,
             duplicateJob: dup,
@@ -311,9 +352,9 @@ export const initDownloads = ({
           };
         }
         if (status === 409 && data.requires_confirmation) {
-          setDownloadStatus(data.error || "Classification confirmation is required.", "error");
+          showDownloadError(data, "Classification confirmation is required.");
         } else {
-          setDownloadStatus(data.error || "Failed to enqueue job.", "error");
+          showDownloadError(data, "Failed to enqueue job.");
         }
         return { ok: false };
       }
@@ -321,7 +362,13 @@ export const initDownloads = ({
       setDownloadStatus(`Queued #${data.id}: ${data.title || data.detail_url}`, "ok");
       return { ok: true, job: data };
     } catch (_) {
-      setDownloadStatus("Failed to enqueue job.", "error");
+      setDownloadStatus({
+        message: "Failed to enqueue job.",
+        mode: "error",
+        details: {
+          hint: "Retry the enqueue or check the download worker health.",
+        },
+      });
       return { ok: false };
     }
   };
@@ -349,7 +396,13 @@ export const initDownloads = ({
     event.preventDefault();
     const detailUrl = downloadDetailUrl.value.trim();
     if (!detailUrl) {
-      setDownloadStatus("Detail URL is required.", "error");
+      setDownloadStatus({
+        message: "Detail URL is required.",
+        mode: "error",
+        details: {
+          hint: "Paste a valid sdilej.cz detail URL before enqueueing.",
+        },
+      });
       return;
     }
 
@@ -380,13 +433,19 @@ export const initDownloads = ({
     try {
       const { ok, data } = await api.clearDownloads({ statuses: ["done", "failed", "canceled"] });
       if (!ok) {
-        setDownloadStatus(data.error || "Failed to clear jobs.", "error");
+        showDownloadError(data, "Failed to clear jobs.");
         return;
       }
       setDownloadStatus(`Cleared ${data.deleted} finished jobs.`, "ok");
       await refreshDownloads();
     } catch (_) {
-      setDownloadStatus("Failed to clear finished jobs.", "error");
+      setDownloadStatus({
+        message: "Failed to clear finished jobs.",
+        mode: "error",
+        details: {
+          hint: "Retry the action or check the storage layer.",
+        },
+      });
     }
   });
 
@@ -401,7 +460,7 @@ export const initDownloads = ({
     try {
       const { ok, data } = await api.updateDownloadSettings(payload);
       if (!ok) {
-        setDownloadStatus(data.error || "Failed to save download settings.", "error");
+        showDownloadError(data, "Failed to save download settings.");
         return;
       }
       settingsMaxConcurrent.value = data.max_concurrent_jobs;
@@ -413,7 +472,13 @@ export const initDownloads = ({
         "ok"
       );
     } catch (_) {
-      setDownloadStatus("Failed to save download settings.", "error");
+      setDownloadStatus({
+        message: "Failed to save download settings.",
+        mode: "error",
+        details: {
+          hint: "Retry the save or check the storage layer.",
+        },
+      });
     }
   });
 
@@ -435,14 +500,30 @@ export const initDownloads = ({
         verify: accountVerify.checked,
       });
       if (!ok) {
-        setAccountStatus(data.error || "Failed to save credentials.", "error");
+        setAccountStatus({
+          message: data.error || "Failed to save credentials.",
+          mode: "error",
+          details: {
+            error_code: data.error_code || null,
+            request_id: data.request_id || null,
+            hint: data.hint || null,
+            retryable: data.retryable ?? null,
+            details: data.details || null,
+          },
+        });
         return;
       }
       accountPassword.value = "";
       setAccountStatus(data.verified === false ? `Saved (not verified): ${data.login}` : `Saved for: ${data.login}`, "ok");
       await refreshAccountStatus();
     } catch (_) {
-      setAccountStatus("Failed to save credentials.", "error");
+      setAccountStatus({
+        message: "Failed to save credentials.",
+        mode: "error",
+        details: {
+          hint: "Retry the save or check the account service.",
+        },
+      });
     }
   });
 
@@ -451,13 +532,29 @@ export const initDownloads = ({
     try {
       const { ok, data } = await api.deleteAccount();
       if (!ok || !data.cleared) {
-        setAccountStatus(data.error || "Failed to clear credentials.", "error");
+        setAccountStatus({
+          message: data.error || "Failed to clear credentials.",
+          mode: "error",
+          details: {
+            error_code: data.error_code || null,
+            request_id: data.request_id || null,
+            hint: data.hint || null,
+            retryable: data.retryable ?? null,
+            details: data.details || null,
+          },
+        });
         return;
       }
       accountPassword.value = "";
       await refreshAccountStatus();
     } catch (_) {
-      setAccountStatus("Failed to clear credentials.", "error");
+      setAccountStatus({
+        message: "Failed to clear credentials.",
+        mode: "error",
+        details: {
+          hint: "Retry the action or check the account service.",
+        },
+      });
     }
   });
 

@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from .downloader import DownloadWorker
+from .diagnostics import REQUEST_ID_HEADER, new_request_id
 from .media_routing import (
     classify_media_title,
     requires_classification_confirmation,
@@ -317,6 +318,16 @@ def create_app(
     app.state.services = services
     app.state.templates = templates
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+    @app.middleware("http")
+    async def add_request_id(request: Request, call_next):  # noqa: ANN001
+        request_id = new_request_id()
+        request.state.request_id = request_id
+        response = await call_next(request)
+        if REQUEST_ID_HEADER not in response.headers:
+            response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+
     from .routes.downloads import router as downloads_router
     from .routes.health import router as health_router
     from .routes.search import router as search_router

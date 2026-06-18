@@ -14,6 +14,7 @@ import {
   writeSearchMode,
 } from "./storage-state.js";
 import { createTvViewHelpers } from "./tv-view.js";
+import { buildStatusErrorState, createStatusController } from "./status-ui.js";
 import {
   buildDownloadedEpisodeState,
   buildDownloadedTvEpisodesFromJobs,
@@ -60,6 +61,7 @@ export const initTvSearch = ({
     tvFilterLanguageScope,
     tvFilterStrictDubbing,
     tvFilterMaxResults,
+    downloadStatus,
     tvStatus,
   } = elements;
 
@@ -73,6 +75,10 @@ export const initTvSearch = ({
   let tvShowSummarySignature = state.tvShowSummarySignature;
   let searchMode = state.searchMode;
   let activeQueueState = state.activeQueueState;
+  const downloadStatusController = createStatusController(downloadStatus);
+  const tvStatusController = createStatusController(tvStatus);
+  const setDownloadStatus = downloadStatusController.setStatus;
+  const setTvStatus = tvStatusController.setStatus;
 
   const tvView = createTvViewHelpers({
     state,
@@ -229,7 +235,11 @@ export const initTvSearch = ({
       const runTvLookup = async () => {
         const showName = tvShowName.value.trim();
         if (!showName) {
-          setTvStatus("Show name is required.", "error");
+          setTvStatus({
+            message: "Show name is required.",
+            mode: "error",
+            details: { hint: "Enter a TV show name before loading seasons." },
+          });
           return;
         }
         setActiveTvSearchJobId(null);
@@ -252,7 +262,9 @@ export const initTvSearch = ({
         try {
           const { ok, data } = await api.tvLookup({ show_name: showName });
           if (!ok) {
-            setTvStatus(data.error || "TV lookup failed.", "error");
+            setTvStatus(buildStatusErrorState(data, "TV lookup failed.", {
+              hint: "Check the show name or try an alternate title.",
+            }));
             return;
           }
           tvLookupState = {
@@ -274,7 +286,11 @@ export const initTvSearch = ({
           state.tvLookupState = tvLookupState;
           renderTvShowSummary(null);
           updateTvSearchButtonState();
-          setTvStatus("TV lookup failed.", "error");
+          setTvStatus({
+            message: "TV lookup failed.",
+            mode: "error",
+            details: { hint: "Retry the lookup or check the TV worker health." },
+          });
         }
       };
 
@@ -285,16 +301,28 @@ export const initTvSearch = ({
 
       tvSearchBtn.addEventListener("click", async () => {
         if (!tvLookupState || !tvLookupState.show) {
-          setTvStatus("Load a TV show first.", "error");
+          setTvStatus({
+            message: "Load a TV show first.",
+            mode: "error",
+            details: { hint: "Enter a show name and load seasons first." },
+          });
           return;
         }
         const seasons = selectedTvSeasons();
         if (!seasons.length) {
-          setTvStatus("Select at least one season.", "error");
+          setTvStatus({
+            message: "Select at least one season.",
+            mode: "error",
+            details: { hint: "Pick at least one season before searching." },
+          });
           return;
         }
         if (!tvEpisodeSelectionIsValid()) {
-          setTvStatus("For seasons in 'Selected episodes' mode, choose at least one episode.", "error");
+          setTvStatus({
+            message: "For seasons in 'Selected episodes' mode, choose at least one episode.",
+            mode: "error",
+            details: { hint: "Select at least one episode in each partially selected season." },
+          });
           return;
         }
         const episodesBySeason = selectedTvEpisodesBySeason();
@@ -326,7 +354,9 @@ export const initTvSearch = ({
               max_results_per_variant: maxPerVariant,
           });
           if (!ok) {
-            setTvStatus(data.error || "TV search failed.", "error");
+            setTvStatus(buildStatusErrorState(data, "TV search failed.", {
+              hint: "Retry the search or check the TV worker health.",
+            }));
             return;
           }
           setActiveTvSearchJobId(data.id);
@@ -334,25 +364,23 @@ export const initTvSearch = ({
             renderTvResults(data);
           } catch (error) {
             console.error("TV search render failed", error);
-            setTvStatus("TV render failed.", "error");
+            setTvStatus({
+              message: "TV render failed.",
+              mode: "error",
+              details: { details: String(error || "unknown render error") },
+            });
             return;
           }
           setTvStatus(`TV search job #${data.id} queued in the background.`, "ok");
           await refreshActiveTvSearchJob({ force: true });
         } catch (_) {
-          setTvStatus("TV search failed.", "error");
+          setTvStatus({
+            message: "TV search failed.",
+            mode: "error",
+            details: { hint: "Retry the search or check the TV worker health." },
+          });
         }
       });
-
-      const setDownloadStatus = (text, mode = "neutral") => {
-        downloadStatus.textContent = text;
-        downloadStatus.dataset.mode = mode;
-      };
-
-      const setTvStatus = (text, mode = "neutral") => {
-        tvStatus.textContent = text;
-        tvStatus.dataset.mode = mode;
-      };
 
       const setActiveTvSearchJobId = (jobId) => {
         activeTvSearchJobId = jobId ? String(jobId) : null;
@@ -416,7 +444,9 @@ export const initTvSearch = ({
             if (status === 404) {
               setActiveTvSearchJobId(null);
             }
-            setTvStatus(data.error || "TV search job is unavailable.", "error");
+            setTvStatus(buildStatusErrorState(data, "TV search job is unavailable.", {
+              hint: "Retry the refresh or check the TV worker health.",
+            }));
             return;
           }
 
@@ -440,7 +470,11 @@ export const initTvSearch = ({
             renderTvResults(data);
           } catch (error) {
             console.error("TV search refresh render failed", error);
-            setTvStatus("TV render failed.", "error");
+            setTvStatus({
+              message: "TV render failed.",
+              mode: "error",
+              details: { details: String(error || "unknown render error") },
+            });
             return;
           }
 
@@ -450,7 +484,9 @@ export const initTvSearch = ({
             setTvStatus(`TV search complete: ${completed}/${total} episodes processed.`, "ok");
             setActiveTvSearchJobId(null);
           } else if (data.status === "failed") {
-            setTvStatus(data.error || "TV search failed.", "error");
+            setTvStatus(buildStatusErrorState(data, "TV search failed.", {
+              hint: "Retry the search or check the TV worker health.",
+            }));
             setActiveTvSearchJobId(null);
           } else if (data.status === "canceled") {
             setTvStatus("TV search canceled.", "neutral");
@@ -459,7 +495,11 @@ export const initTvSearch = ({
             setTvStatus(`TV search running: ${completed}/${total} episodes processed.`, "neutral");
           }
         } catch (_) {
-          setTvStatus("TV search job refresh failed.", "error");
+          setTvStatus({
+            message: "TV search job refresh failed.",
+            mode: "warning",
+            details: { hint: "The last known TV results are preserved while the app retries." },
+          });
         } finally {
           tvJobPollInFlight = false;
           state.tvJobPollInFlight = tvJobPollInFlight;
@@ -652,7 +692,9 @@ export const initTvSearch = ({
                 force_search: true,
             });
             if (!ok) {
-              setTvStatus(data.error || "Episode search failed.", "error");
+              setTvStatus(buildStatusErrorState(data, "Episode search failed.", {
+                hint: "Retry the episode search or check the TV worker health.",
+              }));
               return;
             }
 
@@ -673,7 +715,11 @@ export const initTvSearch = ({
               "ok"
             );
           } catch (_) {
-            setTvStatus("Episode search failed.", "error");
+            setTvStatus({
+              message: "Episode search failed.",
+              mode: "error",
+              details: { hint: "Retry the episode search or check the TV worker health." },
+            });
           } finally {
             tvEpisodeSearchesInFlight.delete(episodeKey);
             if (tvResultsState) renderTvResults(tvResultsState);
@@ -906,12 +952,12 @@ export const initTvSearch = ({
 
             tvEpisodeSearchesInFlight.add(episodeKey);
             if (tvResultsState) renderTvResults(tvResultsState);
-            setTvStatus(
-              forceSearch
+            setTvStatus({
+              message: forceSearch
                 ? `Searching anyway for S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}...`
                 : `Searching all aliases for S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}...`,
-              "neutral"
-            );
+              mode: "neutral",
+            });
 
             try {
               const { ok, data } = await api.searchTvEpisode({
@@ -936,7 +982,9 @@ export const initTvSearch = ({
                   force_search: forceSearch,
               });
               if (!ok) {
-                setTvStatus(data.error || "Expanded episode search failed.", "error");
+                setTvStatus(buildStatusErrorState(data, "Expanded episode search failed.", {
+                  hint: "Retry the alias search or check the TV worker health.",
+                }));
                 return;
               }
 
@@ -951,14 +999,18 @@ export const initTvSearch = ({
                 all_search_aliases: data.all_search_aliases || tvLookupState?.all_search_aliases || [],
                 search_aliases: data.search_aliases || tvLookupState?.search_aliases || [],
               };
-              setTvStatus(
-                forceSearch
+              setTvStatus({
+                message: forceSearch
                   ? `Searched ${data.episode?.episode_code || `S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}`} even though it was already downloaded.`
                   : `Expanded ${data.episode?.episode_code || `S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}`} using all aliases.`,
-                "ok"
-              );
+                mode: "ok",
+              });
             } catch (_) {
-              setTvStatus("Expanded episode search failed.", "error");
+              setTvStatus({
+                message: "Expanded episode search failed.",
+                mode: "error",
+                details: { hint: "Retry the alias search or check the TV worker health." },
+              });
             } finally {
               tvEpisodeSearchesInFlight.delete(episodeKey);
               if (tvResultsState) renderTvResults(tvResultsState);

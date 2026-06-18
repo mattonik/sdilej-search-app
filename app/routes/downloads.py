@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
+from ..diagnostics import error_response
 from ..main import (
     AccountPayload,
     ClearDownloadsPayload,
@@ -22,6 +23,29 @@ from ..sdilej_client import SdilejClient, SdilejClientError
 router = APIRouter()
 
 
+def _download_error(
+    request: Request,
+    *,
+    status_code: int,
+    error: str,
+    error_code: str,
+    hint: str | None = None,
+    retryable: bool | None = None,
+    details: str | None = None,
+    **extra: object,
+) -> JSONResponse:
+    return error_response(
+        request,
+        status_code=status_code,
+        error=error,
+        error_code=error_code,
+        hint=hint,
+        retryable=retryable,
+        details=details,
+        **extra,
+    )
+
+
 @router.get("/api/account")
 def api_account_get(request: Request):
     credentials = _get_services(request).storage.get_account_credentials()
@@ -36,7 +60,14 @@ def api_account_set(request: Request, payload: AccountPayload):
         services = _get_services(request)
         login_value = payload.login.strip()
         if not login_value or not payload.password:
-            return JSONResponse(status_code=400, content={"error": "login and password are required."})
+            return _download_error(
+                request,
+                status_code=400,
+                error="login and password are required.",
+                error_code="account_missing_credentials",
+                hint="Enter both login and password before saving.",
+                retryable=False,
+            )
 
         verified = None
         message = None
@@ -46,7 +77,15 @@ def api_account_set(request: Request, payload: AccountPayload):
             verified = ok
             message = msg
             if not ok:
-                return JSONResponse(status_code=400, content={"error": f"Credential verification failed: {msg}"})
+                return _download_error(
+                    request,
+                    status_code=400,
+                    error=f"Credential verification failed: {msg}",
+                    error_code="account_verification_failed",
+                    hint="Check the credentials and try again.",
+                    retryable=False,
+                    details=msg,
+                )
 
         services.storage.set_account_credentials(login_value, payload.password)
         return JSONResponse(
@@ -59,9 +98,24 @@ def api_account_set(request: Request, payload: AccountPayload):
             }
         )
     except SdilejClientError as exc:
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=400,
+            error=str(exc),
+            error_code="account_save_failed",
+            hint="Check the login form and try again.",
+            retryable=False,
+        )
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Account save failed.",
+            error_code="account_save_failed",
+            hint="Retry the save or check the credentials service.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.delete("/api/account")
@@ -81,7 +135,15 @@ def api_downloads_list(
         jobs = services.storage.list_download_jobs(limit=limit, status=status)
         return JSONResponse({"items": jobs, "summary": services.storage.get_download_summary(), "worker_alive": services.worker.is_alive()})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Queue refresh failed.",
+            error_code="downloads_refresh_failed",
+            hint="Retry the refresh or check the download worker health.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.get("/api/downloads/settings")
@@ -90,7 +152,15 @@ def api_download_settings_get(request: Request):
         settings = _get_services(request).storage.get_download_settings()
         return JSONResponse(settings)
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to load download settings.",
+            error_code="download_settings_load_failed",
+            hint="Retry the request or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads/settings")
@@ -109,7 +179,15 @@ def api_download_settings_set(request: Request, payload: DownloadSettingsPayload
         )
         return JSONResponse(settings)
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to save download settings.",
+            error_code="download_settings_save_failed",
+            hint="Retry the save or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.get("/api/downloads/library-paths")
@@ -117,7 +195,15 @@ def api_library_paths_get(request: Request):
     try:
         return JSONResponse(_get_services(request).storage.get_library_paths())
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to load library paths.",
+            error_code="library_paths_load_failed",
+            hint="Retry the request or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads/library-paths")
@@ -133,7 +219,15 @@ def api_library_paths_set(request: Request, payload: LibraryPathsPayload):
         )
         return JSONResponse(paths)
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to save library paths.",
+            error_code="library_paths_save_failed",
+            hint="Retry the save or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/media/classify")
@@ -158,7 +252,15 @@ def api_media_classify(request: Request, payload: MediaClassificationPayload):
             }
         )
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Media classification failed.",
+            error_code="media_classification_failed",
+            hint="Retry the classification or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads")
@@ -202,34 +304,40 @@ def api_downloads_enqueue(request: Request, payload: EnqueueDownloadPayload):
         media = media_plan["classification"]
 
         if media_plan["requires_confirmation"]:
-            return JSONResponse(
+            return _download_error(
+                request,
                 status_code=409,
-                content={
-                    "error": "Destination is uncertain. Confirm media classification first.",
-                    "requires_confirmation": True,
-                    "classification": media.to_dict(),
-                    "destination_subpath": media_plan["destination_subpath"],
-                },
+                error="Destination is uncertain. Confirm media classification first.",
+                error_code="download_classification_confirmation_required",
+                hint="Review the proposed classification and confirm it first.",
+                retryable=False,
+                requires_confirmation=True,
+                classification=media.to_dict(),
+                destination_subpath=media_plan["destination_subpath"],
             )
 
         duplicate = services.storage.find_duplicate_download(detail_url=detail_url, file_id=file_id)
         if duplicate:
             status = duplicate.get("status")
             if status in {"queued", "running"}:
-                return JSONResponse(
+                return _download_error(
+                    request,
                     status_code=409,
-                    content={
-                        "error": f"A matching job is already {status}.",
-                        "duplicate_job": duplicate,
-                    },
+                    error=f"A matching job is already {status}.",
+                    error_code="download_duplicate_active",
+                    hint="Open the existing job instead of enqueuing another one.",
+                    retryable=False,
+                    duplicate_job=duplicate,
                 )
             if status == "done":
-                return JSONResponse(
+                return _download_error(
+                    request,
                     status_code=409,
-                    content={
-                        "error": "This file appears to be already downloaded.",
-                        "duplicate_job": duplicate,
-                    },
+                    error="This file appears to be already downloaded.",
+                    error_code="download_duplicate_done",
+                    hint="Use the existing file instead of enqueueing it again.",
+                    retryable=False,
+                    duplicate_job=duplicate,
                 )
 
         settings = services.storage.get_download_settings()
@@ -256,9 +364,24 @@ def api_downloads_enqueue(request: Request, payload: EnqueueDownloadPayload):
         )
         return JSONResponse(job)
     except SdilejClientError as exc:
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=400,
+            error=str(exc),
+            error_code="download_enqueue_invalid_request",
+            hint="Check the detail URL and classification inputs.",
+            retryable=False,
+        )
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to enqueue job.",
+            error_code="download_enqueue_failed",
+            hint="Retry the enqueue or check the download worker health.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads/{job_id}/classification")
@@ -267,9 +390,23 @@ def api_downloads_update_classification(request: Request, job_id: int, payload: 
         services = _get_services(request)
         job = services.storage.get_download_job(job_id)
         if job is None:
-            return JSONResponse(status_code=404, content={"error": "Job not found."})
+            return _download_error(
+                request,
+                status_code=404,
+                error="Job not found.",
+                error_code="download_job_not_found",
+                hint="Refresh the queue and try again.",
+                retryable=False,
+            )
         if job.get("status") != "queued":
-            return JSONResponse(status_code=409, content={"error": "Only queued jobs can be recategorized."})
+            return _download_error(
+                request,
+                status_code=409,
+                error="Only queued jobs can be recategorized.",
+                error_code="download_job_not_queued",
+                hint="Open a queued job or wait for the current job to finish.",
+                retryable=False,
+            )
 
         title = (job.get("title") or "").strip() or str(job.get("detail_url", "")).rsplit("/", 1)[-1]
         next_media_kind = payload.media_kind or job.get("media_kind")
@@ -292,14 +429,16 @@ def api_downloads_update_classification(request: Request, job_id: int, payload: 
             services=services,
         )
         if plan["requires_confirmation"]:
-            return JSONResponse(
+            return _download_error(
+                request,
                 status_code=409,
-                content={
-                    "error": "Destination is uncertain. Confirm media classification first.",
-                    "requires_confirmation": True,
-                    "classification": plan["classification"].to_dict(),
-                    "destination_subpath": plan["destination_subpath"],
-                },
+                error="Destination is uncertain. Confirm media classification first.",
+                error_code="download_classification_confirmation_required",
+                hint="Review the proposed classification and confirm it first.",
+                retryable=False,
+                requires_confirmation=True,
+                classification=plan["classification"].to_dict(),
+                destination_subpath=plan["destination_subpath"],
             )
 
         changed = services.storage.update_download_job_classification(
@@ -313,11 +452,26 @@ def api_downloads_update_classification(request: Request, job_id: int, payload: 
             destination_subpath=plan["destination_subpath"],
         )
         if not changed:
-            return JSONResponse(status_code=409, content={"error": "Job could not be updated."})
+            return _download_error(
+                request,
+                status_code=409,
+                error="Job could not be updated.",
+                error_code="download_job_update_failed",
+                hint="Refresh the queue and try again.",
+                retryable=False,
+            )
         updated = services.storage.get_download_job(job_id)
         return JSONResponse(updated or {"updated": True, "job_id": job_id})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to update classification.",
+            error_code="download_classification_update_failed",
+            hint="Retry the action or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads/{job_id}/cancel")
@@ -325,10 +479,25 @@ def api_downloads_cancel(request: Request, job_id: int):
     try:
         changed = _get_services(request).storage.cancel_download_job(job_id, complete=False)
         if not changed:
-            return JSONResponse(status_code=404, content={"error": "Job not found or not cancelable."})
+            return _download_error(
+                request,
+                status_code=404,
+                error="Job not found or not cancelable.",
+                error_code="download_job_not_cancelable",
+                hint="Refresh the queue and try again.",
+                retryable=False,
+            )
         return JSONResponse({"canceled": True, "job_id": job_id})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to cancel job.",
+            error_code="download_cancel_failed",
+            hint="Retry the action or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads/{job_id}/cancel-complete")
@@ -336,10 +505,25 @@ def api_downloads_cancel_complete(request: Request, job_id: int):
     try:
         changed = _get_services(request).storage.cancel_download_job(job_id, complete=True)
         if not changed:
-            return JSONResponse(status_code=404, content={"error": "Job not found or not cancelable."})
+            return _download_error(
+                request,
+                status_code=404,
+                error="Job not found or not cancelable.",
+                error_code="download_job_not_cancelable",
+                hint="Refresh the queue and try again.",
+                retryable=False,
+            )
         return JSONResponse({"canceled": True, "complete": True, "job_id": job_id})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to cancel job completely.",
+            error_code="download_cancel_complete_failed",
+            hint="Retry the action or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads/{job_id}/retry")
@@ -347,10 +531,25 @@ def api_downloads_retry(request: Request, job_id: int):
     try:
         changed = _get_services(request).storage.retry_download_job(job_id)
         if not changed:
-            return JSONResponse(status_code=404, content={"error": "Job not found or not retryable."})
+            return _download_error(
+                request,
+                status_code=404,
+                error="Job not found or not retryable.",
+                error_code="download_job_not_retryable",
+                hint="Refresh the queue and try again.",
+                retryable=False,
+            )
         return JSONResponse({"retried": True, "job_id": job_id})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to retry job.",
+            error_code="download_retry_failed",
+            hint="Retry the action or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.delete("/api/downloads/{job_id}")
@@ -358,12 +557,34 @@ def api_downloads_delete(request: Request, job_id: int, with_data: bool = Query(
     try:
         result = _get_services(request).storage.delete_download_job(job_id, with_data=with_data)
         if result is None:
-            return JSONResponse(status_code=404, content={"error": "Job not found."})
+            return _download_error(
+                request,
+                status_code=404,
+                error="Job not found.",
+                error_code="download_job_not_found",
+                hint="Refresh the queue and try again.",
+                retryable=False,
+            )
         return JSONResponse(result)
     except ValueError as exc:
-        return JSONResponse(status_code=409, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=409,
+            error=str(exc),
+            error_code="download_delete_conflict",
+            hint="Remove the job after it finishes or retry without data deletion.",
+            retryable=False,
+        )
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to delete job.",
+            error_code="download_delete_failed",
+            hint="Retry the action or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads/{job_id}/priority")
@@ -371,10 +592,25 @@ def api_downloads_priority(request: Request, job_id: int, payload: UpdatePriorit
     try:
         changed = _get_services(request).storage.set_download_priority(job_id, payload.priority)
         if not changed:
-            return JSONResponse(status_code=404, content={"error": "Job not found or priority cannot be changed."})
+            return _download_error(
+                request,
+                status_code=404,
+                error="Job not found or priority cannot be changed.",
+                error_code="download_priority_not_changeable",
+                hint="Refresh the queue and try again.",
+                retryable=False,
+            )
         return JSONResponse({"updated": True, "job_id": job_id, "priority": payload.priority})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to update priority.",
+            error_code="download_priority_failed",
+            hint="Retry the action or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads/{job_id}/top")
@@ -382,10 +618,25 @@ def api_downloads_move_top(request: Request, job_id: int):
     try:
         changed = _get_services(request).storage.move_download_job_to_top(job_id)
         if not changed:
-            return JSONResponse(status_code=404, content={"error": "Job not found or not queued."})
+            return _download_error(
+                request,
+                status_code=404,
+                error="Job not found or not queued.",
+                error_code="download_job_not_queued",
+                hint="Only queued jobs can be moved to the top.",
+                retryable=False,
+            )
         return JSONResponse({"moved_to_top": True, "job_id": job_id})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to move job to top.",
+            error_code="download_move_top_failed",
+            hint="Retry the action or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/downloads/clear")
@@ -394,4 +645,12 @@ def api_downloads_clear(request: Request, payload: ClearDownloadsPayload):
         deleted = _get_services(request).storage.delete_download_jobs(statuses=payload.statuses)
         return JSONResponse({"deleted": deleted, "statuses": payload.statuses})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to clear finished jobs.",
+            error_code="download_clear_failed",
+            hint="Retry the action or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )

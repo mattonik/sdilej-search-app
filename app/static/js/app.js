@@ -23,6 +23,7 @@ import { createRuntimeState } from "./runtime-state.js";
 import { initDownloads } from "./downloads.js";
 import { initFileSearch } from "./file-search.js";
 import { createQueueUiHelpers } from "./queue-ui.js";
+import { createStatusController } from "./status-ui.js";
 import { initTvSearch } from "./tv-search.js";
 import { initQueueDialog } from "./queue-dialog.js";
 import { initWorkspaceTabs } from "./workspace-tabs.js";
@@ -125,11 +126,8 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
       let tvEpisodeSearchesInFlight = state.tvEpisodeSearchesInFlight;
       let tvShowSummarySignature = state.tvShowSummarySignature;
       let activeQueueState = state.activeQueueState;
-      const setDownloadStatus = (text, mode = "neutral") => {
-        if (!downloadStatus) return;
-        downloadStatus.textContent = text || "";
-        downloadStatus.dataset.mode = mode;
-      };
+      const downloadStatusController = createStatusController(downloadStatus);
+      const setDownloadStatus = downloadStatusController.setStatus;
       const queueUi = createQueueUiHelpers({
         downloadJobsEl,
         setDownloadStatus,
@@ -312,6 +310,7 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
           tvFilterLanguageScope,
           tvFilterStrictDubbing,
           tvFilterMaxResults,
+          downloadStatus,
           tvStatus,
         },
         api,
@@ -393,12 +392,14 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
 
       refreshAccountStatus();
       refreshDownloadSettings();
-      refreshDownloads();
+      refreshDownloads({ notifyOnFailure: true });
       refreshSavedCandidates();
       if (activeTvSearchJobId) {
         refreshActiveTvSearchJob({ force: true });
       }
-      setInterval(refreshDownloads, 2500);
+      setInterval(() => {
+        refreshDownloads({ notifyOnFailure: true });
+      }, 2500);
       setInterval(() => {
         refreshActiveTvSearchJob();
       }, 2500);

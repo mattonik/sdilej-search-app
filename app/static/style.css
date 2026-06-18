@@ -276,10 +276,66 @@ textarea {
   margin-top: 0.7rem;
   color: var(--muted);
   font-size: 0.9rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.status-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.status-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.status-copy-btn {
+  flex: 0 0 auto;
+}
+
+.status-details {
+  border-top: 1px solid var(--border);
+  padding-top: 0.45rem;
+}
+
+.status-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.status-detail-list {
+  margin-top: 0.45rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.status-detail-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 120px) minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+}
+
+.status-detail-label {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.status-detail-value {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .download-status[data-mode="ok"] {
   color: #166534;
+}
+
+.download-status[data-mode="warning"] {
+  color: #b45309;
 }
 
 .download-status[data-mode="error"] {

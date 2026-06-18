@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from ..diagnostics import error_response
 from ..main import (
     TvEpisodeSearchPayload,
     TvLookupPayload,
@@ -22,6 +23,27 @@ from ..sdilej_client import SdilejClientError
 from ..tvmaze_client import TvMazeClientError
 
 router = APIRouter()
+
+
+def _tv_error(
+    request: Request,
+    *,
+    status_code: int,
+    error: str,
+    error_code: str,
+    hint: str | None = None,
+    retryable: bool | None = None,
+    details: str | None = None,
+) -> JSONResponse:
+    return error_response(
+        request,
+        status_code=status_code,
+        error=error,
+        error_code=error_code,
+        hint=hint,
+        retryable=retryable,
+        details=details,
+    )
 
 
 @router.post("/api/tv/lookup")
@@ -45,9 +67,24 @@ def api_tv_lookup(request: Request, payload: TvLookupPayload):
             }
         )
     except TvMazeClientError as exc:
-        return JSONResponse(status_code=404, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=404,
+            error=str(exc),
+            error_code="tv_lookup_not_found",
+            hint="Check the show name or try a different title.",
+            retryable=False,
+        )
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=500,
+            error="TV lookup failed.",
+            error_code="tv_lookup_failed",
+            hint="Retry the lookup or check the TV worker and metadata services.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/tv/search")
@@ -127,11 +164,33 @@ def api_tv_search(request: Request, payload: TvSeasonSearchPayload):
             }
         )
     except SdilejClientError as exc:
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=400,
+            error=str(exc),
+            error_code="tv_search_invalid_request",
+            hint="Check the selected seasons, episode selection, and filters.",
+            retryable=False,
+        )
     except TvMazeClientError as exc:
-        return JSONResponse(status_code=404, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=404,
+            error=str(exc),
+            error_code="tv_show_not_found",
+            hint="Verify the show name or try an alternate title.",
+            retryable=False,
+        )
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=500,
+            error="TV search failed.",
+            error_code="tv_search_failed",
+            hint="Retry the search or check the TV worker health.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/tv/search-episode")
@@ -185,11 +244,33 @@ def api_tv_search_episode(request: Request, payload: TvEpisodeSearchPayload):
             }
         )
     except SdilejClientError as exc:
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=400,
+            error=str(exc),
+            error_code="tv_episode_search_invalid_request",
+            hint="Check the season, episode, and filter inputs.",
+            retryable=False,
+        )
     except TvMazeClientError as exc:
-        return JSONResponse(status_code=404, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=404,
+            error=str(exc),
+            error_code="tv_show_not_found",
+            hint="Verify the show name or try an alternate title.",
+            retryable=False,
+        )
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=500,
+            error="Episode search failed.",
+            error_code="tv_episode_search_failed",
+            hint="Retry the episode search or inspect the TV worker health.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/tv/search-jobs")
@@ -232,11 +313,33 @@ def api_tv_search_jobs_create(request: Request, payload: TvSeasonSearchPayload):
         response_payload["all_search_aliases"] = all_search_aliases
         return JSONResponse(response_payload)
     except SdilejClientError as exc:
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=400,
+            error=str(exc),
+            error_code="tv_search_invalid_request",
+            hint="Check the selected seasons, episode selection, and filters.",
+            retryable=False,
+        )
     except TvMazeClientError as exc:
-        return JSONResponse(status_code=404, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=404,
+            error=str(exc),
+            error_code="tv_show_not_found",
+            hint="Verify the show name or try an alternate title.",
+            retryable=False,
+        )
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=500,
+            error="TV search job creation failed.",
+            error_code="tv_search_job_create_failed",
+            hint="Retry the search or check the TV worker health.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.get("/api/tv/search-jobs")
@@ -248,7 +351,15 @@ def api_tv_search_jobs_list(
     try:
         return JSONResponse({"items": _get_services(request).storage.list_tv_search_jobs(limit=limit, status=status)})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=500,
+            error="TV search jobs listing failed.",
+            error_code="tv_search_jobs_list_failed",
+            hint="Retry the request or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.get("/api/tv/search-jobs/{job_id}")
@@ -256,7 +367,14 @@ def api_tv_search_jobs_get(request: Request, job_id: int):
     try:
         job = _get_services(request).storage.get_tv_search_job(job_id)
         if job is None:
-            return JSONResponse(status_code=404, content={"error": "TV search job not found."})
+            return _tv_error(
+                request,
+                status_code=404,
+                error="TV search job not found.",
+                error_code="tv_search_job_not_found",
+                hint="Refresh the queue or re-run the TV search.",
+                retryable=False,
+            )
         _aliases, all_search_aliases = _resolve_tv_search_alias_context(
             show_name=str((job.get("show") or {}).get("name") or job.get("show_name") or ""),
             title_metadata=job.get("title_metadata"),
@@ -264,7 +382,15 @@ def api_tv_search_jobs_get(request: Request, job_id: int):
         job["all_search_aliases"] = all_search_aliases
         return JSONResponse(job)
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=500,
+            error="TV search job refresh failed.",
+            error_code="tv_search_job_refresh_failed",
+            hint="Retry the refresh or check the TV worker health.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/tv/search-jobs/{job_id}/cancel")
@@ -272,7 +398,22 @@ def api_tv_search_jobs_cancel(request: Request, job_id: int):
     try:
         changed = _get_services(request).storage.cancel_tv_search_job(job_id)
         if not changed:
-            return JSONResponse(status_code=404, content={"error": "TV search job not found or not cancelable."})
+            return _tv_error(
+                request,
+                status_code=404,
+                error="TV search job not found or not cancelable.",
+                error_code="tv_search_job_not_cancelable",
+                hint="Refresh the queue and try again.",
+                retryable=False,
+            )
         return JSONResponse({"canceled": True, "job_id": job_id})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return _tv_error(
+            request,
+            status_code=500,
+            error="TV search job cancellation failed.",
+            error_code="tv_search_job_cancel_failed",
+            hint="Retry the action or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )

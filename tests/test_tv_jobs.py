@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.models import TitleMetadata
 from app.tv_search_worker import TvSearchWorker
-from app.tvmaze_client import TvEpisode, TvShowSummary
+from app.tvmaze_client import TvEpisode, TvMazeClientError, TvShowSummary
 from tests.conftest import (
     FakeTvMazeClient,
     StaticMetadataResolver,
@@ -45,6 +45,30 @@ def test_tv_media_classification_reuses_existing_alias_folder(app_factory, media
     payload = response.json()
     assert payload["classification"]["series_name"] == "Vesela farma"
     assert payload["destination_subpath"].endswith("tv/Vesela farma/S01")
+
+
+def test_tv_lookup_error_returns_diagnostic_payload_and_request_id(app_factory) -> None:
+    class BrokenTvClient:
+        def lookup_show(self, show_name: str) -> TvShowSummary:
+            raise TvMazeClientError(f"Lookup failed for {show_name}")
+
+        def get_episodes(self, show_id: int) -> list[TvEpisode]:
+            return []
+
+        def get_akas(self, show_id: int) -> list[str]:
+            return []
+
+    app = app_factory(tv_client_instance=BrokenTvClient())
+
+    with TestClient(app) as client:
+        response = client.post("/api/tv/lookup", json={"show_name": "Missing Show"})
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error_code"] == "tv_lookup_not_found"
+    assert payload["request_id"]
+    assert response.headers["x-request-id"] == payload["request_id"]
+    assert payload["hint"]
 
 
 def test_sync_tv_search_marks_existing_episode_as_downloaded_and_skips_episode_queries(app_factory, media_root) -> None:

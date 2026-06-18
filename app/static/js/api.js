@@ -3,7 +3,21 @@ const readJson = async (response) => {
   return { ok: response.ok, status: response.status, data };
 };
 
-const jsonRequest = async (url, options = {}) => readJson(await fetch(url, options));
+const buildNetworkErrorPayload = (error) => ({
+  error: "Network request failed.",
+  error_code: "network_error",
+  retryable: true,
+  hint: "Check the browser console, local app health, and network connectivity.",
+  details: error?.message || String(error || "unknown network error"),
+});
+
+const jsonRequest = async (url, options = {}) => {
+  try {
+    return await readJson(await fetch(url, options));
+  } catch (error) {
+    return { ok: false, status: 0, data: buildNetworkErrorPayload(error) };
+  }
+};
 
 export const api = {
   autocomplete(q, limit = 10) {

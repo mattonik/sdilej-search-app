@@ -449,6 +449,49 @@ def test_download_job_card_exposes_copy_action(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_download_queue_refresh_error_exposes_diagnostic_details(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        failures = {"count": 0}
+
+        def fail_downloads(route) -> None:
+            request = route.request
+            if request.method == "GET" and "/api/downloads" in request.url and "limit=" in request.url:
+                failures["count"] += 1
+                if failures["count"] > 1:
+                    route.continue_()
+                    return
+                route.fulfill(
+                    status=500,
+                    json={
+                        "error": "Queue refresh failed.",
+                        "error_code": "downloads_refresh_failed",
+                        "request_id": "req-downloads-123",
+                        "hint": "Check the download worker health.",
+                        "retryable": True,
+                        "details": "boom",
+                    },
+                )
+                return
+            route.continue_()
+
+        page.route("**/api/downloads*", fail_downloads)
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.wait_for_selector("#refreshDownloadsBtn")
+        page.wait_for_selector("#downloadStatus .status-details", state="attached")
+        page.locator("#downloadStatus details summary").click()
+        page.wait_for_selector("#downloadStatus .status-detail-row")
+        status_text = page.locator("#downloadStatus").text_content() or ""
+        assert "Queue refresh failed." in status_text
+        assert "req-downloads-123" in status_text
+        assert "downloads_refresh_failed" in status_text
+        assert page.locator("#downloadStatus .status-copy-btn").count() == 1
+
+
+@pytest.mark.e2e
 def test_account_tab_is_separate_and_collapsed_by_default(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
@@ -493,6 +536,49 @@ def test_tv_search_marks_downloaded_episode_without_searching(tmp_path) -> None:
         expect_text.wait_for(state="visible")
         assert "downloaded" in expect_text.text_content().lower()
         assert first_episode.locator("button", has_text="Search anyway").count() == 1
+
+
+@pytest.mark.e2e
+def test_tv_search_job_error_exposes_diagnostic_details(tmp_path) -> None:
+    app = _build_tv_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+
+        def fail_tv_search(route) -> None:
+            request = route.request
+            if request.method == "POST" and request.url.endswith("/api/tv/search-jobs"):
+                route.fulfill(
+                    status=500,
+                    json={
+                        "error": "TV search failed.",
+                        "error_code": "tv_search_failed",
+                        "request_id": "req-tv-123",
+                        "hint": "Check the TV worker health.",
+                        "retryable": True,
+                        "details": "boom",
+                    },
+                )
+                return
+            route.continue_()
+
+        page.route("**/api/tv/search-jobs", fail_tv_search)
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "Bluey")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowSummaryCard")
+        assert page.locator("#tvSearchBtn").is_enabled()
+        page.click("#tvSelectAllSeasons")
+        page.click("#tvSearchBtn")
+        page.wait_for_selector("#tvStatus .status-details", state="attached")
+        page.locator("#tvStatus details summary").click()
+        page.wait_for_selector("#tvStatus .status-detail-row")
+        status_text = page.locator("#tvStatus").text_content() or ""
+        assert "TV search failed." in status_text
+        assert "req-tv-123" in status_text
+        assert "tv_search_failed" in status_text
+        assert page.locator("#tvStatus .status-copy-btn").count() == 1
 
 
 @pytest.mark.e2e
