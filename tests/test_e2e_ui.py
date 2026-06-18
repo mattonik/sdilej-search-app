@@ -582,6 +582,120 @@ def test_tv_search_job_error_exposes_diagnostic_details(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_tv_episode_results_show_size_and_sort_by_size(tmp_path) -> None:
+    app = _build_reacher_tv_search_app(tmp_path)
+    tv_lookup_payload = {
+        "show": {
+            "id": 43031,
+            "name": "Reacher",
+            "premiered": "2022-02-04",
+            "language": "English",
+            "image_url": "https://example.com/reacher-poster.jpg",
+            "type": "Scripted",
+            "genres": ["Drama", "Action", "Thriller"],
+            "summary": "Reacher is wrongly accused of murder while visiting a small town.",
+            "source": "tvmaze",
+        },
+        "title_metadata": {
+            "kind": "tv",
+            "canonical_title": "Reacher",
+            "original_title": "Reacher",
+            "local_titles": ["Reacher"],
+            "aliases": ["Reacher"],
+            "genres": ["Drama", "Action", "Thriller"],
+            "summary": "Reacher is wrongly accused of murder while visiting a small town.",
+            "content_type": "Scripted",
+            "year": 2022,
+            "source": "test",
+            "source_ids": {},
+        },
+        "aliases": ["Reacher"],
+        "all_search_aliases": ["Reacher"],
+        "search_aliases": ["Reacher"],
+        "seasons": [
+            {"season_number": 1, "episode_count": 1, "completed_episodes": 1, "result_count": 3, "episodes": []}
+        ],
+        "status": "done",
+        "total_episodes": 1,
+        "completed_episodes": 1,
+        "result_count": 3,
+    }
+    tv_search_payload = {
+        "show": tv_lookup_payload["show"],
+        "title_metadata": tv_lookup_payload["title_metadata"],
+        "aliases": ["Reacher"],
+        "all_search_aliases": ["Reacher"],
+        "search_aliases": ["Reacher"],
+        "max_results_per_variant": 120,
+        "status": "done",
+        "total_episodes": 1,
+        "completed_episodes": 1,
+        "result_count": 3,
+        "seasons": [
+            {
+                "season_number": 1,
+                "episode_count": 1,
+                "completed_episodes": 1,
+                "result_count": 3,
+                "episodes": [
+                    {
+                        "season_number": 1,
+                        "episode_number": 1,
+                        "episode_code": "S01E01",
+                        "episode_name": "Welcome to Margrave",
+                        "status": "done",
+                        "result_count": 3,
+                        "query_variants": ["Reacher S01E01"],
+                        "query_errors": [],
+                        "results": [
+                            dump_search_result(build_search_result(file_id=301, title="Reacher S01E01 720p", size="850 MB")),
+                            dump_search_result(build_search_result(file_id=302, title="Reacher S01E01 1080p", size="1.8 GB")),
+                            dump_search_result(build_search_result(file_id=303, title="Reacher S01E01 480p", size="420 MB")),
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        def fulfill_tv_search(route) -> None:
+            request = route.request
+            if request.method == "POST" and request.url.endswith("/api/tv/search-jobs"):
+                route.fulfill(status=200, json={**tv_search_payload, "id": 999})
+                return
+            if request.method == "GET" and "/api/tv/search-jobs/999" in request.url:
+                route.fulfill(status=200, json={**tv_search_payload, "id": 999})
+                return
+            route.continue_()
+
+        page.route("**/api/tv/search-jobs*", fulfill_tv_search)
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "Reacher")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowSummaryCard")
+        assert page.locator("#tvSearchBtn").is_enabled()
+        page.click("#tvSelectAllSeasons")
+        page.click("#tvSearchBtn")
+        page.wait_for_selector("#tvResults details.tv-season")
+        page.locator("#tvResults details.tv-season summary").first.click()
+        page.wait_for_selector("#tvResults details.tv-season[open] .tv-episode-card")
+        episode_card = page.locator("#tvResults details.tv-season[open] .tv-episode-card").first
+        assert "Size:" in (episode_card.locator(".tv-result-size").first.text_content() or "")
+
+        episode_card.locator('.tv-episode-sort-btn[data-sort-mode="size_desc"]').click()
+        page.wait_for_function(
+            """() => Boolean(document.querySelector('#tvResults details.tv-season[open] .tv-episode-sort-btn[data-sort-mode="size_desc"]')?.classList.contains('active'))""",
+            timeout=3000,
+        )
+        page.wait_for_timeout(500)
+        titles = page.locator("#tvResults details.tv-season[open] .tv-result-item .tv-result-title-row a").all_text_contents()
+        assert titles[0] == "Reacher S01E01 1080p"
+
+
+@pytest.mark.e2e
 def test_reacher_tv_episode_search_runs_without_extra_selection(tmp_path) -> None:
     app = _build_reacher_tv_search_app(tmp_path)
 

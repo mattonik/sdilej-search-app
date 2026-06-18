@@ -9,6 +9,7 @@ export const createRuntimeState = ({
   tvLookupState: null,
   tvResultsState: null,
   tvResultsFilter: "all",
+  tvEpisodeResultSorts: new Map(),
   fileResultsView,
   fileResultsFilter,
   searchMode,

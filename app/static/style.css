@@ -1725,6 +1725,39 @@ textarea {
   align-items: baseline;
 }
 
+.tv-episode-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.tv-episode-sort-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tv-episode-sort-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: var(--text);
+  font-size: 0.76rem;
+  padding: 0.28rem 0.68rem;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.tv-episode-sort-btn.active {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
 .tv-episode-code {
   font-weight: 700;
   color: var(--text);
@@ -1739,6 +1772,18 @@ textarea {
   flex-wrap: wrap;
   gap: 0.4rem 0.55rem;
   align-items: center;
+}
+
+.tv-episode-sort-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.14rem 0.52rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #0f766e;
+  background: #f0fdfa;
 }
 
 .tv-episode-status {
@@ -1952,6 +1997,29 @@ textarea {
   color: var(--muted);
   font-size: 0.8rem;
   white-space: nowrap;
+}
+
+.tv-result-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.55rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.tv-result-meta-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tv-result-meta-row span strong {
+  color: var(--text);
+}
+
+.tv-result-size {
+  color: #0f766e;
+  font-weight: 600;
 }
 
 .tv-result-submeta {
@@ -2319,6 +2387,16 @@ textarea {
   .tv-episode-summary,
   .tv-result-head {
     align-items: flex-start;
+  }
+
+  .tv-episode-sort {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .tv-episode-sort-toggle {
+    width: 100%;
   }
 
   .tv-result-head {

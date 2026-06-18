@@ -44,6 +44,72 @@ export const createTvViewHelpers = ({
     `${season.stats.noMatchEpisodes} no matches`,
   ];
 
+  const parseSizeToBytes = (size) => {
+    const text = String(size || "").trim();
+    if (!text) return null;
+    const match = text.match(/^([\d,.]+)\s*([kmgtp]?i?b)?$/i);
+    if (!match) return null;
+    const value = Number(match[1].replace(/,/g, ""));
+    if (!Number.isFinite(value)) return null;
+    const unit = String(match[2] || "B").toUpperCase();
+    const multipliers = {
+      B: 1,
+      KB: 1024,
+      KIB: 1024,
+      MB: 1024 ** 2,
+      MIB: 1024 ** 2,
+      GB: 1024 ** 3,
+      GIB: 1024 ** 3,
+      TB: 1024 ** 4,
+      TIB: 1024 ** 4,
+      PB: 1024 ** 5,
+      PIB: 1024 ** 5,
+    };
+    const multiplier = multipliers[unit] || 1;
+    return value * multiplier;
+  };
+
+  const sortTvResults = (results, sortMode) => {
+    const items = Array.isArray(results) ? results : [];
+    const decorated = items.map((item, index) => ({
+      item,
+      index,
+      sizeBytes: parseSizeToBytes(item?.size),
+      languageScore: Number(item?.language_score ?? 0) || 0,
+    }));
+
+    const compareBySize = (left, right, direction) => {
+      const leftSize = left.sizeBytes;
+      const rightSize = right.sizeBytes;
+      if (leftSize == null && rightSize == null) return 0;
+      if (leftSize == null) return 1;
+      if (rightSize == null) return -1;
+      if (leftSize === rightSize) return 0;
+      return direction === "asc" ? leftSize - rightSize : rightSize - leftSize;
+    };
+
+    const next = decorated.sort((left, right) => {
+      if (sortMode === "size_asc" || sortMode === "size_desc") {
+        const sizeComparison = compareBySize(left, right, sortMode === "size_asc" ? "asc" : "desc");
+        if (sizeComparison !== 0) return sizeComparison;
+      }
+
+      if (sortMode === "best") {
+        if (left.index !== right.index) return left.index - right.index;
+      } else {
+        if (left.languageScore !== right.languageScore) return right.languageScore - left.languageScore;
+        if (left.index !== right.index) return left.index - right.index;
+      }
+
+      const leftTitle = String(left.item?.title || "");
+      const rightTitle = String(right.item?.title || "");
+      if (leftTitle !== rightTitle) return leftTitle.localeCompare(rightTitle);
+      return left.index - right.index;
+    });
+
+    return next.map((entry) => entry.item);
+  };
+
   const renderTvResultItem = ({
     item,
     queueEpisodeKey,
@@ -51,12 +117,14 @@ export const createTvViewHelpers = ({
     seasonNumber,
     episodeNumber,
     actionLabel,
+    sortMode = "best",
     showQueries = false,
     isPrimary = false,
   }) => {
     const resultKey = item?.detail_url || item?.file_id || `${showName}-${seasonNumber}-${episodeNumber}-${item?.title || ""}`;
     const queryHits = Array.isArray(item?.query_hits) ? Array.from(new Set(item.query_hits.filter(Boolean))) : [];
     const playableLabel = item?.playable ? "Playable" : "Not playable";
+    const sizeLabel = item?.size ? `Size: ${item.size}` : "Size: n/a";
     const queueActionClass = isPrimary ? "btn btn-primary" : "btn btn-secondary";
     const queryHtml = showQueries && queryHits.length ? `<div class="tv-result-queries">Queries: ${esc(queryHits.join(", "))}</div>` : "";
     return `
@@ -73,6 +141,7 @@ export const createTvViewHelpers = ({
           </div>
           <div class="tv-result-meta-row">
             <span>Lang score: ${esc(item?.language_score ?? 0)}</span>
+            <span class="tv-result-size">${esc(sizeLabel)}</span>
             <span>Ext: ${esc(item?.extension || "n/a")}</span>
             <span>${esc(playableLabel)}</span>
           </div>
@@ -173,7 +242,8 @@ export const createTvViewHelpers = ({
             `${season.season_number}:${episode?.episode_number}`
           ) || episode;
           const outcome = getTvEpisodeOutcome(effectiveEpisode, episodeQueueSummary);
-          const results = Array.isArray(effectiveEpisode?.results) ? effectiveEpisode.results : [];
+          const sortMode = state.tvEpisodeResultSorts.get(`${season.season_number}:${episode?.episode_number}`) || "best";
+          const results = sortTvResults(Array.isArray(effectiveEpisode?.results) ? effectiveEpisode.results : [], sortMode);
           const bestResult = results[0] || null;
           const alternativeResults = results.slice(1);
         return {
@@ -181,6 +251,7 @@ export const createTvViewHelpers = ({
           queueEpisodeKey,
           effectiveEpisode,
           outcome,
+          sortMode,
           bestResult,
           alternativeResults,
           episodeQueueSummary,
