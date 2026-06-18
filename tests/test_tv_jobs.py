@@ -186,6 +186,68 @@ def test_manual_tv_episode_search_force_search_bypasses_downloaded_skip(app_fact
     assert any("S01E01" in query for query in fake_client.calls)
 
 
+def test_manual_tv_episode_search_works_for_reacher(app_factory) -> None:
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Reacher",
+        original_title="Reacher",
+        local_titles=["Reacher"],
+        aliases=["Reacher"],
+        genres=["Drama", "Action", "Thriller"],
+        summary="A former military police investigator takes on dangerous cases.",
+        content_type="Scripted",
+        year=2022,
+        source="fallback",
+        source_ids={},
+    )
+    fake_client = StaticSearchClientFactory(
+        {
+            "Reacher S01E01": [build_search_result(file_id=10, title="Reacher S01E01 1080p WEB h264")],
+        }
+    )(timeout_seconds=30)
+    app = app_factory(
+        client_instance=fake_client,
+        tv_client_instance=FakeTvMazeClient(
+            show=TvShowSummary(
+                id=43031,
+                name="Reacher",
+                premiered="2022-02-04",
+                language="English",
+                type="Scripted",
+                genres=["Drama", "Action", "Thriller"],
+                summary="A former military police investigator takes on dangerous cases.",
+                image_url="https://example.test/reacher.jpg",
+            ),
+            episodes=[TvEpisode(id=2229078, season=1, number=1, name="Welcome to Margrave", airdate="2022-02-04")],
+            akas=["Reacher"],
+        ),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/tv/search-episode",
+            json={
+                "show_id": 43031,
+                "show_name": "Reacher",
+                "season_number": 1,
+                "episode_number": 1,
+                "episode_name": "Welcome to Margrave",
+                "aliases": ["Reacher"],
+                "title_metadata": metadata.to_dict(),
+                "alias_mode": "optimized",
+                "force_search": False,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["episode"]["status"] == "done"
+    assert payload["episode"]["result_count"] == 1
+    assert payload["episode"]["query_variants"] == ["Reacher S01E01"]
+    assert fake_client.calls == ["Reacher S01E01"]
+
+
 def test_tv_search_job_worker_processes_and_finalizes_job(app_factory, storage) -> None:
     search_factory = StaticSearchClientFactory(
         {

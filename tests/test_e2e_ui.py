@@ -323,6 +323,52 @@ def _build_tv_search_app(tmp_path: Path):
     return app
 
 
+def _build_reacher_tv_search_app(tmp_path: Path):
+    storage = Storage(db_path=str(tmp_path / "reacher-tv.db"))
+    storage.init_db()
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Reacher",
+        original_title="Reacher",
+        local_titles=["Reacher"],
+        aliases=["Reacher"],
+        genres=["Drama", "Action", "Thriller"],
+        summary="Reacher is wrongly accused of murder while visiting a small town.",
+        content_type="Scripted",
+        year=2022,
+        source="test",
+        source_ids={},
+    )
+    show = TvShowSummary(
+        id=43031,
+        name="Reacher",
+        premiered="2022-02-04",
+        language="English",
+        image_url="https://example.com/reacher-poster.jpg",
+        type="Scripted",
+        genres=["Drama", "Action", "Thriller"],
+        summary="Reacher is wrongly accused of murder while visiting a small town.",
+    )
+    episodes = [
+        TvEpisode(id=2229078, season=1, number=1, name="Welcome to Margrave", airdate="2022-02-04"),
+        TvEpisode(id=2229079, season=1, number=2, name="First Dance", airdate="2022-02-04"),
+    ]
+    client = FakeSdilejClient(
+        responses_by_query={
+            "Reacher S01E01": [build_search_result(file_id=301, title="Reacher S01E01 Welcome to Margrave")],
+            "Reacher S01E02": [build_search_result(file_id=302, title="Reacher S01E02 First Dance")],
+        }
+    )
+    app = create_app(
+        storage_instance=storage,
+        client_instance=client,
+        tv_client_instance=FakeTvMazeClient(show=show, episodes=episodes, akas=["Reacher"]),
+        metadata_resolver_instance=E2EMetadataResolver(metadata),
+        start_workers=True,
+    )
+    return app
+
+
 def _build_tv_polling_app(
     tmp_path: Path,
     *,
@@ -447,6 +493,35 @@ def test_tv_search_marks_downloaded_episode_without_searching(tmp_path) -> None:
         expect_text.wait_for(state="visible")
         assert "downloaded" in expect_text.text_content().lower()
         assert first_episode.locator("button", has_text="Search anyway").count() == 1
+
+
+@pytest.mark.e2e
+def test_reacher_tv_episode_search_runs_without_extra_selection(tmp_path) -> None:
+    app = _build_reacher_tv_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "Reacher")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowSummaryCard")
+
+        assert page.locator("#tvSearchBtn").is_enabled()
+        page.click("#tvSearchBtn")
+
+        page.wait_for_function(
+            """() => {
+              const status = document.querySelector('#tvStatus');
+              return Boolean(status && /TV search complete/i.test(status.textContent || ''));
+            }""",
+            timeout=10000,
+        )
+        page.locator("#tvResults details.tv-season summary").first.click()
+        page.wait_for_selector("#tvResults details.tv-season[open] .tv-episode-card")
+        first_episode = page.locator("#tvResults details.tv-season[open] .tv-episode-card").first
+        assert "done" in first_episode.locator(".tv-episode-status").text_content().lower()
+        assert first_episode.locator(".tv-result-item a").first.text_content().lower().find("reacher") >= 0
 
 
 @pytest.mark.e2e
