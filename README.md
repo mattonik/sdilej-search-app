@@ -223,6 +223,7 @@ SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
   - supports `source_type`: `sdilej` (default) or `youtube`
   - supports optional `source_metadata` for catalog/provider context
   - supports `chunk_count` override (1..8)
+  - supports `destination_preset`: `auto`, `movies`, `tv`, `kids_movies`, `kids_tv`, `unsorted`
   - supports optional media routing hints: `media_kind`, `is_kids`, `series_name`, `season_number`, `episode_number`
   - duplicate queue/download protection returns `409` + `duplicate_job`
   - supports `source_saved_file_id` + `delete_saved_on_complete`
@@ -230,7 +231,7 @@ SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
 - `POST /api/downloads/settings` (`max_concurrent_jobs`, `default_chunk_count`, `bandwidth_limit_kbps`)
 - `GET /api/downloads/library-paths`
 - `POST /api/downloads/library-paths` (`movies_dir`, `tv_dir`, `kids_movies_dir`, `kids_tv_dir`, `unsorted_dir`, `confirm_on_uncertain`)
-- `POST /api/media/classify` (preview auto-classification + resolved destination path)
+- `POST /api/media/classify` (preview auto-classification/destination preset + resolved destination path)
 - `POST /api/downloads/{id}/classification` (recategorize queued job and reroute destination)
 - `POST /api/downloads/{id}/cancel`
 - `POST /api/downloads/{id}/cancel-complete`

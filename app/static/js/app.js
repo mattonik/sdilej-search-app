@@ -82,6 +82,8 @@ import { initKidsCatalog } from "./kids-catalog.js";
       const downloadDetailUrl = document.getElementById("downloadDetailUrl");
       const downloadModeLabel = document.getElementById("downloadModeLabel");
       const downloadMode = document.getElementById("downloadMode");
+      const downloadDestinationPreset = document.getElementById("downloadDestinationPreset");
+      const downloadDestinationPreview = document.getElementById("downloadDestinationPreview");
       const downloadMediaKind = document.getElementById("downloadMediaKind");
       const downloadKidsTag = document.getElementById("downloadKidsTag");
       const downloadSeriesName = document.getElementById("downloadSeriesName");
@@ -114,6 +116,7 @@ import { initKidsCatalog } from "./kids-catalog.js";
       const queueDialogTitle = document.getElementById("queueDialogTitle");
       const queueDialogItemTitle = document.getElementById("queueDialogItemTitle");
       const queueDialogMode = document.getElementById("queueDialogMode");
+      const queueDialogDestinationPreset = document.getElementById("queueDialogDestinationPreset");
       const queueDialogMediaKind = document.getElementById("queueDialogMediaKind");
       const queueDialogKidsTag = document.getElementById("queueDialogKidsTag");
       const queueDialogSeriesName = document.getElementById("queueDialogSeriesName");
@@ -200,6 +203,7 @@ import { initKidsCatalog } from "./kids-catalog.js";
           queueDialogTitle,
           queueDialogItemTitle,
           queueDialogMode,
+          queueDialogDestinationPreset,
           queueDialogMediaKind,
           queueDialogKidsTag,
           queueDialogSeriesName,
@@ -234,6 +238,8 @@ import { initKidsCatalog } from "./kids-catalog.js";
           downloadDetailUrl,
           downloadModeLabel,
           downloadMode,
+          downloadDestinationPreset,
+          downloadDestinationPreview,
           downloadMediaKind,
           downloadKidsTag,
           downloadSeriesName,

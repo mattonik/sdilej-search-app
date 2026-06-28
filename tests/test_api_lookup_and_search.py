@@ -516,6 +516,92 @@ def test_media_classify_uses_tv_metadata_for_kids_detection(app_factory) -> None
     assert payload["destination_subpath"].endswith("kids/tv/Bluey/S02")
 
 
+def test_media_classify_destination_preset_tv_requires_series_and_season(app_factory) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/media/classify",
+            json={"title": "Some Episode", "destination_preset": "tv"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["destination_preset"] == "tv"
+    assert payload["classification"]["media_kind"] == "tv"
+    assert payload["classification"]["is_kids"] is False
+    assert payload["requires_confirmation"] is True
+
+
+def test_download_enqueue_destination_preset_kids_movies(app_factory) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/downloads",
+            json={
+                "detail_url": "https://sdilej.cz/771/frozen.mkv",
+                "file_id": 771,
+                "title": "Frozen.2013.1080p.mkv",
+                "destination_preset": "kids_movies",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["media_kind"] == "movie"
+    assert payload["is_kids"] is True
+    assert payload["destination_subpath"].endswith("kids/movies")
+
+
+def test_download_enqueue_destination_preset_unsorted_bypasses_uncertain_confirmation(app_factory) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/downloads",
+            json={
+                "detail_url": "https://sdilej.cz/772/unknown-episode.mkv",
+                "file_id": 772,
+                "title": "Unknown Episode",
+                "destination_preset": "unsorted",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["media_kind"] == "unknown"
+    assert payload["destination_subpath"].endswith("unsorted")
+
+
+def test_download_recategorize_destination_preset_unsorted_updates_route(app_factory) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        queued = client.post(
+            "/api/downloads",
+            json={
+                "detail_url": "https://sdilej.cz/773/bluey-s01e01.mkv",
+                "file_id": 773,
+                "title": "Bluey S01E01",
+                "media_kind": "tv",
+                "is_kids": True,
+                "series_name": "Bluey",
+                "season_number": 1,
+            },
+        )
+        assert queued.status_code == 200
+        response = client.post(
+            f"/api/downloads/{queued.json()['id']}/classification",
+            json={"destination_preset": "unsorted"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["media_kind"] == "unknown"
+    assert payload["destination_subpath"].endswith("unsorted")
+
+
 def test_saved_upsert_uses_metadata_for_kids_detection(app_factory) -> None:
     resolver = StaticMetadataResolver(
         TitleMetadata(

@@ -449,6 +449,29 @@ def test_download_job_card_exposes_copy_action(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_queue_dialog_destination_preset_routes_to_kids_movies(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(f"{base_url}/?query=Bluey&category=video", wait_until="networkidle")
+        page.locator('.queue-dialog-btn[data-file-id="103"]').click()
+        page.wait_for_selector("#queueDialogBackdrop:not(.hidden)")
+
+        page.select_option("#queueDialogDestinationPreset", "kids_movies")
+        page.wait_for_function("document.querySelector('#queueDialogPreview')?.textContent.includes('kids/movies')")
+        with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith("/api/downloads")) as response_info:
+            page.click("#queueDialogConfirm")
+
+        assert response_info.value.status == 200
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.wait_for_function("document.querySelector('#downloadJobs')?.textContent.includes('kids/movies')")
+        job_text = page.locator("#downloadJobs").text_content() or ""
+        assert "Bluey S01E03 EN" in job_text
+        assert "kids/movies" in job_text
+
+
+@pytest.mark.e2e
 def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 

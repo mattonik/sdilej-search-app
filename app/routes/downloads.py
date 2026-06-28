@@ -236,6 +236,7 @@ def api_media_classify(request: Request, payload: MediaClassificationPayload):
     try:
         plan = _build_media_plan(
             title=payload.title,
+            destination_preset=payload.destination_preset,
             media_kind=payload.media_kind,
             is_kids=payload.is_kids,
             series_name=payload.series_name,
@@ -246,6 +247,7 @@ def api_media_classify(request: Request, payload: MediaClassificationPayload):
         return JSONResponse(
             {
                 "classification": plan["classification"].to_dict(),
+                "destination_preset": plan["destination_preset"],
                 "destination_subpath": plan["destination_subpath"],
                 "resolved_output_dir": plan["resolved_output_dir"],
                 "requires_confirmation": plan["requires_confirmation"],
@@ -305,6 +307,7 @@ def api_downloads_enqueue(request: Request, payload: EnqueueDownloadPayload):
 
         media_plan = _build_media_plan(
             title=title or detail_url.rsplit("/", 1)[-1],
+            destination_preset=payload.destination_preset,
             media_kind=requested_media_kind,
             is_kids=(
                 payload.is_kids if payload.is_kids is not None else (saved_candidate.get("is_kids") if saved_candidate else None)
@@ -446,6 +449,7 @@ def api_downloads_update_classification(request: Request, job_id: int, payload: 
 
         plan = _build_media_plan(
             title=title,
+            destination_preset=payload.destination_preset,
             media_kind=next_media_kind,
             is_kids=payload.is_kids if payload.is_kids is not None else job.get("is_kids"),
             series_name=next_series_name,

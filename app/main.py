@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from .downloader import DownloadWorker
 from .diagnostics import REQUEST_ID_HEADER, new_request_id
 from .media_routing import (
+    MediaClassification,
     classify_media_title,
     requires_classification_confirmation,
     resolve_destination_subpath,
@@ -168,6 +169,9 @@ class AccountPayload(BaseModel):
     verify: bool = True
 
 
+DestinationPreset = Literal["auto", "movies", "tv", "kids_movies", "kids_tv", "unsorted"]
+
+
 class EnqueueDownloadPayload(BaseModel):
     detail_url: str
     file_id: int | None = None
@@ -177,6 +181,7 @@ class EnqueueDownloadPayload(BaseModel):
     preferred_mode: Literal["auto", "premium", "free"] = "auto"
     priority: int = Field(default=0, ge=-100, le=100)
     chunk_count: int | None = Field(default=None, ge=1, le=8)
+    destination_preset: DestinationPreset = "auto"
     media_kind: Literal["movie", "tv"] | None = None
     is_kids: bool | None = None
     series_name: str | None = None
@@ -211,6 +216,7 @@ class LibraryPathsPayload(BaseModel):
 
 class MediaClassificationPayload(BaseModel):
     title: str = Field(min_length=1, max_length=500)
+    destination_preset: DestinationPreset = "auto"
     media_kind: Literal["movie", "tv"] | None = None
     is_kids: bool | None = None
     series_name: str | None = None
@@ -219,6 +225,7 @@ class MediaClassificationPayload(BaseModel):
 
 
 class UpdateDownloadClassificationPayload(BaseModel):
+    destination_preset: DestinationPreset = "auto"
     media_kind: Literal["movie", "tv"] | None = None
     is_kids: bool | None = None
     series_name: str | None = None
@@ -1096,9 +1103,29 @@ def _build_media_plan(
     series_name: str | None,
     season_number: int | None,
     episode_number: int | None,
+    destination_preset: DestinationPreset = "auto",
     services: ServiceContainer,
 ) -> dict:
     library_paths = services.storage.get_library_paths()
+    if destination_preset == "movies":
+        media_kind = "movie"
+        is_kids = False
+        series_name = None
+        season_number = None
+        episode_number = None
+    elif destination_preset == "kids_movies":
+        media_kind = "movie"
+        is_kids = True
+        series_name = None
+        season_number = None
+        episode_number = None
+    elif destination_preset == "tv":
+        media_kind = "tv"
+        is_kids = False
+    elif destination_preset == "kids_tv":
+        media_kind = "tv"
+        is_kids = True
+
     metadata = _resolve_classification_metadata(
         title=title,
         media_kind=media_kind,
@@ -1107,15 +1134,26 @@ def _build_media_plan(
         episode_number=episode_number,
         services=services,
     )
-    media = classify_media_title(
-        title=title,
-        media_kind_override=media_kind,
-        is_kids_override=is_kids,
-        metadata=metadata,
-        series_name_override=_normalize_optional_text(series_name),
-        season_number_override=season_number,
-        episode_number_override=episode_number,
-    )
+    if destination_preset == "unsorted":
+        media = MediaClassification(
+            media_kind="unknown",
+            is_kids=False if is_kids is None else is_kids,
+            series_name=None,
+            season_number=None,
+            episode_number=None,
+            confidence="manual",
+            uncertain_reason=None,
+        )
+    else:
+        media = classify_media_title(
+            title=title,
+            media_kind_override=media_kind,
+            is_kids_override=is_kids,
+            metadata=metadata,
+            series_name_override=_normalize_optional_text(series_name),
+            season_number_override=season_number,
+            episode_number_override=episode_number,
+        )
     if media.media_kind == "tv" and media.series_name:
         try:
             if metadata is None or metadata.kind != "tv":
@@ -1132,11 +1170,17 @@ def _build_media_plan(
             pass
     destination_subpath = resolve_destination_subpath(media, library_paths=library_paths)
     resolved_output_dir = str(_resolve_download_root() / Path(destination_subpath))
+    preset_requires_tv_details = destination_preset in {"tv", "kids_tv"} and not (
+        media.series_name and media.season_number
+    )
     requires_confirmation = bool(
-        library_paths.get("confirm_on_uncertain", True) and requires_classification_confirmation(media)
+        destination_preset != "unsorted"
+        and library_paths.get("confirm_on_uncertain", True)
+        and (requires_classification_confirmation(media) or preset_requires_tv_details)
     )
     return {
         "classification": media,
+        "destination_preset": destination_preset,
         "destination_subpath": destination_subpath,
         "resolved_output_dir": resolved_output_dir,
         "requires_confirmation": requires_confirmation,

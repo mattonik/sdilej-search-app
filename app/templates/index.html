@@ -79,32 +79,51 @@
           </label>
 
           <label>
-            Type
-            <select id="downloadMediaKind">
-              <option value="auto" selected>Auto detect</option>
-              <option value="movie">Movie</option>
-              <option value="tv">TV show</option>
+            Destination
+            <select id="downloadDestinationPreset">
+              <option value="auto" selected>Auto route</option>
+              <option value="movies">Movies</option>
+              <option value="tv">TV Show</option>
+              <option value="kids_movies">Kids Movies</option>
+              <option value="kids_tv">Kids TV</option>
+              <option value="unsorted">Unsorted</option>
             </select>
           </label>
 
-          <label>
-            Kids tag
-            <select id="downloadKidsTag">
-              <option value="auto" selected>Auto detect</option>
-              <option value="yes">Kids</option>
-              <option value="no">Not kids</option>
-            </select>
-          </label>
+          <div id="downloadDestinationPreview" class="destination-preview">Destination will be detected after you paste a URL.</div>
 
-          <label>
-            Series (for TV)
-            <input id="downloadSeriesName" type="text" placeholder="e.g. Bluey" autocomplete="off" />
-          </label>
+          <details class="destination-advanced">
+            <summary>Advanced destination</summary>
+            <div class="destination-advanced-grid">
+              <label>
+                Type
+                <select id="downloadMediaKind">
+                  <option value="auto" selected>Auto detect</option>
+                  <option value="movie">Movie</option>
+                  <option value="tv">TV show</option>
+                </select>
+              </label>
 
-          <label>
-            Season (for TV)
-            <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" />
-          </label>
+              <label>
+                Kids tag
+                <select id="downloadKidsTag">
+                  <option value="auto" selected>Auto detect</option>
+                  <option value="yes">Kids</option>
+                  <option value="no">Not kids</option>
+                </select>
+              </label>
+
+              <label>
+                Series (for TV)
+                <input id="downloadSeriesName" type="text" placeholder="e.g. Bluey" autocomplete="off" />
+              </label>
+
+              <label>
+                Season (for TV)
+                <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" />
+              </label>
+            </div>
+          </details>
 
           <label id="downloadChunkCountLabel">
             Chunk count
@@ -562,6 +581,20 @@
               </select>
             </label>
             <label>
+              Destination
+              <select id="queueDialogDestinationPreset">
+                <option value="auto">Auto route</option>
+                <option value="movies">Movies</option>
+                <option value="tv">TV Show</option>
+                <option value="kids_movies">Kids Movies</option>
+                <option value="kids_tv">Kids TV</option>
+                <option value="unsorted">Unsorted</option>
+              </select>
+            </label>
+            <details class="destination-advanced">
+              <summary>Advanced destination</summary>
+              <div class="destination-advanced-grid">
+            <label>
               Type
               <select id="queueDialogMediaKind">
                 <option value="auto">Auto detect</option>
@@ -585,6 +618,8 @@
               Season
               <input id="queueDialogSeasonNumber" type="number" min="1" max="99" value="" />
             </label>
+              </div>
+            </details>
             <label>
               Chunk count
               <input id="queueDialogChunkCount" type="number" min="1" max="8" value="1" />

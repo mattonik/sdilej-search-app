@@ -14,6 +14,7 @@ export const initQueueDialog = ({
     queueDialogTitle,
     queueDialogItemTitle,
     queueDialogMode,
+    queueDialogDestinationPreset,
     queueDialogMediaKind,
     queueDialogKidsTag,
     queueDialogSeriesName,
@@ -39,12 +40,38 @@ export const initQueueDialog = ({
     const seasonValue = Number(queueDialogSeasonNumber.value || 0);
     const episodeValue = Number(queueDialogState?.episodeNumber || 0);
     return {
+      destination_preset: queueDialogDestinationPreset?.value || "auto",
       media_kind: mediaKind,
       is_kids: isKids,
       series_name: mediaKind === "tv" ? (queueDialogSeriesName.value.trim() || null) : null,
       season_number: mediaKind === "tv" && Number.isFinite(seasonValue) && seasonValue > 0 ? seasonValue : null,
       episode_number: mediaKind === "tv" && Number.isFinite(episodeValue) && episodeValue > 0 ? episodeValue : null,
     };
+  };
+
+  const applyDestinationPresetToDialogFields = () => {
+    const preset = queueDialogDestinationPreset?.value || "auto";
+    if (preset === "movies" || preset === "kids_movies") {
+      queueDialogMediaKind.value = "movie";
+      queueDialogKidsTag.value = preset === "kids_movies" ? "yes" : "no";
+      queueDialogSeriesName.value = "";
+      queueDialogSeasonNumber.value = "";
+    } else if (preset === "tv" || preset === "kids_tv") {
+      queueDialogMediaKind.value = "tv";
+      queueDialogKidsTag.value = preset === "kids_tv" ? "yes" : "no";
+    } else if (preset === "unsorted") {
+      queueDialogMediaKind.value = "auto";
+      queueDialogKidsTag.value = "auto";
+      queueDialogSeriesName.value = "";
+      queueDialogSeasonNumber.value = "";
+    }
+  };
+
+  const destinationPresetFromConfig = (config) => {
+    if (config.destinationPreset) return config.destinationPreset;
+    if (config.mediaKind === "movie") return config.isKids ? "kids_movies" : "movies";
+    if (config.mediaKind === "tv") return config.isKids ? "kids_tv" : "tv";
+    return "auto";
   };
 
   const updateQueueDialogMode = () => {
@@ -71,11 +98,11 @@ export const initQueueDialog = ({
       }
 
       const c = data.classification || {};
-      if (queueDialogMediaKind.value === "auto" && (c.media_kind === "movie" || c.media_kind === "tv")) {
+      if ((queueDialogDestinationPreset?.value || "auto") === "auto" && queueDialogMediaKind.value === "auto" && (c.media_kind === "movie" || c.media_kind === "tv")) {
         queueDialogMediaKind.value = c.media_kind;
         updateQueueDialogMode();
       }
-      if (queueDialogKidsTag.value === "auto" && typeof c.is_kids === "boolean") {
+      if ((queueDialogDestinationPreset?.value || "auto") === "auto" && queueDialogKidsTag.value === "auto" && typeof c.is_kids === "boolean") {
         queueDialogKidsTag.value = c.is_kids ? "yes" : "no";
       }
       if (queueDialogMediaKind.value === "tv") {
@@ -89,7 +116,7 @@ export const initQueueDialog = ({
 
       const confidence = c.confidence ? ` (${c.confidence})` : "";
       const note = data.requires_confirmation ? " Confirmation required." : "";
-      queueDialogPreview.textContent = `Detected: ${c.media_kind || "unknown"}${confidence}. Route: ${data.destination_subpath || "unsorted"}.${note}`;
+      queueDialogPreview.textContent = `Detected: ${c.media_kind || "unknown"}${confidence}. Will save to: ${data.destination_subpath || "unsorted"}.${note}`;
     } catch (_) {
       queueDialogPreview.textContent = "Classification preview failed.";
     }
@@ -106,6 +133,7 @@ export const initQueueDialog = ({
     queueDialogTitle.textContent = config.intent === "edit" ? `Recategorize Job #${config.jobId}` : "Add To Queue";
     queueDialogItemTitle.textContent = config.title || config.detailUrl || "";
     queueDialogMode.value = config.preferredMode || "premium";
+    queueDialogDestinationPreset.value = destinationPresetFromConfig(config);
     queueDialogMediaKind.value = config.mediaKind || "auto";
     queueDialogKidsTag.value =
       config.isKids === true ? "yes" : config.isKids === false ? "no" : "auto";
@@ -118,6 +146,7 @@ export const initQueueDialog = ({
     queueDialogMode.disabled = editMode;
     queueDialogChunkCount.disabled = editMode;
     queueDialogPriority.disabled = editMode;
+    applyDestinationPresetToDialogFields();
     updateQueueDialogMode();
 
     queueDialogBackdrop.classList.remove("hidden");
@@ -132,7 +161,23 @@ export const initQueueDialog = ({
     }
   });
 
-  [queueDialogMediaKind, queueDialogKidsTag, queueDialogSeriesName, queueDialogSeasonNumber].forEach((el) => {
+  queueDialogDestinationPreset?.addEventListener("change", async () => {
+    applyDestinationPresetToDialogFields();
+    updateQueueDialogMode();
+    await classifyForQueueDialog();
+  });
+
+  [queueDialogMediaKind, queueDialogKidsTag].forEach((el) => {
+    el.addEventListener("change", async () => {
+      if (queueDialogDestinationPreset) {
+        queueDialogDestinationPreset.value = "auto";
+      }
+      updateQueueDialogMode();
+      await classifyForQueueDialog();
+    });
+  });
+
+  [queueDialogSeriesName, queueDialogSeasonNumber].forEach((el) => {
     el.addEventListener("change", async () => {
       updateQueueDialogMode();
       await classifyForQueueDialog();

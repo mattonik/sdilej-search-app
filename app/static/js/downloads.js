@@ -26,6 +26,8 @@ export const initDownloads = ({
     downloadDetailUrl,
     downloadModeLabel,
     downloadMode,
+    downloadDestinationPreset,
+    downloadDestinationPreview,
     downloadMediaKind,
     downloadKidsTag,
     downloadSeriesName,
@@ -56,6 +58,7 @@ export const initDownloads = ({
   let refreshDownloadsInFlight = false;
   let refreshDownloadsQueued = false;
   let refreshDownloadsFailures = 0;
+  let destinationPreviewSeq = 0;
 
   const isYoutubeLikeUrl = (value) => {
     const text = String(value || "").trim().toLowerCase();
@@ -96,6 +99,7 @@ export const initDownloads = ({
     const mediaKind = downloadMediaKind.value === "auto" ? null : downloadMediaKind.value;
     const isKids = resolveKidsValue(downloadKidsTag.value);
     const payload = {
+      destination_preset: downloadDestinationPreset?.value || "auto",
       media_kind: mediaKind,
       is_kids: isKids,
       series_name: null,
@@ -107,6 +111,61 @@ export const initDownloads = ({
       payload.season_number = Number.isFinite(season) && season > 0 ? season : null;
     }
     return payload;
+  };
+
+  const applyDestinationPresetToDownloadFields = () => {
+    const preset = downloadDestinationPreset?.value || "auto";
+    if (preset === "movies" || preset === "kids_movies") {
+      downloadMediaKind.value = "movie";
+      downloadKidsTag.value = preset === "kids_movies" ? "yes" : "no";
+      downloadSeriesName.value = "";
+      downloadSeasonNumber.value = "";
+    } else if (preset === "tv" || preset === "kids_tv") {
+      downloadMediaKind.value = "tv";
+      downloadKidsTag.value = preset === "kids_tv" ? "yes" : "no";
+    } else if (preset === "unsorted") {
+      downloadMediaKind.value = "auto";
+      downloadKidsTag.value = "auto";
+      downloadSeriesName.value = "";
+      downloadSeasonNumber.value = "";
+    }
+    const isTv = downloadMediaKind.value === "tv";
+    downloadSeriesName.disabled = !isTv;
+    downloadSeasonNumber.disabled = !isTv;
+  };
+
+  const updateDownloadDestinationPreview = async () => {
+    if (!downloadDestinationPreview) return;
+    const seq = ++destinationPreviewSeq;
+    const detailUrl = downloadDetailUrl?.value.trim() || "";
+    if (!detailUrl && (downloadDestinationPreset?.value || "auto") === "auto") {
+      downloadDestinationPreview.textContent = "Destination will be detected after you paste a URL.";
+      downloadDestinationPreview.dataset.mode = "neutral";
+      return;
+    }
+    downloadDestinationPreview.textContent = "Checking destination...";
+    downloadDestinationPreview.dataset.mode = "neutral";
+    const payload = {
+      title: detailUrl ? detailUrl.split("/").filter(Boolean).pop() || "Manual download" : "Manual download",
+      ...buildMediaRoutingPayload(),
+    };
+    try {
+      const { ok, data } = await api.classifyMedia(payload);
+      if (seq !== destinationPreviewSeq) return;
+      if (!ok) {
+        downloadDestinationPreview.textContent = data.error || "Destination preview failed.";
+        downloadDestinationPreview.dataset.mode = "error";
+        return;
+      }
+      const c = data.classification || {};
+      const warning = data.requires_confirmation ? " Needs confirmation." : "";
+      downloadDestinationPreview.textContent = `Will save to: ${data.destination_subpath || "unsorted"} (${c.media_kind || "unknown"}).${warning}`;
+      downloadDestinationPreview.dataset.mode = data.requires_confirmation ? "warning" : "ok";
+    } catch (_) {
+      if (seq !== destinationPreviewSeq) return;
+      downloadDestinationPreview.textContent = "Destination preview failed.";
+      downloadDestinationPreview.dataset.mode = "error";
+    }
   };
 
   const renderDownloadJobs = (jobs, { refreshDownloads, enqueueDownload }) => {
@@ -522,8 +581,29 @@ export const initDownloads = ({
     }
   });
 
+  downloadDestinationPreset?.addEventListener("change", async () => {
+    applyDestinationPresetToDownloadFields();
+    await updateDownloadDestinationPreview();
+  });
+  [downloadMediaKind, downloadKidsTag].forEach((el) => {
+    el?.addEventListener("change", async () => {
+      if (downloadDestinationPreset) {
+        downloadDestinationPreset.value = "auto";
+      }
+      applyDestinationPresetToDownloadFields();
+      await updateDownloadDestinationPreview();
+    });
+  });
+  [downloadDetailUrl, downloadSeriesName, downloadSeasonNumber].forEach((el) => {
+    el?.addEventListener("input", () => {
+      window.setTimeout(updateDownloadDestinationPreview, 0);
+    });
+  });
+
   downloadSourceType?.addEventListener("change", updateDownloadSourceMode);
   updateDownloadSourceMode();
+  applyDestinationPresetToDownloadFields();
+  updateDownloadDestinationPreview();
 
   refreshDownloadsBtn.addEventListener("click", async () => {
     setDownloadStatus("Refreshing queue...", "neutral");
