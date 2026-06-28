@@ -310,3 +310,5 @@ curl http://localhost:8080/api/downloads
 ## Backlog
 
 See [docs/ux-backlog.md](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/docs/ux-backlog.md) for the closed UX and stability log.
+
+See [docs/local-library-management.md](/Users/martinp/Work/Projects/lilnasx/sdilej-search-app/docs/local-library-management.md) for the current read-only Missing TV library scan behavior.

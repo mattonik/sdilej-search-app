@@ -20,6 +20,17 @@ export const initLibraryManagement = ({
 
   const status = createStatusController(libraryStatus);
   let lastReport = null;
+  let scanInFlight = false;
+
+  const submitButton = libraryTvMissingForm.querySelector('button[type="submit"]');
+
+  const setScanning = (scanning) => {
+    scanInFlight = Boolean(scanning);
+    if (submitButton) {
+      submitButton.disabled = scanInFlight;
+      submitButton.textContent = scanInFlight ? "Scanning..." : "Scan missing episodes";
+    }
+  };
 
   const renderEmpty = (message) => {
     libraryTvMissingResults.innerHTML = `<div class="download-empty">${esc(message)}</div>`;
@@ -31,6 +42,10 @@ export const initLibraryManagement = ({
     const context = report.local_context || {};
     const summary = report.summary || {};
     const seasons = Array.isArray(report.seasons) ? report.seasons : [];
+    if (!seasons.length) {
+      renderEmpty("No TV seasons were returned for this show.");
+      return;
+    }
     libraryTvMissingResults.innerHTML = `
       <div class="library-summary-card">
         <div>
@@ -95,6 +110,7 @@ export const initLibraryManagement = ({
 
   libraryTvMissingForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (scanInFlight) return;
     const showName = libraryTvShowName?.value.trim() || "";
     if (!showName) {
       status.setStatus({
@@ -104,19 +120,24 @@ export const initLibraryManagement = ({
       });
       return;
     }
+    setScanning(true);
     status.setStatus("Scanning local TV library...", "neutral");
     renderEmpty("Scanning...");
-    const { ok, data } = await api.scanMissingTv({ show_name: showName });
-    if (!ok) {
-      status.setStatus(buildStatusErrorState(data, "TV library scan failed.", {
-        hint: "Check the show name and configured media folders.",
-      }));
-      renderEmpty(data?.error || "TV library scan failed.");
-      return;
+    try {
+      const { ok, data } = await api.scanMissingTv({ show_name: showName });
+      if (!ok) {
+        status.setStatus(buildStatusErrorState(data, "TV library scan failed.", {
+          hint: "Check the show name and configured media folders.",
+        }));
+        renderEmpty(data?.error || "TV library scan failed.");
+        return;
+      }
+      renderReport(data);
+      const summary = data.summary || {};
+      status.setStatus(`Scan complete: ${summary.downloaded_episodes || 0} downloaded, ${summary.missing_episodes || 0} missing.`, "ok");
+    } finally {
+      setScanning(false);
     }
-    renderReport(data);
-    const summary = data.summary || {};
-    status.setStatus(`Scan complete: ${summary.downloaded_episodes || 0} downloaded, ${summary.missing_episodes || 0} missing.`, "ok");
   });
 
   return {

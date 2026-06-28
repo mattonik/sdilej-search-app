@@ -218,6 +218,22 @@ def test_library_tv_missing_error_returns_diagnostic_payload(app_factory) -> Non
     assert payload["request_id"]
 
 
+def test_library_tv_missing_without_episode_data_returns_diagnostic_payload(app_factory) -> None:
+    class NoEpisodesTvClient(FakeTvMazeClient):
+        def get_episodes(self, show_id: int) -> list[TvEpisode]:
+            return []
+
+    app = app_factory(tv_client_instance=NoEpisodesTvClient())
+
+    with TestClient(app) as client:
+        response = client.post("/api/library/tv/missing", json={"show_name": "Shaun the Sheep"})
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error_code"] == "library_tv_show_not_found"
+    assert "No episode data" in payload["error"]
+
+
 def test_manual_tv_episode_search_force_search_bypasses_downloaded_skip(app_factory, media_root) -> None:
     season_dir = media_root / "tv" / "Vesela farma" / "S01"
     season_dir.mkdir(parents=True)
