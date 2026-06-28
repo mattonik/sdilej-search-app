@@ -79,6 +79,13 @@ export const api = {
     const query = new URLSearchParams(params || {});
     return jsonRequest(`/api/discovery/movies?${query.toString()}`);
   },
+  scanMissingTv(payload) {
+    return jsonRequest("/api/library/tv/missing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
   listKidsCatalogShows() {
     return jsonRequest("/api/kids-catalog/shows");
   },

@@ -16,6 +16,7 @@
       <nav class="workspace-tabs">
         <button type="button" class="workspace-tab btn btn-pill active" data-tab="search">Search</button>
         <button type="button" class="workspace-tab btn btn-pill" data-tab="downloads">Downloads</button>
+        <button type="button" class="workspace-tab btn btn-pill" data-tab="library">Library</button>
         <button type="button" class="workspace-tab btn btn-pill" data-tab="account">Account</button>
         <a href="/saved" class="workspace-tab-link btn btn-pill">Saved Picks</a>
       </nav>
@@ -201,6 +202,26 @@
             </div>
           </form>
         </details>
+      </section>
+
+      <section class="panel library-panel tab-section tab-library">
+        <div class="library-header">
+          <div>
+            <h2>Local Library</h2>
+            <p>Check a TV show against your configured local folders and find missing episodes.</p>
+          </div>
+        </div>
+
+        <form id="libraryTvMissingForm" class="library-scan-form">
+          <label>
+            TV show name
+            <input id="libraryTvShowName" type="text" maxlength="200" placeholder="e.g. Reacher" autocomplete="off" />
+          </label>
+          <button type="submit" class="btn btn-primary">Scan missing episodes</button>
+        </form>
+
+        <div id="libraryStatus" class="download-status" aria-live="polite" aria-atomic="true">Library scan idle.</div>
+        <div id="libraryTvMissingResults" class="library-results"></div>
       </section>
 
       <section class="panel tab-section tab-search">

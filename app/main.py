@@ -342,6 +342,7 @@ def create_app(
     from .routes.discovery import router as discovery_router
     from .routes.health import router as health_router
     from .routes.kids_catalog import router as kids_catalog_router
+    from .routes.library import router as library_router
     from .routes.search import router as search_router
     from .routes.tv import router as tv_router
 
@@ -350,6 +351,7 @@ def create_app(
     app.include_router(downloads_router)
     app.include_router(discovery_router)
     app.include_router(kids_catalog_router)
+    app.include_router(library_router)
     app.include_router(health_router)
 
     def on_startup() -> None:

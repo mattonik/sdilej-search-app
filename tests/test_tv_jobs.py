@@ -161,6 +161,63 @@ def test_sync_tv_search_ignores_support_files_when_detecting_downloaded_episodes
     assert episode["result_count"] == 1
 
 
+def test_library_tv_missing_report_uses_alias_folder_and_counts_missing(app_factory, media_root) -> None:
+    season_dir = media_root / "tv" / "Vesela farma" / "S01"
+    season_dir.mkdir(parents=True)
+    (season_dir / "Vesela farma - S01E01.mkv").write_text("video")
+    (season_dir / "Vesela farma - S01E02.srt").write_text("subtitle")
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Ovecka Shaun",
+        original_title="Shaun the Sheep",
+        local_titles=["Vesela farma"],
+        aliases=["Shaun the Sheep", "Vesela farma"],
+        year=2007,
+        source="fallback",
+        source_ids={},
+    )
+    app = app_factory(
+        tv_client_instance=FakeTvMazeClient(),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/api/library/tv/missing", json={"show_name": "Shaun the Sheep"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["local_context"]["series_name"] == "Vesela farma"
+    assert payload["local_context"]["series_dir"].endswith("tv/Vesela farma")
+    assert payload["summary"] == {"total_episodes": 2, "downloaded_episodes": 1, "missing_episodes": 1}
+    first, second = payload["seasons"][0]["episodes"]
+    assert first["status"] == "downloaded"
+    assert first["downloaded_files"] == ["Vesela farma - S01E01.mkv"]
+    assert second["status"] == "missing"
+    assert second["downloaded_files"] == []
+
+
+def test_library_tv_missing_error_returns_diagnostic_payload(app_factory) -> None:
+    class BrokenTvClient:
+        def lookup_show(self, show_name: str) -> TvShowSummary:
+            raise TvMazeClientError(f"Lookup failed for {show_name}")
+
+        def get_episodes(self, show_id: int) -> list[TvEpisode]:
+            return []
+
+        def get_akas(self, show_id: int) -> list[str]:
+            return []
+
+    app = app_factory(tv_client_instance=BrokenTvClient())
+
+    with TestClient(app) as client:
+        response = client.post("/api/library/tv/missing", json={"show_name": "Missing Show"})
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error_code"] == "library_tv_show_not_found"
+    assert payload["request_id"]
+
+
 def test_manual_tv_episode_search_force_search_bypasses_downloaded_skip(app_factory, media_root) -> None:
     season_dir = media_root / "tv" / "Vesela farma" / "S01"
     season_dir.mkdir(parents=True)

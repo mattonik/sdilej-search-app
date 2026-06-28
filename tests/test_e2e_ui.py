@@ -629,6 +629,31 @@ def test_tv_search_marks_downloaded_episode_without_searching(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_library_missing_tv_scan_and_search_missing_flow(tmp_path) -> None:
+    app = _build_tv_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="library"]')
+        page.fill("#libraryTvShowName", "Bluey")
+        page.click('#libraryTvMissingForm button[type="submit"]')
+        page.wait_for_selector(".library-summary-card")
+        results_text = page.locator("#libraryTvMissingResults").text_content() or ""
+        assert "1 downloaded" in results_text
+        assert "1 missing" in results_text
+        assert "Bluey.S01E01.mkv" in results_text
+        assert "S01E02" in results_text
+
+        page.locator('.library-episode[data-status="missing"] .library-search-missing').first.click()
+        page.wait_for_function("window.location.hash === '#search'")
+        page.wait_for_selector("#tvModePanel:not(.hidden)")
+        page.wait_for_function("document.querySelector('#tvShowName')?.value === 'Bluey'")
+        page.wait_for_selector('.tv-season-select[data-season-number="1"] input.tv-episode-check[value="2"]:checked')
+        assert page.locator("#tvSearchBtn").is_enabled()
+
+
+@pytest.mark.e2e
 def test_tv_search_job_error_exposes_diagnostic_details(tmp_path) -> None:
     app = _build_tv_search_app(tmp_path)
 

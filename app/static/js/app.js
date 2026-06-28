@@ -28,6 +28,7 @@ import { initTvSearch } from "./tv-search.js";
 import { initQueueDialog } from "./queue-dialog.js";
 import { initWorkspaceTabs } from "./workspace-tabs.js";
 import { initKidsCatalog } from "./kids-catalog.js";
+import { initLibraryManagement } from "./library-management.js";
 import { initMovieDiscovery } from "./movie-discovery.js";
 
       const input = document.getElementById("queryInput");
@@ -89,6 +90,10 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const accountPassword = document.getElementById("accountPassword");
       const accountVerify = document.getElementById("accountVerify");
       const accountClearBtn = document.getElementById("accountClearBtn");
+      const libraryTvMissingForm = document.getElementById("libraryTvMissingForm");
+      const libraryTvShowName = document.getElementById("libraryTvShowName");
+      const libraryStatus = document.getElementById("libraryStatus");
+      const libraryTvMissingResults = document.getElementById("libraryTvMissingResults");
       const youtubeQuickForm = document.getElementById("youtubeQuickForm");
       const youtubeQuickUrl = document.getElementById("youtubeQuickUrl");
       const youtubeQuickSubmit = document.getElementById("youtubeQuickSubmit");
@@ -196,9 +201,9 @@ import { initMovieDiscovery } from "./movie-discovery.js";
 
       const initialTab = (() => {
         const hash = (window.location.hash || "").replace("#", "").trim();
-        if (hash === "search" || hash === "downloads" || hash === "account") return hash;
+        if (hash === "search" || hash === "downloads" || hash === "library" || hash === "account") return hash;
         const saved = readActiveWorkspaceTab();
-        if (saved === "search" || saved === "downloads" || saved === "account") return saved;
+        if (saved === "search" || saved === "downloads" || saved === "library" || saved === "account") return saved;
         return "search";
       })();
 
@@ -314,6 +319,18 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         },
         api,
         openQueueDialog: (...args) => openQueueDialog?.(...args),
+      });
+
+      initLibraryManagement({
+        elements: {
+          libraryTvMissingForm,
+          libraryTvShowName,
+          libraryStatus,
+          libraryTvMissingResults,
+        },
+        api,
+        setWorkspaceTab: (...args) => setWorkspaceTab?.(...args),
+        getTvApi: () => tvApi,
       });
 
       fileSearchApi = initFileSearch({

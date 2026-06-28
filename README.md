@@ -19,6 +19,9 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - Music search:
   - audio-category shortcut form
   - `music` destination preset for routing downloads to `/music`
+- Local library management:
+  - per-show TV missing-episode scan using TVMaze episode lists
+  - local downloaded detection from configured TV folders via `SxxEyy` media files
 - Sort options: relevance, most downloaded, newest, largest, smallest
 - Language-aware filtering with filename heuristics (e.g. `SK`, `(sk)`, `CZ EN SK`, `SKtit`, `SK dabing`)
 - `strict_dubbing` mode (requires explicit `dub`/`dabing` markers)
@@ -69,6 +72,7 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - `app/static/js/saved.js` - saved-picks browser runtime
 - `app/static/js/file-search.js` - file-search runtime
 - `app/static/js/movie-discovery.js` - movie discovery runtime
+- `app/static/js/library-management.js` - local library scan runtime
 - `app/static/js/tv-search.js` - TV runtime
 - `app/static/js/queue-ui.js` - shared queue rendering/actions
 - `app/static/js/tv-view.js` - TV rendering helpers
@@ -219,6 +223,7 @@ SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
 - `POST /api/movie/lookup` (`title`, optional `year`) returns localized title metadata + aliases
 - `GET /api/discovery/movie-genres?language=sk-SK`
 - `GET /api/discovery/movies?mode=popular&time_window=week&genre=28&year=2024&limit=12`
+- `POST /api/library/tv/missing` (`show_name`) returns local downloaded/missing TV episode report
 - `POST /api/tv/search` (`show_id`, `show_name`, `seasons`, optional current filters) returns grouped episode results
 - `POST /api/tv/search-jobs` creates a persisted background TV search job
 - `GET /api/tv/search-jobs?limit=50&status=running`

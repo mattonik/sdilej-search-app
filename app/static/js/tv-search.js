@@ -288,6 +288,7 @@ export const initTvSearch = ({
           renderTvSeasonPicker(data.seasons || []);
           setTvStatus("Seasons loaded. Select seasons and run search.", "ok");
           updateTvSearchButtonState();
+          return tvLookupState;
         } catch (_) {
           tvLookupState = null;
           state.tvLookupState = tvLookupState;
@@ -298,6 +299,7 @@ export const initTvSearch = ({
             mode: "error",
             details: { hint: "Retry the lookup or check the TV worker health." },
           });
+          return null;
         }
       };
 
@@ -900,6 +902,50 @@ export const initTvSearch = ({
         updateTvSearchButtonState();
       };
 
+      const refreshTvSeasonPickerVisibility = () => {
+        tvSeasonPicker.querySelectorAll(".tv-season-select").forEach((row) => {
+          const seasonChecked = Boolean(row.querySelector("input.tv-season-check")?.checked);
+          const mode = row.querySelector("select.tv-episode-mode")?.value || "all";
+          row.querySelector(".tv-episode-picker")?.classList.toggle("hidden", !(seasonChecked && mode === "selected"));
+        });
+      };
+
+      const selectSingleTvEpisode = ({ seasonNumber, episodeNumber }) => {
+        const seasonValue = String(Number(seasonNumber || 0));
+        const episodeValue = String(Number(episodeNumber || 0));
+        if (!seasonValue || !episodeValue) return false;
+        let found = false;
+        tvSeasonPicker.querySelectorAll("input.tv-season-check").forEach((el) => {
+          el.checked = el.value === seasonValue;
+        });
+        tvSeasonPicker.querySelectorAll(".tv-season-select").forEach((row) => {
+          const activeSeason = row.dataset.seasonNumber === seasonValue;
+          const mode = row.querySelector("select.tv-episode-mode");
+          if (mode) mode.value = activeSeason ? "selected" : "all";
+          row.querySelectorAll("input.tv-episode-check").forEach((episodeEl) => {
+            const activeEpisode = activeSeason && episodeEl.value === episodeValue;
+            episodeEl.checked = activeEpisode;
+            found = found || activeEpisode;
+          });
+        });
+        refreshTvSeasonPickerVisibility();
+        updateTvSearchButtonState();
+        return found;
+      };
+
+      const prepareTvSearchForEpisode = async ({ showName, seasonNumber, episodeNumber }) => {
+        setSearchMode("tv");
+        if (tvShowName && showName) {
+          tvShowName.value = showName;
+        }
+        const lookup = await runTvLookup();
+        const selected = selectSingleTvEpisode({ seasonNumber, episodeNumber });
+        if (lookup && selected) {
+          setTvStatus(`Loaded ${showName}. Selected S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}.`, "ok");
+        }
+        return Boolean(lookup && selected);
+      };
+
       const bindTvQueueButtons = () => {
         tvResults.querySelectorAll("button.tv-queue-btn").forEach((btn) => {
           btn.addEventListener("click", async () => {
@@ -1356,6 +1402,7 @@ export const initTvSearch = ({
     syncTvEditorToFileFilters,
     updateTvSearchButtonState,
     setSearchMode,
+    prepareTvSearchForEpisode,
     setTvStatus,
     setActiveTvSearchJobId,
     selectedTvSeasons,

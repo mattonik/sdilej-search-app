@@ -714,6 +714,130 @@ textarea {
   background: #fff;
 }
 
+.library-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.library-header p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+.library-scan-form {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.library-scan-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.library-results {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.library-summary-card,
+.library-season,
+.library-episode {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.library-summary-card {
+  padding: 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.library-summary-card span,
+.library-episode small {
+  color: var(--muted);
+}
+
+.library-summary-card > div:first-child,
+.library-episode > div:first-child {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.library-summary-stats,
+.library-episode-state {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.library-summary-stats span,
+.library-badge {
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.library-season-list,
+.library-episode-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.library-season {
+  overflow: hidden;
+}
+
+.library-season > summary {
+  cursor: pointer;
+  padding: 0.8rem 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.library-season > summary span {
+  color: var(--muted);
+}
+
+.library-episode-list {
+  padding: 0 0.9rem 0.9rem;
+}
+
+.library-episode {
+  padding: 0.7rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.library-badge[data-status="downloaded"] {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+
+.library-badge[data-status="missing"] {
+  color: #92400e;
+  background: #fef3c7;
+}
+
 .download-job.queue-job-highlight {
   border-color: #38bdf8;
   box-shadow: 0 0 0 3px rgb(56 189 248 / 0.22);
@@ -2700,6 +2824,19 @@ textarea {
 
   .tv-controls {
     grid-template-columns: 1fr;
+  }
+
+  .library-scan-form,
+  .library-summary-card,
+  .library-episode {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .library-summary-stats,
+  .library-episode-state {
+    justify-content: flex-start;
   }
 
   .tv-show-summary {
