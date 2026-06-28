@@ -504,6 +504,22 @@ def test_music_search_routes_audio_results_to_music_preset(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_movie_discovery_without_tmdb_token_shows_setup_state(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("TMDB_BEARER_TOKEN", raising=False)
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#movieDiscoveryPanel summary")
+        page.click('#movieDiscoveryForm button[type="submit"]')
+        page.wait_for_function(
+            "document.querySelector('#movieDiscoveryStatus')?.textContent.includes('TMDB_BEARER_TOKEN')"
+        )
+        assert "TMDB_BEARER_TOKEN" in (page.locator("#movieDiscoveryResults").text_content() or "")
+
+
+@pytest.mark.e2e
 def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 

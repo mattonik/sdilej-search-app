@@ -21,6 +21,8 @@ export const initMovieDiscovery = ({
     return {};
   }
 
+  let genresLoaded = false;
+
   const setStatus = (message, mode = "neutral") => {
     if (!movieDiscoveryStatus) return;
     movieDiscoveryStatus.textContent = message || "";
@@ -33,6 +35,12 @@ export const initMovieDiscovery = ({
     if (status === "error") return "Check failed";
     return "Not found";
   };
+
+  const movieTitle = (item) => item?.title || item?.original_title || "Untitled movie";
+  const movieYear = (item) => item?.year || "n/a";
+  const movieVoteAverage = (item) => item?.vote_average ?? "n/a";
+  const movieVoteCount = (item) => item?.vote_count ?? 0;
+  const movieLanguages = (best) => (Array.isArray(best?.detected_languages) ? best.detected_languages : []);
 
   const renderMovies = (items) => {
     if (!Array.isArray(items) || !items.length) {
@@ -48,20 +56,21 @@ export const initMovieDiscovery = ({
           ${item.poster_url ? `<img src="${esc(item.poster_url)}" alt="" loading="lazy" />` : `<div class="movie-discovery-poster-fallback">No poster</div>`}
           <div class="movie-discovery-body">
             <div class="movie-discovery-head">
-              <strong>${esc(item.title || item.original_title || "Untitled movie")}</strong>
-              <span>${esc(item.year || "n/a")}</span>
+              <strong>${esc(movieTitle(item))}</strong>
+              <span>${esc(movieYear(item))}</span>
             </div>
             <div class="movie-discovery-meta">
-              <span>TMDB ${esc(item.vote_average ?? "n/a")}</span>
-              <span>${esc(item.vote_count ?? 0)} votes</span>
+              <span>TMDB ${esc(movieVoteAverage(item))}</span>
+              <span>${esc(movieVoteCount(item))} votes</span>
               <span class="movie-availability" data-status="${esc(status)}">${esc(availabilityLabel(status))}</span>
             </div>
             ${item.overview ? `<p>${esc(truncateText(item.overview, 180))}</p>` : ""}
+            ${availability.error ? `<div class="movie-discovery-error">${esc(availability.error)}</div>` : ""}
             ${best ? `
               <div class="movie-discovery-match">
                 <span>Best sdilej match</span>
                 <strong>${esc(best.title || "")}</strong>
-                <small>${esc(best.size || "n/a")} · ${esc(best.primary_year || "year n/a")} · ${esc((best.detected_languages || []).join(", ") || "language n/a")}</small>
+                <small>${esc(best.size || "n/a")} · ${esc(best.primary_year || "year n/a")} · ${esc(movieLanguages(best).join(", ") || "language n/a")}</small>
               </div>
               <button
                 type="button"
@@ -96,17 +105,25 @@ export const initMovieDiscovery = ({
   };
 
   const loadGenres = async () => {
+    if (genresLoaded) return;
     const { ok, data } = await api.listMovieDiscoveryGenres("sk-SK");
     if (!ok || !data.configured) {
       setStatus(data?.hint || "Set TMDB_BEARER_TOKEN to enable movie discovery.", "warning");
       return;
     }
-    (data.items || []).forEach((genre) => {
+    if (movieDiscoveryGenre) {
+      Array.from(movieDiscoveryGenre.options)
+        .filter((option) => option.value)
+        .forEach((option) => option.remove());
+    }
+    (Array.isArray(data.items) ? data.items : []).forEach((genre) => {
+      if (!genre?.id || !genre?.name) return;
       const option = document.createElement("option");
       option.value = String(genre.id);
       option.textContent = genre.name;
       movieDiscoveryGenre?.appendChild(option);
     });
+    genresLoaded = true;
   };
 
   movieDiscoveryForm.addEventListener("submit", async (event) => {
@@ -128,10 +145,13 @@ export const initMovieDiscovery = ({
     const { ok, data } = await api.discoverMovies(params);
     if (!ok || !data.configured) {
       setStatus(data?.hint || data?.error || "Movie discovery is not configured.", "warning");
+      movieDiscoveryResults.innerHTML = `<div class="download-empty">${esc(data?.hint || data?.error || "Movie discovery is not configured.")}</div>`;
       return;
     }
     renderMovies(data.items || []);
-    setStatus(`Loaded ${data.items?.length || 0} movies with sdilej availability.`, "ok");
+    const items = Array.isArray(data.items) ? data.items : [];
+    const checkedCount = items.filter((item) => item?.availability?.status !== "error").length;
+    setStatus(`Loaded ${items.length} movies. Checked availability for ${checkedCount}.`, "ok");
   });
 
   loadGenres();

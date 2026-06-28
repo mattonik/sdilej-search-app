@@ -5,10 +5,38 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.models import TitleMetadata
+from app.routes.discovery import _parse_size_bytes, _score_candidate
+from app.sdilej_client import SdilejClientError
 from app.title_metadata import CZDB_DETAIL_URL, CZDB_SEARCH_URL
-from app.tmdb_client import TMDB_BASE_URL
+from app.tmdb_client import TMDB_BASE_URL, TmdbClient
 from app.tvmaze_client import TVMAZE_BASE_URL
 from tests.conftest import FakeSdilejClient, StaticMetadataResolver, build_search_result
+
+
+class FailingSearchClient(FakeSdilejClient):
+    def search(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        raise SdilejClientError("sdilej timeout")
+
+
+def test_tmdb_client_parse_movie_handles_missing_optional_fields() -> None:
+    movie = TmdbClient(token="token")._parse_movie(  # noqa: SLF001
+        {
+            "id": 42,
+            "title": "",
+            "name": "Fallback Title",
+            "release_date": "",
+            "poster_path": "",
+            "genre_ids": [12, "ignored"],
+        }
+    )
+
+    assert movie.tmdb_id == 42
+    assert movie.title == "Fallback Title"
+    assert movie.year is None
+    assert movie.poster_url is None
+    assert movie.vote_average is None
+    assert movie.vote_count is None
+    assert movie.genre_ids == [12]
 
 
 @responses.activate
@@ -145,6 +173,17 @@ def test_movie_discovery_endpoint_reports_missing_tmdb_token(app_factory, monkey
     assert "TMDB_BEARER_TOKEN" in payload["hint"]
 
 
+def test_movie_discovery_size_parser_and_candidate_scoring() -> None:
+    movie = {"title": "Matrix", "original_title": "The Matrix", "year": 2020}
+    strong = build_search_result(file_id=1, title="Matrix 2020 CZ 1080p", size="4.2 GB")
+    weak = build_search_result(file_id=2, title="Unrelated 2020 CZ 1080p", size="4.2 GB")
+
+    assert _parse_size_bytes("1.5 GB") == 1610612736
+    assert _parse_size_bytes("700 MB") == 734003200
+    assert _parse_size_bytes("unknown") == 0
+    assert _score_candidate(strong, movie=movie) > _score_candidate(weak, movie=movie)
+
+
 @responses.activate
 def test_movie_discovery_endpoint_marks_best_sdilej_availability(app_factory, monkeypatch) -> None:
     monkeypatch.setenv("TMDB_BEARER_TOKEN", "test-token")
@@ -195,6 +234,77 @@ def test_movie_discovery_endpoint_marks_best_sdilej_availability(app_factory, mo
     assert availability["query"] == "Matrix"
     assert availability["best_result"]["file_id"] == 900
     assert availability["best_result"]["size"] == "4.0 GB"
+
+
+@responses.activate
+def test_movie_discovery_endpoint_reports_weak_and_not_found_availability(app_factory, monkeypatch) -> None:
+    monkeypatch.setenv("TMDB_BEARER_TOKEN", "test-token")
+    responses.get(
+        f"{TMDB_BASE_URL}/movie/popular",
+        json={
+            "results": [
+                {
+                    "id": 1,
+                    "title": "Known Film",
+                    "original_title": "Known Film",
+                    "release_date": "2020-01-01",
+                    "genre_ids": [],
+                },
+                {
+                    "id": 2,
+                    "title": "Missing Film",
+                    "original_title": "Missing Film",
+                    "release_date": "2020-01-01",
+                    "genre_ids": [],
+                },
+            ]
+        },
+    )
+    fake_client = FakeSdilejClient(
+        responses_by_query={
+            "Known Film": [build_search_result(file_id=901, title="Unrelated 2020 1080p", size="700 MB")]
+        }
+    )
+    app = app_factory(client_instance=fake_client)
+
+    with TestClient(app) as client:
+        response = client.get("/api/discovery/movies?mode=popular&limit=2")
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert items[0]["availability"]["status"] == "weak_match"
+    assert items[0]["availability"]["best_result"]["file_id"] == 901
+    assert items[1]["availability"]["status"] == "not_found"
+    assert fake_client.calls == ["Known Film", "Missing Film"]
+
+
+@responses.activate
+def test_movie_discovery_endpoint_reports_sdilej_availability_errors(app_factory, monkeypatch) -> None:
+    monkeypatch.setenv("TMDB_BEARER_TOKEN", "test-token")
+    responses.get(
+        f"{TMDB_BASE_URL}/movie/popular",
+        json={
+            "results": [
+                {
+                    "id": 1,
+                    "title": "Known Film",
+                    "original_title": "Known Film",
+                    "release_date": "2020-01-01",
+                    "genre_ids": [],
+                }
+            ]
+        },
+    )
+    app = app_factory(client_instance=FailingSearchClient())
+
+    with TestClient(app) as client:
+        response = client.get("/api/discovery/movies?mode=popular&limit=1")
+
+    assert response.status_code == 200
+    availability = response.json()["items"][0]["availability"]
+    assert availability["status"] == "error"
+    assert availability["error"] == "sdilej timeout"
+    assert availability["best_result"] is None
 
 
 @responses.activate
@@ -656,6 +766,64 @@ def test_download_enqueue_destination_preset_music(app_factory) -> None:
     payload = response.json()
     assert payload["media_kind"] == "music"
     assert payload["is_kids"] is False
+    assert payload["destination_subpath"].endswith("music")
+
+
+def test_library_paths_roundtrip_includes_music_dir(app_factory) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/downloads/library-paths",
+            json={
+                "movies_dir": "/films",
+                "tv_dir": "/series",
+                "kids_movies_dir": "/kids/films",
+                "kids_tv_dir": "/kids/series",
+                "music_dir": "/audio",
+                "unsorted_dir": "/inbox",
+                "confirm_on_uncertain": False,
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["music_dir"] == "/audio"
+
+        loaded = client.get("/api/downloads/library-paths")
+
+    assert loaded.status_code == 200
+    payload = loaded.json()
+    assert payload["music_dir"] == "/audio"
+    assert payload["confirm_on_uncertain"] is False
+
+
+def test_download_recategorize_music_clears_previous_tv_metadata(app_factory) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        queued = client.post(
+            "/api/downloads",
+            json={
+                "detail_url": "https://sdilej.cz/775/bluey-s01e01.mkv",
+                "file_id": 775,
+                "title": "Bluey S01E01",
+                "media_kind": "tv",
+                "is_kids": True,
+                "series_name": "Bluey",
+                "season_number": 1,
+            },
+        )
+        assert queued.status_code == 200
+        response = client.post(
+            f"/api/downloads/{queued.json()['id']}/classification",
+            json={"destination_preset": "music"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["media_kind"] == "music"
+    assert payload["is_kids"] is False
+    assert payload["series_name"] is None
+    assert payload["season_number"] is None
     assert payload["destination_subpath"].endswith("music")
 
 
