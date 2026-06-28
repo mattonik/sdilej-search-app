@@ -343,6 +343,69 @@ def test_download_enqueue_returns_duplicate_job_for_active_match(app_factory) ->
     assert duplicate["status"] == "queued"
 
 
+def test_download_enqueue_accepts_youtube_source(app_factory) -> None:
+    app = app_factory()
+
+    payload = {
+        "detail_url": "https://www.youtube.com/watch?v=abc123XYZ",
+        "title": "Máša a medveď: Ako sa stretli",
+        "source_type": "youtube",
+        "preferred_mode": "premium",
+        "media_kind": "tv",
+        "is_kids": True,
+        "series_name": "Máša a medveď",
+        "season_number": 1,
+        "episode_number": 1,
+        "source_metadata": {"provider": "veselerozpravky"},
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/api/downloads", json=payload)
+
+    assert response.status_code == 200
+    job = response.json()
+    assert job["source_type"] == "youtube"
+    assert job["preferred_mode"] == "auto"
+    assert job["source_metadata"]["provider"] == "veselerozpravky"
+    assert job["media_kind"] == "tv"
+    assert job["is_kids"] is True
+
+
+@responses.activate
+def test_download_enqueue_resolves_veselerozpravky_episode_url(app_factory) -> None:
+    episode_url = "https://www.veselerozpravky.sk/masa-a-medved-ako-sa-stretli/"
+    responses.get(
+        episode_url,
+        body="""
+        <html><body>
+          <h1>Máša a medveď: Ako sa stretli</h1>
+          <script>var videoId = "1V3ZY_TXKwU";</script>
+        </body></html>
+        """,
+    )
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/downloads",
+            json={
+                "detail_url": episode_url,
+                "source_type": "youtube",
+                "media_kind": "tv",
+                "is_kids": True,
+                "series_name": "Máša a medveď",
+                "season_number": 1,
+                "episode_number": 1,
+            },
+        )
+
+    assert response.status_code == 200
+    job = response.json()
+    assert job["detail_url"] == "https://www.youtube.com/watch?v=1V3ZY_TXKwU"
+    assert job["source_type"] == "youtube"
+    assert job["source_metadata"]["kids_catalog"]["youtube_video_id"] == "1V3ZY_TXKwU"
+
+
 def test_download_queue_refresh_error_returns_diagnostic_payload_and_request_id(app_factory) -> None:
     app = app_factory()
     app.state.services.storage.list_download_jobs = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom"))  # type: ignore[assignment]

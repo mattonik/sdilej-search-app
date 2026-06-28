@@ -172,6 +172,8 @@ class EnqueueDownloadPayload(BaseModel):
     detail_url: str
     file_id: int | None = None
     title: str | None = None
+    source_type: Literal["sdilej", "youtube"] = "sdilej"
+    source_metadata: dict | None = None
     preferred_mode: Literal["auto", "premium", "free"] = "auto"
     priority: int = Field(default=0, ge=-100, le=100)
     chunk_count: int | None = Field(default=None, ge=1, le=8)
@@ -330,12 +332,14 @@ def create_app(
 
     from .routes.downloads import router as downloads_router
     from .routes.health import router as health_router
+    from .routes.kids_catalog import router as kids_catalog_router
     from .routes.search import router as search_router
     from .routes.tv import router as tv_router
 
     app.include_router(search_router)
     app.include_router(tv_router)
     app.include_router(downloads_router)
+    app.include_router(kids_catalog_router)
     app.include_router(health_router)
 
     def on_startup() -> None:

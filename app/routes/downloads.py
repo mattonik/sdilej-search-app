@@ -19,6 +19,7 @@ from ..main import (
     _normalize_detail_url,
 )
 from ..sdilej_client import SdilejClient, SdilejClientError
+from ..kids_catalog import KidsCatalogError, VeseleRozpravkyClient
 
 router = APIRouter()
 
@@ -268,13 +269,25 @@ def api_downloads_enqueue(request: Request, payload: EnqueueDownloadPayload):
     try:
         services = _get_services(request)
         detail_url = _normalize_detail_url(payload.detail_url)
-        file_id = payload.file_id if payload.file_id is not None else _extract_file_id(detail_url)
-        title = payload.title.strip() if payload.title else None
+        source_type = payload.source_type or "sdilej"
+        source_metadata = dict(payload.source_metadata or {})
 
-        if file_id is None or title is None:
+        if source_type == "youtube" and "veselerozpravky.sk" in detail_url.lower():
+            resolved = VeseleRozpravkyClient().resolve_episode(detail_url)
+            source_metadata = {**source_metadata, "kids_catalog": resolved}
+            detail_url = resolved["youtube_url"]
+
+        file_id = payload.file_id if payload.file_id is not None else (_extract_file_id(detail_url) if source_type == "sdilej" else None)
+        metadata_title = source_metadata.get("title")
+        title = payload.title.strip() if payload.title else (str(metadata_title).strip() if metadata_title else None)
+
+        if source_type == "sdilej" and (file_id is None or title is None):
             probe = services.client.probe_detail(detail_url=detail_url, run_preflight=False)
             file_id = file_id if file_id is not None else probe.file_id
             title = title or probe.title
+
+        if title is None:
+            title = detail_url.rsplit("/", 1)[-1] or "YouTube download"
 
         saved_candidate = None
         if payload.source_saved_file_id is not None:
@@ -342,6 +355,7 @@ def api_downloads_enqueue(request: Request, payload: EnqueueDownloadPayload):
 
         settings = services.storage.get_download_settings()
         effective_chunk_count = payload.chunk_count or settings["default_chunk_count"]
+        effective_preferred_mode = "auto" if source_type == "youtube" else payload.preferred_mode
         destination_subpath = media_plan["destination_subpath"]
         resolved_output_dir = media_plan["resolved_output_dir"]
 
@@ -349,7 +363,9 @@ def api_downloads_enqueue(request: Request, payload: EnqueueDownloadPayload):
             detail_url=detail_url,
             file_id=file_id,
             title=title,
-            preferred_mode=payload.preferred_mode,
+            preferred_mode=effective_preferred_mode,
+            source_type=source_type,
+            source_metadata=source_metadata,
             output_dir=resolved_output_dir,
             priority=payload.priority,
             chunk_count=effective_chunk_count,
@@ -371,6 +387,15 @@ def api_downloads_enqueue(request: Request, payload: EnqueueDownloadPayload):
             error_code="download_enqueue_invalid_request",
             hint="Check the detail URL and classification inputs.",
             retryable=False,
+        )
+    except KidsCatalogError as exc:
+        return _download_error(
+            request,
+            status_code=400,
+            error=str(exc),
+            error_code="download_kids_catalog_resolve_failed",
+            hint="Open the VeseleRozpravky page directly or paste the YouTube URL.",
+            retryable=True,
         )
     except Exception as exc:  # noqa: BLE001
         return _download_error(

@@ -72,6 +72,19 @@ export const api = {
   listDownloads(limit = 200) {
     return jsonRequest(`/api/downloads?limit=${encodeURIComponent(limit)}`);
   },
+  listKidsCatalogShows() {
+    return jsonRequest("/api/kids-catalog/shows");
+  },
+  getKidsCatalogShow(slug) {
+    return jsonRequest(`/api/kids-catalog/shows/${encodeURIComponent(slug)}`);
+  },
+  resolveKidsCatalogEpisode(payload) {
+    return jsonRequest("/api/kids-catalog/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
   getDownloadSettings() {
     return jsonRequest("/api/downloads/settings");
   },

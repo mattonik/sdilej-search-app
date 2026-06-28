@@ -27,6 +27,7 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
   - saved picks (upsert by file ID)
   - saved-pick driven download jobs (optional auto-remove save on successful download)
 - Background downloader queue worker:
+  - providers: `sdilej` direct/probed downloads and `youtube` downloads via `yt-dlp`
   - queued/running/done/failed/canceled states
   - progress tracking
   - speed controls: max concurrent jobs, per-job chunk count, global bandwidth cap
@@ -43,6 +44,10 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
   - uncertain title classification can require user confirmation before enqueue
   - queue controls: move-to-top, custom priority, clear finished jobs
   - account credentials (for subscription/premium flow)
+- Kids catalog mode:
+  - reads VeseleRozpravky show/episode lists
+  - resolves episode pages to YouTube video URLs
+  - queues selected episodes as `youtube` provider jobs with kids/TV routing
 - JSON API endpoints for future download-manager integration
 
 ## Project structure
@@ -58,6 +63,7 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - `app/static/js/tv-search.js` - TV runtime
 - `app/static/js/queue-ui.js` - shared queue rendering/actions
 - `app/static/js/tv-view.js` - TV rendering helpers
+- `app/kids_catalog.py` - VeseleRozpravky parser/resolver
 - `app/static/js/api.js` - browser API wrapper
 - `app/static/js/runtime-state.js` - shared browser runtime state
 - `app/static/style.css` - styling
@@ -214,6 +220,8 @@ SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
 - `DELETE /api/account` (clear credentials)
 - `GET /api/downloads?limit=200&status=queued`
 - `POST /api/downloads` (enqueue download job)
+  - supports `source_type`: `sdilej` (default) or `youtube`
+  - supports optional `source_metadata` for catalog/provider context
   - supports `chunk_count` override (1..8)
   - supports optional media routing hints: `media_kind`, `is_kids`, `series_name`, `season_number`, `episode_number`
   - duplicate queue/download protection returns `409` + `duplicate_job`
@@ -232,7 +240,24 @@ SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
 - `POST /api/downloads/{id}/priority`
 - `POST /api/downloads/{id}/top`
 - `POST /api/downloads/clear`
+- `GET /api/kids-catalog/shows`
+- `GET /api/kids-catalog/shows/{slug}`
+- `POST /api/kids-catalog/resolve` (`episode_url`) resolves VeseleRozpravky episode pages to YouTube URLs
 - `GET /healthz`
+
+## YouTube / Kids Catalog downloads
+
+YouTube downloads use `yt-dlp` inside the same background queue as sdilej downloads. The Docker image installs `ffmpeg`, which yt-dlp uses for common merge/output flows.
+
+Example enqueue:
+
+```bash
+curl -X POST http://localhost:8080/api/downloads \\
+  -H 'Content-Type: application/json' \\
+  -d '{"detail_url":"https://www.youtube.com/watch?v=VIDEO_ID","source_type":"youtube","title":"Episode title","media_kind":"tv","is_kids":true,"series_name":"Show","season_number":1,"episode_number":1}'
+```
+
+Only download content you have the right to access and store.
 
 ## Subscription credentials
 

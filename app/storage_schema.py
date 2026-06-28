@@ -19,6 +19,8 @@ class StorageSchemaRepository:
         self._ensure_column(conn, table="saved_candidates", column="classification_confidence", definition="TEXT")
         self._ensure_column(conn, table="download_jobs", column="working_path", definition="TEXT")
         self._ensure_column(conn, table="download_jobs", column="chunk_count", definition="INTEGER")
+        self._ensure_column(conn, table="download_jobs", column="source_type", definition="TEXT NOT NULL DEFAULT 'sdilej'")
+        self._ensure_column(conn, table="download_jobs", column="source_metadata_json", definition="TEXT NOT NULL DEFAULT '{}'")
         self._ensure_column(conn, table="download_jobs", column="media_kind", definition="TEXT")
         self._ensure_column(conn, table="download_jobs", column="is_kids", definition="INTEGER NOT NULL DEFAULT 0")
         self._ensure_column(conn, table="download_jobs", column="series_name", definition="TEXT")

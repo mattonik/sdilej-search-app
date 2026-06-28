@@ -19,12 +19,15 @@ export const initDownloads = ({
     accountVerify,
     accountClearBtn,
     downloadForm,
+    downloadSourceType,
     downloadDetailUrl,
+    downloadModeLabel,
     downloadMode,
     downloadMediaKind,
     downloadKidsTag,
     downloadSeriesName,
     downloadSeasonNumber,
+    downloadChunkCountLabel,
     downloadChunkCount,
     downloadPriority,
     downloadSettingsForm,
@@ -114,6 +117,7 @@ export const initDownloads = ({
         const canMoveTop = job.status === "queued";
         const canRemove = job.status !== "running";
         const title = job.title || job.detail_url;
+        const sourceType = job.source_type || "sdilej";
         const eta = formatEta(done, total, job.speed_bps);
         const savePath = job.save_path ? `<div><strong>Saved:</strong> <code>${esc(job.save_path)}</code></div>` : "";
         const error = job.error ? `<div class="job-error"><strong>Error:</strong> ${esc(job.error)}</div>` : "";
@@ -123,6 +127,7 @@ export const initDownloads = ({
           <article class="download-job" data-job-id="${esc(job.id)}">
             <div class="job-head">
               <a href="${esc(job.detail_url)}" target="_blank" rel="noreferrer">${esc(title)}</a>
+              <span class="job-source">${esc(sourceType)}</span>
               <span class="job-status status-${esc(job.status)}">${esc(job.status)}</span>
             </div>
             <div class="job-progress-wrap">
@@ -328,6 +333,28 @@ export const initDownloads = ({
     }
   };
 
+  const updateDownloadSourceMode = () => {
+    const sourceType = downloadSourceType?.value || "sdilej";
+    const isYoutube = sourceType === "youtube";
+    if (downloadModeLabel) {
+      downloadModeLabel.classList.toggle("hidden", isYoutube);
+    }
+    if (downloadMode) {
+      downloadMode.disabled = isYoutube;
+    }
+    if (downloadChunkCountLabel) {
+      downloadChunkCountLabel.classList.toggle("hidden", isYoutube);
+    }
+    if (downloadChunkCount) {
+      downloadChunkCount.disabled = isYoutube;
+    }
+    if (downloadDetailUrl) {
+      downloadDetailUrl.placeholder = isYoutube
+        ? "https://www.youtube.com/watch?v=... or VeseleRozpravky episode URL"
+        : "https://sdilej.cz/123456/file-name.mkv";
+    }
+  };
+
   const enqueueDownload = async (payload) => {
     try {
       const { ok, status, data } = await api.enqueueDownload(payload);
@@ -408,7 +435,8 @@ export const initDownloads = ({
 
     const payload = {
       detail_url: detailUrl,
-      preferred_mode: downloadMode.value || "premium",
+      source_type: downloadSourceType?.value || "sdilej",
+      preferred_mode: downloadSourceType?.value === "youtube" ? "auto" : (downloadMode.value || "premium"),
       chunk_count: Number(downloadChunkCount.value || 1),
       priority: Number(downloadPriority.value || 0),
       ...buildMediaRoutingPayload(),
@@ -422,6 +450,9 @@ export const initDownloads = ({
       focusDownloadJob(result.duplicateJob.id);
     }
   });
+
+  downloadSourceType?.addEventListener("change", updateDownloadSourceMode);
+  updateDownloadSourceMode();
 
   refreshDownloadsBtn.addEventListener("click", async () => {
     setDownloadStatus("Refreshing queue...", "neutral");

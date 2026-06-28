@@ -18,6 +18,8 @@ class StorageDownloadsRepository:
         preferred_mode: str,
         output_dir: str | None,
         priority: int,
+        source_type: str = "sdilej",
+        source_metadata: dict[str, Any] | None = None,
         chunk_count: int | None = None,
         media_kind: str | None = None,
         is_kids: bool = False,
@@ -39,6 +41,8 @@ class StorageDownloadsRepository:
                         file_id,
                         title,
                         detail_url,
+                        source_type,
+                        source_metadata_json,
                         preferred_mode,
                         output_dir,
                         priority,
@@ -52,12 +56,14 @@ class StorageDownloadsRepository:
                         source_saved_file_id,
                         delete_saved_on_complete,
                         status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued')
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued')
                     """,
                     (
                         file_id,
                         title,
                         detail_url,
+                        source_type,
+                        json.dumps(source_metadata or {}, ensure_ascii=False),
                         preferred_mode,
                         output_dir,
                         priority,

@@ -34,6 +34,14 @@
 
         <form id="downloadForm" class="download-form">
           <label>
+            Source
+            <select id="downloadSourceType">
+              <option value="sdilej" selected>Sdilej</option>
+              <option value="youtube">YouTube</option>
+            </select>
+          </label>
+
+          <label>
             Detail URL
             <input
               id="downloadDetailUrl"
@@ -44,7 +52,7 @@
             />
           </label>
 
-          <label>
+          <label id="downloadModeLabel">
             Mode
             <select id="downloadMode">
               <option value="premium" selected>Premium</option>
@@ -81,7 +89,7 @@
             <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" />
           </label>
 
-          <label>
+          <label id="downloadChunkCountLabel">
             Chunk count
             <input id="downloadChunkCount" type="number" min="1" max="8" value="1" />
           </label>
@@ -326,6 +334,20 @@
           <div id="tvStatus" class="download-status" aria-live="polite" aria-atomic="true">TV mode is ready.</div>
           <div id="tvResults" class="tv-results"></div>
         </div>
+
+        <details id="kidsCatalogPanel" class="kids-catalog-panel">
+          <summary>Kids Catalog</summary>
+          <div class="kids-catalog-controls">
+            <label>
+              Filter
+              <input id="kidsCatalogFilter" type="text" placeholder="e.g. Máša, Krtko" autocomplete="off" />
+            </label>
+            <button type="button" id="kidsCatalogLoadBtn" class="btn btn-secondary">Load catalog</button>
+          </div>
+          <div id="kidsCatalogStatus" class="download-status" aria-live="polite" aria-atomic="true">Catalog idle.</div>
+          <div id="kidsCatalogShows" class="kids-catalog-shows"></div>
+          <div id="kidsCatalogEpisodes" class="kids-catalog-episodes"></div>
+        </details>
       </section>
 
       {% if error %}

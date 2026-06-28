@@ -42,6 +42,8 @@ class StorageRowsRepository:
             "file_id": row["file_id"],
             "title": row["title"],
             "detail_url": row["detail_url"],
+            "source_type": row["source_type"],
+            "source_metadata": json.loads(row["source_metadata_json"] or "{}"),
             "preferred_mode": row["preferred_mode"],
             "output_dir": row["output_dir"],
             "status": row["status"],

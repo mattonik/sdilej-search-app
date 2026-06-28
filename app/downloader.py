@@ -9,6 +9,7 @@ from urllib.parse import unquote, urlparse
 
 from .sdilej_client import SdilejClient, SdilejClientError
 from .storage import Storage
+from .youtube_downloader import YoutubeDownloader, YoutubeDownloadError
 
 DEFAULT_DOWNLOAD_DIR = "./downloads"
 DOWNLOAD_TIMEOUT_SECONDS = 120
@@ -96,6 +97,11 @@ class DownloadWorker:
     def _process_job(self, job: dict) -> None:
         job_id = int(job["id"])
         detail_url = str(job["detail_url"])
+        source_type = str(job.get("source_type") or "sdilej").lower().strip()
+        if source_type == "youtube":
+            self._process_youtube_job(job)
+            return
+
         preferred_mode = str(job.get("preferred_mode") or "auto")
         with self._config_lock:
             default_chunk_count = self.default_chunk_count
@@ -338,6 +344,73 @@ class DownloadWorker:
                 status_code=locals().get("status_code"),
             )
 
+    def _process_youtube_job(self, job: dict) -> None:
+        job_id = int(job["id"])
+        detail_url = str(job["detail_url"])
+        started_at = time.time()
+
+        try:
+            output_dir = self._resolve_output_dir(job.get("output_dir"))
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            filename_stem = self._resolve_youtube_filename_stem(job)
+            output_template = str(self._resolve_unique_youtube_template(output_dir, filename_stem))
+            self.storage.set_download_working_path(job_id, output_template.replace("%(ext)s", "part"))
+
+            def on_progress(payload: dict) -> None:
+                status = str(payload.get("status") or "")
+                downloaded = payload.get("downloaded_bytes") or payload.get("fragment_index") or 0
+                total = payload.get("total_bytes") or payload.get("total_bytes_estimate")
+                speed = payload.get("speed")
+                filename = payload.get("filename") or payload.get("tmpfilename")
+                if filename:
+                    self.storage.set_download_working_path(job_id, str(filename))
+                if status in {"downloading", "finished"}:
+                    elapsed = max(time.time() - started_at, 0.001)
+                    if not isinstance(speed, (int, float)):
+                        speed = (float(downloaded) / elapsed) if downloaded else None
+                    self.storage.update_download_progress(
+                        job_id,
+                        bytes_downloaded=int(downloaded or 0),
+                        bytes_total=int(total) if total else None,
+                        speed_bps=float(speed) if isinstance(speed, (int, float)) else None,
+                        final_url=detail_url,
+                    )
+
+            downloader = YoutubeDownloader(
+                is_canceled=lambda: self._stop_event.is_set() or self.storage.is_job_canceled(job_id),
+                on_progress=on_progress,
+            )
+            result = downloader.download(detail_url, output_template=output_template)
+            save_path = result.get("filepath")
+            if not save_path:
+                raise YoutubeDownloadError("yt-dlp completed without producing a final file path.")
+
+            final_path = Path(str(save_path))
+            bytes_total = final_path.stat().st_size if final_path.exists() else int(job.get("bytes_downloaded") or 0)
+            self.storage.complete_download_job(
+                job_id,
+                save_path=str(final_path),
+                final_url=detail_url,
+                bytes_total=bytes_total,
+                status_code=None,
+            )
+            self._run_post_complete_actions(job_id)
+        except YoutubeDownloadError as exc:
+            if "canceled" in str(exc).lower():
+                clear_working_path = self.storage.should_delete_partial_on_cancel(job_id)
+                self.storage.fail_download_job(
+                    job_id,
+                    error=str(exc),
+                    final_url=detail_url,
+                    status_code=None,
+                    clear_working_path=clear_working_path,
+                )
+                return
+            self.storage.fail_download_job(job_id, error=str(exc), final_url=detail_url, status_code=None)
+        except Exception as exc:  # noqa: BLE001
+            self.storage.fail_download_job(job_id, error=str(exc), final_url=detail_url, status_code=None)
+
     def _pick_download_url(self, preferred_mode: str, fast_url: str | None, slow_url: str | None) -> str | None:
         if preferred_mode == "premium":
             if fast_url and not fast_url.rstrip("/").endswith("/cenik"):
@@ -446,6 +519,39 @@ class DownloadWorker:
         path_name = Path(urlparse(fallback_url).path).name or "download.bin"
         raw_filename = self._sanitize_filename(path_name)
         return self._normalize_tv_filename(raw_filename, fallback_title=fallback_title, job=job)
+
+    def _resolve_youtube_filename_stem(self, job: dict) -> str:
+        raw_title = str(job.get("title") or "youtube-download")
+        base = self._sanitize_filename(Path(raw_title).stem or raw_title)
+        media_kind = str(job.get("media_kind") or "").lower().strip()
+        if media_kind != "tv":
+            return base
+
+        series_name = str(job.get("series_name") or "").strip()
+        season_number = self._parse_positive_int(job.get("season_number"))
+        episode_number = self._parse_positive_int(job.get("episode_number"))
+        if not series_name or not season_number:
+            return base
+        safe_series = self._sanitize_filename(series_name)
+        if episode_number:
+            return f"{safe_series} - S{season_number:02d}E{episode_number:02d}"
+        return f"{safe_series} - S{season_number:02d}"
+
+    def _resolve_unique_youtube_template(self, output_dir: Path, filename_stem: str) -> Path:
+        stem = self._sanitize_filename(filename_stem)
+        candidate = output_dir / f"{stem}.%(ext)s"
+        counter = 1
+        while any(output_dir.glob(candidate.name.replace("%(ext)s", "*"))):
+            candidate = output_dir / f"{stem} ({counter}).%(ext)s"
+            counter += 1
+        return candidate
+
+    def _parse_positive_int(self, value) -> int | None:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
 
     def _normalize_tv_filename(self, raw_filename: str, *, fallback_title: str | None, job: dict | None) -> str:
         if not job:

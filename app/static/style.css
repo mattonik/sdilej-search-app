@@ -364,6 +364,100 @@ textarea {
   background: #fdfefe;
 }
 
+.job-source {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 0.16rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.kids-catalog-panel {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem;
+  background: #fbfdff;
+}
+
+.kids-catalog-panel > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.kids-catalog-controls {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: end;
+}
+
+.kids-catalog-controls label {
+  flex: 1 1 240px;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.kids-catalog-controls input {
+  min-height: 42px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0.55rem 0.7rem;
+}
+
+.kids-catalog-shows {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.55rem;
+}
+
+.kids-catalog-show {
+  justify-content: space-between;
+  text-align: left;
+}
+
+.kids-catalog-show small,
+.kids-catalog-episode-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.kids-catalog-episodes {
+  margin-top: 0.9rem;
+}
+
+.kids-catalog-episode-head,
+.kids-catalog-episode {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.kids-catalog-episode-head {
+  color: var(--muted);
+  margin-bottom: 0.55rem;
+}
+
+.kids-catalog-episode-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.kids-catalog-episode {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.65rem;
+  background: #fff;
+}
+
 .download-job.queue-job-highlight {
   border-color: #38bdf8;
   box-shadow: 0 0 0 3px rgb(56 189 248 / 0.22);

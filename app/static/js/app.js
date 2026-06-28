@@ -27,6 +27,7 @@ import { createStatusController } from "./status-ui.js";
 import { initTvSearch } from "./tv-search.js";
 import { initQueueDialog } from "./queue-dialog.js";
 import { initWorkspaceTabs } from "./workspace-tabs.js";
+import { initKidsCatalog } from "./kids-catalog.js";
 
       const input = document.getElementById("queryInput");
       const list = document.getElementById("suggestions");
@@ -74,12 +75,15 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
       const accountVerify = document.getElementById("accountVerify");
       const accountClearBtn = document.getElementById("accountClearBtn");
       const downloadForm = document.getElementById("downloadForm");
+      const downloadSourceType = document.getElementById("downloadSourceType");
       const downloadDetailUrl = document.getElementById("downloadDetailUrl");
+      const downloadModeLabel = document.getElementById("downloadModeLabel");
       const downloadMode = document.getElementById("downloadMode");
       const downloadMediaKind = document.getElementById("downloadMediaKind");
       const downloadKidsTag = document.getElementById("downloadKidsTag");
       const downloadSeriesName = document.getElementById("downloadSeriesName");
       const downloadSeasonNumber = document.getElementById("downloadSeasonNumber");
+      const downloadChunkCountLabel = document.getElementById("downloadChunkCountLabel");
       const downloadChunkCount = document.getElementById("downloadChunkCount");
       const downloadPriority = document.getElementById("downloadPriority");
       const downloadSettingsForm = document.getElementById("downloadSettingsForm");
@@ -93,6 +97,11 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
       const downloadSummary = document.getElementById("downloadSummary");
       const downloadWorkerState = document.getElementById("downloadWorkerState");
       const openAccountTabBtn = document.getElementById("openAccountTabBtn");
+      const kidsCatalogLoadBtn = document.getElementById("kidsCatalogLoadBtn");
+      const kidsCatalogFilter = document.getElementById("kidsCatalogFilter");
+      const kidsCatalogStatus = document.getElementById("kidsCatalogStatus");
+      const kidsCatalogShows = document.getElementById("kidsCatalogShows");
+      const kidsCatalogEpisodes = document.getElementById("kidsCatalogEpisodes");
       const workspaceTabs = Array.from(document.querySelectorAll(".workspace-tab"));
       const tabSections = Array.from(document.querySelectorAll(".tab-section"));
       const queueDialogBackdrop = document.getElementById("queueDialogBackdrop");
@@ -215,12 +224,15 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
           accountVerify,
           accountClearBtn,
           downloadForm,
+          downloadSourceType,
           downloadDetailUrl,
+          downloadModeLabel,
           downloadMode,
           downloadMediaKind,
           downloadKidsTag,
           downloadSeriesName,
           downloadSeasonNumber,
+          downloadChunkCountLabel,
           downloadChunkCount,
           downloadPriority,
           downloadSettingsForm,
@@ -246,6 +258,20 @@ import { initWorkspaceTabs } from "./workspace-tabs.js";
         refreshDownloadSettings,
         refreshAccountStatus,
       } = downloadsApi;
+
+      initKidsCatalog({
+        elements: {
+          kidsCatalogLoadBtn,
+          kidsCatalogFilter,
+          kidsCatalogStatus,
+          kidsCatalogShows,
+          kidsCatalogEpisodes,
+        },
+        api,
+        enqueueDownload: (payload) => downloadsApi?.enqueueDownload?.(payload),
+        refreshDownloads: () => downloadsApi?.refreshDownloads?.(),
+        focusDownloadJob,
+      });
 
       fileSearchApi = initFileSearch({
         elements: {
