@@ -155,7 +155,7 @@ class SaveCandidatePayload(BaseModel):
     detected_languages: list[str] = Field(default_factory=list)
     has_dub_hint: bool = False
     has_subtitle_hint: bool = False
-    media_kind: Literal["movie", "tv", "unknown"] | None = None
+    media_kind: Literal["movie", "tv", "music", "unknown"] | None = None
     is_kids: bool | None = None
     series_name: str | None = None
     season_number: int | None = Field(default=None, ge=1, le=99)
@@ -169,7 +169,7 @@ class AccountPayload(BaseModel):
     verify: bool = True
 
 
-DestinationPreset = Literal["auto", "movies", "tv", "kids_movies", "kids_tv", "unsorted"]
+DestinationPreset = Literal["auto", "movies", "tv", "kids_movies", "kids_tv", "music", "unsorted"]
 
 
 class EnqueueDownloadPayload(BaseModel):
@@ -182,7 +182,7 @@ class EnqueueDownloadPayload(BaseModel):
     priority: int = Field(default=0, ge=-100, le=100)
     chunk_count: int | None = Field(default=None, ge=1, le=8)
     destination_preset: DestinationPreset = "auto"
-    media_kind: Literal["movie", "tv"] | None = None
+    media_kind: Literal["movie", "tv", "music"] | None = None
     is_kids: bool | None = None
     series_name: str | None = None
     season_number: int | None = Field(default=None, ge=1, le=99)
@@ -210,6 +210,7 @@ class LibraryPathsPayload(BaseModel):
     tv_dir: str = Field(default="/tv", min_length=1, max_length=200)
     kids_movies_dir: str = Field(default="/kids/movies", min_length=1, max_length=200)
     kids_tv_dir: str = Field(default="/kids/tv", min_length=1, max_length=200)
+    music_dir: str = Field(default="/music", min_length=1, max_length=200)
     unsorted_dir: str = Field(default="/unsorted", min_length=1, max_length=200)
     confirm_on_uncertain: bool = True
 
@@ -217,7 +218,7 @@ class LibraryPathsPayload(BaseModel):
 class MediaClassificationPayload(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     destination_preset: DestinationPreset = "auto"
-    media_kind: Literal["movie", "tv"] | None = None
+    media_kind: Literal["movie", "tv", "music"] | None = None
     is_kids: bool | None = None
     series_name: str | None = None
     season_number: int | None = Field(default=None, ge=1, le=99)
@@ -226,7 +227,7 @@ class MediaClassificationPayload(BaseModel):
 
 class UpdateDownloadClassificationPayload(BaseModel):
     destination_preset: DestinationPreset = "auto"
-    media_kind: Literal["movie", "tv"] | None = None
+    media_kind: Literal["movie", "tv", "music"] | None = None
     is_kids: bool | None = None
     series_name: str | None = None
     season_number: int | None = Field(default=None, ge=1, le=99)
@@ -338,6 +339,7 @@ def create_app(
         return response
 
     from .routes.downloads import router as downloads_router
+    from .routes.discovery import router as discovery_router
     from .routes.health import router as health_router
     from .routes.kids_catalog import router as kids_catalog_router
     from .routes.search import router as search_router
@@ -346,6 +348,7 @@ def create_app(
     app.include_router(search_router)
     app.include_router(tv_router)
     app.include_router(downloads_router)
+    app.include_router(discovery_router)
     app.include_router(kids_catalog_router)
     app.include_router(health_router)
 
@@ -598,7 +601,7 @@ def _resolve_video_metadata(
 def _resolve_classification_metadata(
     *,
     title: str,
-    media_kind: Literal["movie", "tv"] | None,
+    media_kind: Literal["movie", "tv", "music"] | None,
     series_name: str | None,
     season_number: int | None,
     episode_number: int | None,
@@ -1098,7 +1101,7 @@ def _serialize_tv_seasons(episodes: list[TvEpisode]) -> list[dict]:
 def _build_media_plan(
     *,
     title: str,
-    media_kind: Literal["movie", "tv"] | None,
+    media_kind: Literal["movie", "tv", "music"] | None,
     is_kids: bool | None,
     series_name: str | None,
     season_number: int | None,
@@ -1125,6 +1128,12 @@ def _build_media_plan(
     elif destination_preset == "kids_tv":
         media_kind = "tv"
         is_kids = True
+    elif destination_preset == "music":
+        media_kind = "music"
+        is_kids = False
+        series_name = None
+        season_number = None
+        episode_number = None
 
     metadata = _resolve_classification_metadata(
         title=title,

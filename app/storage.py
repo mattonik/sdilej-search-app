@@ -613,6 +613,7 @@ class Storage:
         tv_dir: str,
         kids_movies_dir: str,
         kids_tv_dir: str,
+        music_dir: str,
         unsorted_dir: str,
         confirm_on_uncertain: bool,
     ) -> dict[str, Any]:
@@ -621,6 +622,7 @@ class Storage:
             tv_dir=tv_dir,
             kids_movies_dir=kids_movies_dir,
             kids_tv_dir=kids_tv_dir,
+            music_dir=music_dir,
             unsorted_dir=unsorted_dir,
             confirm_on_uncertain=confirm_on_uncertain,
         )

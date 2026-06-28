@@ -27,6 +27,11 @@ export const initFileSearch = ({
     fileResultsListBtn,
     fileResultsGrid,
     fileResultsEmpty,
+    musicSearchPanel,
+    musicSearchForm,
+    musicSearchQuery,
+    musicSearchSort,
+    musicSearchMaxResults,
   } = elements;
 
   const buildSavedStateFromItems = (items) => {
@@ -354,15 +359,36 @@ export const initFileSearch = ({
 
   document.querySelectorAll(".queue-dialog-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      const musicResult = categorySelect?.value === "audio";
       await openQueueDialog({
         intent: "enqueue",
         detailUrl: btn.dataset.detailUrl,
         fileId: btn.dataset.fileId ? Number(btn.dataset.fileId) : null,
         title: btn.dataset.title || "",
         preferredMode: "premium",
+        destinationPreset: musicResult ? "music" : "auto",
+        mediaKind: musicResult ? "music" : null,
+        isKids: musicResult ? false : null,
       });
     });
   });
+
+  musicSearchForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const params = new URLSearchParams();
+    const query = musicSearchQuery?.value.trim() || "";
+    if (query) {
+      params.set("query", query);
+    }
+    params.set("category", "audio");
+    params.set("sort", musicSearchSort?.value || "downloads");
+    params.set("max_results", musicSearchMaxResults?.value || "120");
+    window.location.href = `/?${params.toString()}`;
+  });
+
+  if (musicSearchPanel && categorySelect?.value === "audio") {
+    musicSearchPanel.open = true;
+  }
 
   fileResultsCardsBtn?.addEventListener("click", () => {
     setFileResultsView("cards");

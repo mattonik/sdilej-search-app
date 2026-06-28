@@ -59,6 +59,11 @@ export const initQueueDialog = ({
     } else if (preset === "tv" || preset === "kids_tv") {
       queueDialogMediaKind.value = "tv";
       queueDialogKidsTag.value = preset === "kids_tv" ? "yes" : "no";
+    } else if (preset === "music") {
+      queueDialogMediaKind.value = "music";
+      queueDialogKidsTag.value = "no";
+      queueDialogSeriesName.value = "";
+      queueDialogSeasonNumber.value = "";
     } else if (preset === "unsorted") {
       queueDialogMediaKind.value = "auto";
       queueDialogKidsTag.value = "auto";
@@ -71,6 +76,7 @@ export const initQueueDialog = ({
     if (config.destinationPreset) return config.destinationPreset;
     if (config.mediaKind === "movie") return config.isKids ? "kids_movies" : "movies";
     if (config.mediaKind === "tv") return config.isKids ? "kids_tv" : "tv";
+    if (config.mediaKind === "music") return "music";
     return "auto";
   };
 

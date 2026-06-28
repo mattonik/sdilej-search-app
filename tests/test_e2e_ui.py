@@ -472,6 +472,38 @@ def test_queue_dialog_destination_preset_routes_to_kids_movies(tmp_path) -> None
 
 
 @pytest.mark.e2e
+def test_music_search_routes_audio_results_to_music_preset(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#musicSearchPanel summary")
+        page.fill("#musicSearchQuery", "Bluey")
+        page.click('#musicSearchForm button[type="submit"]')
+        page.wait_for_url("**/?query=Bluey&category=audio**")
+        page.wait_for_selector('.queue-dialog-btn[data-file-id="103"]')
+
+        page.locator('.queue-dialog-btn[data-file-id="103"]').click()
+        page.wait_for_selector("#queueDialogBackdrop:not(.hidden)")
+        assert page.locator("#queueDialogDestinationPreset").input_value() == "music"
+        assert page.locator("#queueDialogMediaKind").input_value() == "music"
+
+        with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith("/api/downloads")) as response_info:
+            page.click("#queueDialogConfirm")
+
+        assert response_info.value.status == 200
+        queued_payload = response_info.value.json()
+        assert queued_payload["media_kind"] == "music"
+        assert queued_payload["destination_subpath"].endswith("music")
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.wait_for_function("document.querySelector('#downloadJobs')?.textContent.includes('Dest: music')")
+        job_text = page.locator("#downloadJobs").text_content() or ""
+        assert "Bluey S01E03 EN" in job_text
+        assert "Dest: music" in job_text
+
+
+@pytest.mark.e2e
 def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 

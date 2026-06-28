@@ -215,6 +215,7 @@ def api_library_paths_set(request: Request, payload: LibraryPathsPayload):
             tv_dir=payload.tv_dir,
             kids_movies_dir=payload.kids_movies_dir,
             kids_tv_dir=payload.kids_tv_dir,
+            music_dir=payload.music_dir,
             unsorted_dir=payload.unsorted_dir,
             confirm_on_uncertain=payload.confirm_on_uncertain,
         )
@@ -296,14 +297,14 @@ def api_downloads_enqueue(request: Request, payload: EnqueueDownloadPayload):
             saved_candidate = services.storage.get_saved_candidate(payload.source_saved_file_id)
 
         requested_media_kind = payload.media_kind or (saved_candidate.get("media_kind") if saved_candidate else None)
-        if requested_media_kind == "movie":
-            fallback_series_name = None
-            fallback_season_number = None
-            fallback_episode_number = None
-        else:
+        if requested_media_kind == "tv":
             fallback_series_name = saved_candidate.get("series_name") if saved_candidate else None
             fallback_season_number = saved_candidate.get("season_number") if saved_candidate else None
             fallback_episode_number = saved_candidate.get("episode_number") if saved_candidate else None
+        else:
+            fallback_series_name = None
+            fallback_season_number = None
+            fallback_episode_number = None
 
         media_plan = _build_media_plan(
             title=title or detail_url.rsplit("/", 1)[-1],
@@ -438,14 +439,14 @@ def api_downloads_update_classification(request: Request, job_id: int, payload: 
 
         title = (job.get("title") or "").strip() or str(job.get("detail_url", "")).rsplit("/", 1)[-1]
         next_media_kind = payload.media_kind or job.get("media_kind")
-        if next_media_kind == "movie":
-            next_series_name = None
-            next_season_number = None
-            next_episode_number = None
-        else:
+        if next_media_kind == "tv":
             next_series_name = payload.series_name if payload.series_name is not None else job.get("series_name")
             next_season_number = payload.season_number if payload.season_number is not None else job.get("season_number")
             next_episode_number = payload.episode_number if payload.episode_number is not None else job.get("episode_number")
+        else:
+            next_series_name = None
+            next_season_number = None
+            next_episode_number = None
 
         plan = _build_media_plan(
             title=title,

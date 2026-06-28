@@ -61,6 +61,7 @@
                     <option value="auto" {% if not item.media_kind or item.media_kind == "unknown" %}selected{% endif %}>Auto detect</option>
                     <option value="movie" {% if item.media_kind == "movie" %}selected{% endif %}>Movie</option>
                     <option value="tv" {% if item.media_kind == "tv" %}selected{% endif %}>TV show</option>
+                    <option value="music" {% if item.media_kind == "music" %}selected{% endif %}>Music</option>
                   </select>
                 </label>
                 <label>

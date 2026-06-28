@@ -107,6 +107,7 @@ class StorageSettingsRepository:
                     'library_tv_dir',
                     'library_kids_movies_dir',
                     'library_kids_tv_dir',
+                    'library_music_dir',
                     'library_unsorted_dir',
                     'library_confirm_on_uncertain'
                 )
@@ -123,6 +124,8 @@ class StorageSettingsRepository:
             result["kids_movies_dir"] = mapping["library_kids_movies_dir"]
         if "library_kids_tv_dir" in mapping:
             result["kids_tv_dir"] = mapping["library_kids_tv_dir"]
+        if "library_music_dir" in mapping:
+            result["music_dir"] = mapping["library_music_dir"]
         if "library_unsorted_dir" in mapping:
             result["unsorted_dir"] = mapping["library_unsorted_dir"]
         if "library_confirm_on_uncertain" in mapping:
@@ -137,6 +140,7 @@ class StorageSettingsRepository:
         tv_dir: str,
         kids_movies_dir: str,
         kids_tv_dir: str,
+        music_dir: str,
         unsorted_dir: str,
         confirm_on_uncertain: bool,
     ) -> dict[str, Any]:
@@ -145,6 +149,7 @@ class StorageSettingsRepository:
             "library_tv_dir": tv_dir,
             "library_kids_movies_dir": kids_movies_dir,
             "library_kids_tv_dir": kids_tv_dir,
+            "library_music_dir": music_dir,
             "library_unsorted_dir": unsorted_dir,
             "library_confirm_on_uncertain": "1" if confirm_on_uncertain else "0",
         }

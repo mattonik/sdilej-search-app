@@ -123,6 +123,11 @@ export const initDownloads = ({
     } else if (preset === "tv" || preset === "kids_tv") {
       downloadMediaKind.value = "tv";
       downloadKidsTag.value = preset === "kids_tv" ? "yes" : "no";
+    } else if (preset === "music") {
+      downloadMediaKind.value = "music";
+      downloadKidsTag.value = "no";
+      downloadSeriesName.value = "";
+      downloadSeasonNumber.value = "";
     } else if (preset === "unsorted") {
       downloadMediaKind.value = "auto";
       downloadKidsTag.value = "auto";

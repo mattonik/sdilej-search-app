@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.models import TitleMetadata
 from app.title_metadata import CZDB_DETAIL_URL, CZDB_SEARCH_URL
+from app.tmdb_client import TMDB_BASE_URL
 from app.tvmaze_client import TVMAZE_BASE_URL
 from tests.conftest import FakeSdilejClient, StaticMetadataResolver, build_search_result
 
@@ -128,6 +129,72 @@ def test_movie_info_link_endpoint_rejects_obvious_tv_titles(app_factory) -> None
     payload = response.json()
     assert payload["found"] is False
     assert "TV episode" in payload["error"]
+
+
+def test_movie_discovery_endpoint_reports_missing_tmdb_token(app_factory, monkeypatch) -> None:
+    monkeypatch.delenv("TMDB_BEARER_TOKEN", raising=False)
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.get("/api/discovery/movies?mode=popular&limit=1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["configured"] is False
+    assert payload["items"] == []
+    assert "TMDB_BEARER_TOKEN" in payload["hint"]
+
+
+@responses.activate
+def test_movie_discovery_endpoint_marks_best_sdilej_availability(app_factory, monkeypatch) -> None:
+    monkeypatch.setenv("TMDB_BEARER_TOKEN", "test-token")
+    responses.get(
+        f"{TMDB_BASE_URL}/movie/popular",
+        json={
+            "results": [
+                {
+                    "id": 603,
+                    "title": "Matrix",
+                    "original_title": "The Matrix",
+                    "overview": "A hacker discovers a simulated reality.",
+                    "release_date": "1999-03-31",
+                    "poster_path": "/matrix.jpg",
+                    "vote_average": 8.2,
+                    "vote_count": 1000,
+                    "popularity": 99.0,
+                    "genre_ids": [28],
+                }
+            ]
+        },
+    )
+    app = app_factory(
+        client_instance=FakeSdilejClient(
+            responses_by_query={
+                "Matrix": [
+                    build_search_result(
+                        file_id=900,
+                        title="Matrix 1999 CZ 1080p mkv",
+                        size="4.0 GB",
+                        detected_languages=["CZ"],
+                    )
+                ]
+            }
+        )
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/discovery/movies?mode=popular&limit=1&sdilej_language=CZ")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["configured"] is True
+    assert payload["items"][0]["title"] == "Matrix"
+    assert payload["items"][0]["poster_url"] == "https://image.tmdb.org/t/p/w342/matrix.jpg"
+    availability = payload["items"][0]["availability"]
+    assert availability["status"] == "available"
+    assert availability["query"] == "Matrix"
+    assert availability["best_result"]["file_id"] == 900
+    assert availability["best_result"]["size"] == "4.0 GB"
 
 
 @responses.activate
@@ -552,6 +619,44 @@ def test_download_enqueue_destination_preset_kids_movies(app_factory) -> None:
     assert payload["media_kind"] == "movie"
     assert payload["is_kids"] is True
     assert payload["destination_subpath"].endswith("kids/movies")
+
+
+def test_media_classify_destination_preset_music_routes_to_music(app_factory) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/media/classify",
+            json={"title": "Artist - Track.flac", "destination_preset": "music"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["classification"]["media_kind"] == "music"
+    assert payload["classification"]["is_kids"] is False
+    assert payload["destination_subpath"].endswith("music")
+    assert payload["requires_confirmation"] is False
+
+
+def test_download_enqueue_destination_preset_music(app_factory) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/downloads",
+            json={
+                "detail_url": "https://sdilej.cz/774/artist-track.flac",
+                "file_id": 774,
+                "title": "Artist - Track.flac",
+                "destination_preset": "music",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["media_kind"] == "music"
+    assert payload["is_kids"] is False
+    assert payload["destination_subpath"].endswith("music")
 
 
 def test_download_enqueue_destination_preset_unsorted_bypasses_uncertain_confirmation(app_factory) -> None:

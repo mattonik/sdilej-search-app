@@ -13,6 +13,12 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
   - multi-pattern episode queries (`SxxExx`, `x`, `Season N Episode M`)
   - result ranking: precision-first alias matching with episode-title boosts and language-aware tie breaking
 - Category filters: all, video, audio, archive, image
+- Movie discovery:
+  - TMDB-powered trending/popular/now-playing/upcoming/top-rated movie lists
+  - lightweight sdilej availability check for discovered movies
+- Music search:
+  - audio-category shortcut form
+  - `music` destination preset for routing downloads to `/music`
 - Sort options: relevance, most downloaded, newest, largest, smallest
 - Language-aware filtering with filename heuristics (e.g. `SK`, `(sk)`, `CZ EN SK`, `SKtit`, `SK dabing`)
 - `strict_dubbing` mode (requires explicit `dub`/`dabing` markers)
@@ -41,6 +47,7 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
     - `tv` -> `/tv/{series}/SNN`
     - `kids + movie` -> `/kids/movies`
     - `kids + tv` -> `/kids/tv/{series}/SNN`
+    - `music` -> `/music`
   - uncertain title classification can require user confirmation before enqueue
   - queue controls: move-to-top, custom priority, clear finished jobs
   - account credentials (for subscription/premium flow)
@@ -55,11 +62,13 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - `app/main.py` - FastAPI app factory + route registration
 - `app/db.py` - shared SQLite connection policy + retry helpers
 - `app/sdilej_client.py` - HTTP client + parser + URL mapping
+- `app/tmdb_client.py` - TMDB client for movie discovery
 - `app/routes/` - domain route modules (`search`, `tv`, `downloads`, `health`)
 - `app/templates/index.html` - UI shell
 - `app/static/js/app.js` - main browser runtime
 - `app/static/js/saved.js` - saved-picks browser runtime
 - `app/static/js/file-search.js` - file-search runtime
+- `app/static/js/movie-discovery.js` - movie discovery runtime
 - `app/static/js/tv-search.js` - TV runtime
 - `app/static/js/queue-ui.js` - shared queue rendering/actions
 - `app/static/js/tv-view.js` - TV rendering helpers
@@ -120,6 +129,9 @@ GitHub Actions mirrors that release gate in `.github/workflows/ci.yml` on pull r
 
 Optional config:
 
+- `TMDB_BEARER_TOKEN`
+  - enables movie discovery via TMDB
+  - when missing, the discovery UI shows a setup hint instead of failing app startup
 - `TITLE_METADATA_CACHE_TTL_HOURS`
   - default: `168`
   - controls how long localized title metadata stays fresh before the resolver attempts a synchronous refresh
@@ -205,6 +217,8 @@ SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
 - `GET /api/autocomplete?q=mat&limit=10`
 - `POST /api/tv/lookup` (`show_name`) returns show + seasons/episodes
 - `POST /api/movie/lookup` (`title`, optional `year`) returns localized title metadata + aliases
+- `GET /api/discovery/movie-genres?language=sk-SK`
+- `GET /api/discovery/movies?mode=popular&time_window=week&genre=28&year=2024&limit=12`
 - `POST /api/tv/search` (`show_id`, `show_name`, `seasons`, optional current filters) returns grouped episode results
 - `POST /api/tv/search-jobs` creates a persisted background TV search job
 - `GET /api/tv/search-jobs?limit=50&status=running`
@@ -223,14 +237,14 @@ SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
   - supports `source_type`: `sdilej` (default) or `youtube`
   - supports optional `source_metadata` for catalog/provider context
   - supports `chunk_count` override (1..8)
-  - supports `destination_preset`: `auto`, `movies`, `tv`, `kids_movies`, `kids_tv`, `unsorted`
+  - supports `destination_preset`: `auto`, `movies`, `tv`, `kids_movies`, `kids_tv`, `music`, `unsorted`
   - supports optional media routing hints: `media_kind`, `is_kids`, `series_name`, `season_number`, `episode_number`
   - duplicate queue/download protection returns `409` + `duplicate_job`
   - supports `source_saved_file_id` + `delete_saved_on_complete`
 - `GET /api/downloads/settings`
 - `POST /api/downloads/settings` (`max_concurrent_jobs`, `default_chunk_count`, `bandwidth_limit_kbps`)
 - `GET /api/downloads/library-paths`
-- `POST /api/downloads/library-paths` (`movies_dir`, `tv_dir`, `kids_movies_dir`, `kids_tv_dir`, `unsorted_dir`, `confirm_on_uncertain`)
+- `POST /api/downloads/library-paths` (`movies_dir`, `tv_dir`, `kids_movies_dir`, `kids_tv_dir`, `music_dir`, `unsorted_dir`, `confirm_on_uncertain`)
 - `POST /api/media/classify` (preview auto-classification/destination preset + resolved destination path)
 - `POST /api/downloads/{id}/classification` (recategorize queued job and reroute destination)
 - `POST /api/downloads/{id}/cancel`

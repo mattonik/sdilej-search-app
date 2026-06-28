@@ -9,7 +9,7 @@ from typing import Literal
 from .dataclass_compat import dataclass
 from .models import TitleMetadata
 
-MediaKind = Literal["movie", "tv", "unknown"]
+MediaKind = Literal["movie", "tv", "music", "unknown"]
 ClassificationConfidence = Literal["strict", "loose", "unknown", "manual"]
 
 
@@ -18,6 +18,7 @@ _DEFAULT_LIBRARY_PATHS = {
     "tv_dir": "/tv",
     "kids_movies_dir": "/kids/movies",
     "kids_tv_dir": "/kids/tv",
+    "music_dir": "/music",
     "unsorted_dir": "/unsorted",
 }
 
@@ -104,13 +105,13 @@ def classify_media_title(
         override=is_kids_override,
     )
 
-    if media_kind_override in {"movie", "tv"}:
+    if media_kind_override in {"movie", "tv", "music"}:
         return MediaClassification(
             media_kind=media_kind_override,
             is_kids=resolved_is_kids,
-            series_name=_normalize_optional_text(series_name_override),
-            season_number=season_number_override,
-            episode_number=episode_number_override,
+            series_name=_normalize_optional_text(series_name_override) if media_kind_override == "tv" else None,
+            season_number=season_number_override if media_kind_override == "tv" else None,
+            episode_number=episode_number_override if media_kind_override == "tv" else None,
             confidence="manual",
             uncertain_reason=None,
         )
@@ -213,6 +214,9 @@ def resolve_destination_subpath(
         season_number = classification.season_number if classification.season_number is not None else 1
         season = f"S{max(1, season_number):02d}"
         return str(PurePosixPath(base_route) / series / season)
+
+    if classification.media_kind == "music":
+        return _normalize_route(library_paths.get("music_dir") or _DEFAULT_LIBRARY_PATHS["music_dir"])
 
     return _normalize_route(library_paths.get("unsorted_dir") or _DEFAULT_LIBRARY_PATHS["unsorted_dir"])
 

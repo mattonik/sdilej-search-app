@@ -28,6 +28,7 @@ import { initTvSearch } from "./tv-search.js";
 import { initQueueDialog } from "./queue-dialog.js";
 import { initWorkspaceTabs } from "./workspace-tabs.js";
 import { initKidsCatalog } from "./kids-catalog.js";
+import { initMovieDiscovery } from "./movie-discovery.js";
 
       const input = document.getElementById("queryInput");
       const list = document.getElementById("suggestions");
@@ -50,7 +51,21 @@ import { initKidsCatalog } from "./kids-catalog.js";
       const fileResultsEmpty = document.getElementById("fileResultsEmpty");
       const fileSearchModeBtn = document.getElementById("fileSearchModeBtn");
       const tvSearchModeBtn = document.getElementById("tvSearchModeBtn");
+      const movieDiscoveryPanel = document.getElementById("movieDiscoveryPanel");
+      const movieDiscoveryForm = document.getElementById("movieDiscoveryForm");
+      const movieDiscoveryMode = document.getElementById("movieDiscoveryMode");
+      const movieDiscoveryWindow = document.getElementById("movieDiscoveryWindow");
+      const movieDiscoveryGenre = document.getElementById("movieDiscoveryGenre");
+      const movieDiscoveryYear = document.getElementById("movieDiscoveryYear");
+      const movieDiscoveryLimit = document.getElementById("movieDiscoveryLimit");
+      const movieDiscoveryStatus = document.getElementById("movieDiscoveryStatus");
+      const movieDiscoveryResults = document.getElementById("movieDiscoveryResults");
       const fileSearchPanel = document.getElementById("fileSearchPanel");
+      const musicSearchPanel = document.getElementById("musicSearchPanel");
+      const musicSearchForm = document.getElementById("musicSearchForm");
+      const musicSearchQuery = document.getElementById("musicSearchQuery");
+      const musicSearchSort = document.getElementById("musicSearchSort");
+      const musicSearchMaxResults = document.getElementById("musicSearchMaxResults");
       const tvModePanel = document.getElementById("tvModePanel");
       const tvLookupForm = document.getElementById("tvLookupForm");
       const tvShowName = document.getElementById("tvShowName");
@@ -285,6 +300,22 @@ import { initKidsCatalog } from "./kids-catalog.js";
         focusDownloadJob,
       });
 
+      initMovieDiscovery({
+        elements: {
+          movieDiscoveryPanel,
+          movieDiscoveryForm,
+          movieDiscoveryMode,
+          movieDiscoveryWindow,
+          movieDiscoveryGenre,
+          movieDiscoveryYear,
+          movieDiscoveryLimit,
+          movieDiscoveryStatus,
+          movieDiscoveryResults,
+        },
+        api,
+        openQueueDialog: (...args) => openQueueDialog?.(...args),
+      });
+
       fileSearchApi = initFileSearch({
         elements: {
           categorySelect,
@@ -303,6 +334,12 @@ import { initKidsCatalog } from "./kids-catalog.js";
           fileResultsListBtn,
           fileResultsGrid,
           fileResultsEmpty,
+          musicSearchPanel,
+          musicSearchForm,
+          musicSearchQuery,
+          musicSearchSort,
+          musicSearchMaxResults,
+          categorySelect,
         },
         api,
         state,

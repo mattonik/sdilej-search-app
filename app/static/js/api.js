@@ -72,6 +72,13 @@ export const api = {
   listDownloads(limit = 200) {
     return jsonRequest(`/api/downloads?limit=${encodeURIComponent(limit)}`);
   },
+  listMovieDiscoveryGenres(language = "sk-SK") {
+    return jsonRequest(`/api/discovery/movie-genres?language=${encodeURIComponent(language)}`);
+  },
+  discoverMovies(params) {
+    const query = new URLSearchParams(params || {});
+    return jsonRequest(`/api/discovery/movies?${query.toString()}`);
+  },
   listKidsCatalogShows() {
     return jsonRequest("/api/kids-catalog/shows");
   },

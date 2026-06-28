@@ -86,6 +86,7 @@
               <option value="tv">TV Show</option>
               <option value="kids_movies">Kids Movies</option>
               <option value="kids_tv">Kids TV</option>
+              <option value="music">Music</option>
               <option value="unsorted">Unsorted</option>
             </select>
           </label>
@@ -101,6 +102,7 @@
                   <option value="auto" selected>Auto detect</option>
                   <option value="movie">Movie</option>
                   <option value="tv">TV show</option>
+                  <option value="music">Music</option>
                 </select>
               </label>
 
@@ -209,6 +211,70 @@
             <button id="tvSearchModeBtn" type="button" class="btn btn-pill">TV Show Search</button>
           </div>
         </div>
+
+        <details id="movieDiscoveryPanel" class="movie-discovery-panel">
+          <summary>Movie Discovery</summary>
+          <form id="movieDiscoveryForm" class="movie-discovery-form">
+            <label>
+              List
+              <select id="movieDiscoveryMode">
+                <option value="trending" selected>Trending</option>
+                <option value="popular">Popular</option>
+                <option value="now_playing">Now playing</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="top_rated">Top rated</option>
+              </select>
+            </label>
+            <label>
+              Period
+              <select id="movieDiscoveryWindow">
+                <option value="week" selected>Week</option>
+                <option value="day">Day</option>
+              </select>
+            </label>
+            <label>
+              Genre
+              <select id="movieDiscoveryGenre">
+                <option value="">Any genre</option>
+              </select>
+            </label>
+            <label>
+              Year
+              <input id="movieDiscoveryYear" type="number" min="1900" max="2099" placeholder="optional" />
+            </label>
+            <label>
+              Limit
+              <input id="movieDiscoveryLimit" type="number" min="1" max="20" value="12" />
+            </label>
+            <button type="submit" class="btn btn-primary">Find available movies</button>
+          </form>
+          <div id="movieDiscoveryStatus" class="download-status">Discovery idle.</div>
+          <div id="movieDiscoveryResults" class="movie-discovery-results"></div>
+        </details>
+
+        <details id="musicSearchPanel" class="music-search-panel">
+          <summary>Music Search</summary>
+          <form id="musicSearchForm" class="music-search-form">
+            <label>
+              Artist / track / album
+              <input id="musicSearchQuery" type="text" placeholder="e.g. Daft Punk Random Access Memories" autocomplete="off" />
+            </label>
+            <label>
+              Sort
+              <select id="musicSearchSort">
+                <option value="downloads" selected>Most downloaded</option>
+                <option value="newest">Newest</option>
+                <option value="relevance">Relevance</option>
+                <option value="size_desc">Largest</option>
+              </select>
+            </label>
+            <label>
+              Max results
+              <input id="musicSearchMaxResults" type="number" min="1" max="500" value="120" />
+            </label>
+            <button type="submit" class="btn btn-primary">Search music</button>
+          </form>
+        </details>
 
         <div id="fileSearchPanel" class="search-mode-panel">
           <form method="get" action="/" class="search-form" id="fileSearchForm">
@@ -588,6 +654,7 @@
                 <option value="tv">TV Show</option>
                 <option value="kids_movies">Kids Movies</option>
                 <option value="kids_tv">Kids TV</option>
+                <option value="music">Music</option>
                 <option value="unsorted">Unsorted</option>
               </select>
             </label>
@@ -600,6 +667,7 @@
                 <option value="auto">Auto detect</option>
                 <option value="movie">Movie</option>
                 <option value="tv">TV show</option>
+                <option value="music">Music</option>
               </select>
             </label>
             <label>
