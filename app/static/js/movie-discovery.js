@@ -6,7 +6,6 @@ export const initMovieDiscovery = ({
   openQueueDialog,
 }) => {
   const {
-    movieDiscoveryPanel,
     movieDiscoveryForm,
     movieDiscoveryMode,
     movieDiscoveryWindow,
@@ -128,9 +127,6 @@ export const initMovieDiscovery = ({
 
   movieDiscoveryForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (movieDiscoveryPanel) {
-      movieDiscoveryPanel.open = true;
-    }
     setStatus("Loading TMDB movies and checking sdilej availability...", "neutral");
     movieDiscoveryResults.innerHTML = "";
     const params = {

@@ -33,138 +33,158 @@
           </div>
         </div>
 
-        <form id="youtubeQuickForm" class="youtube-quick-form" aria-label="YouTube quick download">
-          <div class="youtube-quick-copy">
-            <strong>YouTube quick download</strong>
-            <span>Paste a video link and enqueue it directly. Use the full form below for TV/kids routing.</span>
-          </div>
-          <label>
-            YouTube URL
-            <input
-              id="youtubeQuickUrl"
-              type="url"
-              placeholder="https://www.youtube.com/watch?v=..."
-              autocomplete="off"
-            />
-          </label>
-          <button type="submit" id="youtubeQuickSubmit" class="btn btn-primary">Download YouTube</button>
-        </form>
-
-        <form id="downloadForm" class="download-form">
-          <label>
-            Source
-            <select id="downloadSourceType">
-              <option value="sdilej" selected>Sdilej</option>
-              <option value="youtube">YouTube</option>
-            </select>
-          </label>
-
-          <label>
-            Detail URL
-            <input
-              id="downloadDetailUrl"
-              type="text"
-              placeholder="https://sdilej.cz/123456/file-name.mkv"
-              autocomplete="off"
-              required
-            />
-          </label>
-
-          <label id="downloadModeLabel">
-            Mode
-            <select id="downloadMode">
-              <option value="premium" selected>Premium</option>
-              <option value="auto">Auto</option>
-              <option value="free">Free</option>
-            </select>
-          </label>
-
-          <label>
-            Destination
-            <select id="downloadDestinationPreset">
-              <option value="auto" selected>Auto route</option>
-              <option value="movies">Movies</option>
-              <option value="tv">TV Show</option>
-              <option value="kids_movies">Kids Movies</option>
-              <option value="kids_tv">Kids TV</option>
-              <option value="music">Music</option>
-              <option value="unsorted">Unsorted</option>
-            </select>
-          </label>
-
-          <div id="downloadDestinationPreview" class="destination-preview">Destination will be detected after you paste a URL.</div>
-
-          <details class="destination-advanced">
-            <summary>Advanced destination</summary>
-            <div class="destination-advanced-grid">
-              <label>
-                Type
-                <select id="downloadMediaKind">
-                  <option value="auto" selected>Auto detect</option>
-                  <option value="movie">Movie</option>
-                  <option value="tv">TV show</option>
-                  <option value="music">Music</option>
-                </select>
-              </label>
-
-              <label>
-                Kids tag
-                <select id="downloadKidsTag">
-                  <option value="auto" selected>Auto detect</option>
-                  <option value="yes">Kids</option>
-                  <option value="no">Not kids</option>
-                </select>
-              </label>
-
-              <label>
-                Series (for TV)
-                <input id="downloadSeriesName" type="text" placeholder="e.g. Bluey" autocomplete="off" />
-              </label>
-
-              <label>
-                Season (for TV)
-                <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" />
-              </label>
+        <section class="download-queue-section">
+          <div class="download-command-bar">
+            <div>
+              <strong>Queue</strong>
+              <span>Current download state and active jobs.</span>
             </div>
-          </details>
-
-          <label id="downloadChunkCountLabel">
-            Chunk count
-            <input id="downloadChunkCount" type="number" min="1" max="8" value="1" />
-          </label>
-
-          <label>
-            Priority
-            <input id="downloadPriority" type="number" min="-100" max="100" value="0" />
-          </label>
-
-          <div class="download-actions">
-            <button type="submit" class="btn btn-primary">Enqueue download</button>
-            <button id="refreshDownloadsBtn" type="button" class="secondary-btn btn btn-secondary">Refresh queue</button>
-            <button id="clearFinishedBtn" type="button" class="secondary-btn btn btn-secondary">Clear finished</button>
+            <div class="download-actions">
+              <button id="refreshDownloadsBtn" type="button" class="secondary-btn btn btn-secondary">Refresh queue</button>
+              <button id="clearFinishedBtn" type="button" class="secondary-btn btn btn-secondary">Clear finished</button>
+            </div>
           </div>
-        </form>
+          <div id="downloadStatus" class="download-status" aria-live="polite" aria-atomic="true">Queue idle.</div>
+          <div id="downloadJobs" class="download-jobs"></div>
+        </section>
 
-        <form id="downloadSettingsForm" class="download-form settings-form">
-          <label>
-            Max concurrent jobs
-            <input id="settingsMaxConcurrent" type="number" min="1" max="8" value="1" />
-          </label>
-          <label>
-            Default chunk count
-            <input id="settingsDefaultChunks" type="number" min="1" max="8" value="1" />
-          </label>
-          <label>
-            Bandwidth limit (KB/s)
-            <input id="settingsBandwidth" type="number" min="0" max="2000000" value="0" />
-          </label>
-          <div class="download-actions">
-            <button type="submit" class="btn btn-primary">Save download settings</button>
+        <section class="download-add-section">
+          <div class="download-section-heading">
+            <h3>Add download</h3>
+            <p>Paste a direct sdilej link, YouTube URL, or route the item manually when auto detection is not enough.</p>
           </div>
-        </form>
 
-        <div id="downloadStatus" class="download-status" aria-live="polite" aria-atomic="true">Queue idle.</div>
-        <div id="downloadJobs" class="download-jobs"></div>
+          <form id="youtubeQuickForm" class="youtube-quick-form" aria-label="YouTube quick download">
+            <div class="youtube-quick-copy">
+              <strong>YouTube quick download</strong>
+              <span>Paste a video link and enqueue it directly. Use the full form for TV/kids routing.</span>
+            </div>
+            <label>
+              YouTube URL
+              <input
+                id="youtubeQuickUrl"
+                type="url"
+                placeholder="https://www.youtube.com/watch?v=..."
+                autocomplete="off"
+              />
+            </label>
+            <button type="submit" id="youtubeQuickSubmit" class="btn btn-primary">Download YouTube</button>
+          </form>
+
+          <form id="downloadForm" class="download-form">
+            <label>
+              Source
+              <select id="downloadSourceType">
+                <option value="sdilej" selected>Sdilej</option>
+                <option value="youtube">YouTube</option>
+              </select>
+            </label>
+
+            <label>
+              Detail URL
+              <input
+                id="downloadDetailUrl"
+                type="text"
+                placeholder="https://sdilej.cz/123456/file-name.mkv"
+                autocomplete="off"
+                required
+              />
+            </label>
+
+            <label id="downloadModeLabel">
+              Mode
+              <select id="downloadMode">
+                <option value="premium" selected>Premium</option>
+                <option value="auto">Auto</option>
+                <option value="free">Free</option>
+              </select>
+            </label>
+
+            <label>
+              Destination
+              <select id="downloadDestinationPreset">
+                <option value="auto" selected>Auto route</option>
+                <option value="movies">Movies</option>
+                <option value="tv">TV Show</option>
+                <option value="kids_movies">Kids Movies</option>
+                <option value="kids_tv">Kids TV</option>
+                <option value="music">Music</option>
+                <option value="unsorted">Unsorted</option>
+              </select>
+            </label>
+
+            <div id="downloadDestinationPreview" class="destination-preview">Destination will be detected after you paste a URL.</div>
+
+            <details class="destination-advanced">
+              <summary>Advanced destination</summary>
+              <div class="destination-advanced-grid">
+                <label>
+                  Type
+                  <select id="downloadMediaKind">
+                    <option value="auto" selected>Auto detect</option>
+                    <option value="movie">Movie</option>
+                    <option value="tv">TV show</option>
+                    <option value="music">Music</option>
+                  </select>
+                </label>
+
+                <label>
+                  Kids tag
+                  <select id="downloadKidsTag">
+                    <option value="auto" selected>Auto detect</option>
+                    <option value="yes">Kids</option>
+                    <option value="no">Not kids</option>
+                  </select>
+                </label>
+
+                <label>
+                  Series (for TV)
+                  <input id="downloadSeriesName" type="text" placeholder="e.g. Bluey" autocomplete="off" />
+                </label>
+
+                <label>
+                  Season (for TV)
+                  <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" />
+                </label>
+              </div>
+            </details>
+
+            <label id="downloadChunkCountLabel">
+              Chunk count
+              <input id="downloadChunkCount" type="number" min="1" max="8" value="1" />
+            </label>
+
+            <label>
+              Priority
+              <input id="downloadPriority" type="number" min="-100" max="100" value="0" />
+            </label>
+
+            <div class="download-actions">
+              <button type="submit" class="btn btn-primary">Enqueue download</button>
+            </div>
+          </form>
+        </section>
+
+        <details class="download-settings-section">
+          <summary>Download settings</summary>
+          <form id="downloadSettingsForm" class="download-form settings-form">
+            <label>
+              Max concurrent jobs
+              <input id="settingsMaxConcurrent" type="number" min="1" max="8" value="1" />
+            </label>
+            <label>
+              Default chunk count
+              <input id="settingsDefaultChunks" type="number" min="1" max="8" value="1" />
+            </label>
+            <label>
+              Bandwidth limit (KB/s)
+              <input id="settingsBandwidth" type="number" min="0" max="2000000" value="0" />
+            </label>
+            <div class="download-actions">
+              <button type="submit" class="btn btn-primary">Save download settings</button>
+            </div>
+          </form>
+        </details>
       </section>
 
       <section class="panel account-panel tab-section tab-account">
@@ -226,15 +246,24 @@
 
       <section class="panel tab-section tab-search">
         <div class="search-mode-head">
-          <h2>Search</h2>
+          <div>
+            <h2>Search</h2>
+            <p id="searchModeHint" class="search-mode-hint">Search files and movies by title, language, year, and category.</p>
+          </div>
           <div class="search-mode-switch" role="tablist" aria-label="Search mode">
-            <button id="fileSearchModeBtn" type="button" class="btn btn-pill active">File Search</button>
-            <button id="tvSearchModeBtn" type="button" class="btn btn-pill">TV Show Search</button>
+            <button id="fileSearchModeBtn" type="button" class="btn btn-pill active" data-search-mode="file">Movies / Files</button>
+            <button id="tvSearchModeBtn" type="button" class="btn btn-pill" data-search-mode="tv">TV Shows</button>
+            <button id="musicSearchModeBtn" type="button" class="btn btn-pill" data-search-mode="music">Music</button>
+            <button id="discoverySearchModeBtn" type="button" class="btn btn-pill" data-search-mode="discovery">Discover</button>
+            <button id="kidsSearchModeBtn" type="button" class="btn btn-pill" data-search-mode="kids">Kids</button>
           </div>
         </div>
 
-        <details id="movieDiscoveryPanel" class="movie-discovery-panel">
-          <summary>Movie Discovery</summary>
+        <div id="movieDiscoveryPanel" class="movie-discovery-panel search-mode-panel hidden">
+          <div class="search-section-intro">
+            <h3>Movie Discovery</h3>
+            <p>Browse top lists and check which movies look available before searching manually.</p>
+          </div>
           <form id="movieDiscoveryForm" class="movie-discovery-form">
             <label>
               List
@@ -271,10 +300,13 @@
           </form>
           <div id="movieDiscoveryStatus" class="download-status">Discovery idle.</div>
           <div id="movieDiscoveryResults" class="movie-discovery-results"></div>
-        </details>
+        </div>
 
-        <details id="musicSearchPanel" class="music-search-panel">
-          <summary>Music Search</summary>
+        <div id="musicSearchPanel" class="music-search-panel search-mode-panel hidden">
+          <div class="search-section-intro">
+            <h3>Music Search</h3>
+            <p>Search audio results and route queue actions to the music destination by default.</p>
+          </div>
           <form id="musicSearchForm" class="music-search-form">
             <label>
               Artist / track / album
@@ -295,7 +327,7 @@
             </label>
             <button type="submit" class="btn btn-primary">Search music</button>
           </form>
-        </details>
+        </div>
 
         <div id="fileSearchPanel" class="search-mode-panel">
           <form method="get" action="/" class="search-form" id="fileSearchForm">
@@ -458,8 +490,11 @@
           <div id="tvResults" class="tv-results"></div>
         </div>
 
-        <details id="kidsCatalogPanel" class="kids-catalog-panel">
-          <summary>Kids Catalog</summary>
+        <div id="kidsCatalogPanel" class="kids-catalog-panel search-mode-panel hidden">
+          <div class="search-section-intro">
+            <h3>Kids Catalog</h3>
+            <p>Browse the curated kids catalog and enqueue episodes directly.</p>
+          </div>
           <div class="kids-catalog-controls">
             <label>
               Filter
@@ -470,7 +505,7 @@
           <div id="kidsCatalogStatus" class="download-status" aria-live="polite" aria-atomic="true">Catalog idle.</div>
           <div id="kidsCatalogShows" class="kids-catalog-shows"></div>
           <div id="kidsCatalogEpisodes" class="kids-catalog-episodes"></div>
-        </details>
+        </div>
       </section>
 
       {% if error %}

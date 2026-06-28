@@ -379,9 +379,57 @@ textarea {
   gap: 0.45rem;
 }
 
+.download-queue-section,
+.download-add-section,
+.download-settings-section {
+  margin-top: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.download-queue-section {
+  background:
+    radial-gradient(circle at top right, rgba(13, 148, 136, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.82);
+}
+
+.download-command-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.download-command-bar > div:first-child,
+.download-section-heading {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.download-command-bar strong,
+.download-section-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.download-command-bar span,
+.download-section-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.download-settings-section > summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--text);
+}
+
 .movie-discovery-panel,
 .music-search-panel {
-  margin-top: 0.85rem;
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 0.75rem 0.85rem;
@@ -390,15 +438,24 @@ textarea {
     rgba(255, 255, 255, 0.76);
 }
 
-.movie-discovery-panel > summary,
-.music-search-panel > summary {
-  cursor: pointer;
-  font-weight: 800;
+.search-section-intro {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.search-section-intro h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.search-section-intro p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .movie-discovery-form,
 .music-search-form {
-  margin-top: 0.8rem;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.75rem;
@@ -633,20 +690,13 @@ textarea {
 }
 
 .kids-catalog-panel {
-  margin-top: 1rem;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 16px;
   padding: 0.8rem;
   background: #fbfdff;
 }
 
-.kids-catalog-panel > summary {
-  cursor: pointer;
-  font-weight: 700;
-}
-
 .kids-catalog-controls {
-  margin-top: 0.75rem;
   display: flex;
   flex-wrap: wrap;
   gap: 0.7rem;
@@ -950,11 +1000,9 @@ textarea {
 }
 
 .search-mode-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 0.8rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 1rem;
 }
 
 .search-mode-head h2 {
@@ -962,11 +1010,18 @@ textarea {
   font-size: 1.1rem;
 }
 
+.search-mode-hint {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .search-mode-switch {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.2rem;
+  border-radius: 18px;
+  padding: 0.25rem;
   background: #f4f7fa;
   gap: 0.25rem;
 }
@@ -979,6 +1034,7 @@ textarea {
   padding: 0.35rem 0.75rem;
   font-size: 0.84rem;
   cursor: pointer;
+  min-height: 40px;
 }
 
 .search-mode-switch button.active {
@@ -2771,6 +2827,17 @@ textarea {
     justify-items: start;
   }
 
+  .download-queue-section,
+  .download-add-section,
+  .download-settings-section {
+    padding: 0.75rem;
+  }
+
+  .download-command-bar {
+    display: grid;
+    gap: 0.7rem;
+  }
+
   .download-form {
     grid-template-columns: 1fr;
   }
@@ -2793,9 +2860,14 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .search-mode-head {
-    flex-direction: column;
-    align-items: flex-start;
+  .search-mode-switch {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .search-mode-switch button {
+    padding-inline: 0.45rem;
+    font-size: 0.8rem;
   }
 
   .file-results-toolbar-head,

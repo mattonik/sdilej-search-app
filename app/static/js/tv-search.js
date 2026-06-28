@@ -43,7 +43,14 @@ export const initTvSearch = ({
     maxResultsInput,
     fileSearchModeBtn,
     tvSearchModeBtn,
+    musicSearchModeBtn,
+    discoverySearchModeBtn,
+    kidsSearchModeBtn,
+    searchModeHint,
     fileSearchPanel,
+    musicSearchPanel,
+    movieDiscoveryPanel,
+    kidsCatalogPanel,
     tvModePanel,
     queryInput,
     suggestions,
@@ -187,16 +194,44 @@ export const initTvSearch = ({
         tvSearchBtn.disabled = !canSearch;
       };
 
+      const SEARCH_MODE_HINTS = {
+        file: "Search files and movies by title, language, year, and category.",
+        tv: "Find a show, choose seasons, then scan episode results.",
+        music: "Search audio results and route queue actions to the music destination by default.",
+        discovery: "Browse top movie lists and check sdilej availability before picking a title.",
+        kids: "Browse the curated kids catalog and enqueue episodes directly.",
+      };
+
+      const normalizeSearchMode = (mode) =>
+        ["file", "tv", "music", "discovery", "kids"].includes(String(mode)) ? String(mode) : "file";
+
       const setSearchMode = (mode) => {
-        searchMode = mode === "tv" ? "tv" : "file";
+        searchMode = normalizeSearchMode(mode);
         state.searchMode = searchMode;
         const tvActive = searchMode === "tv";
-        fileSearchModeBtn.classList.toggle("active", !tvActive);
-        tvSearchModeBtn.classList.toggle("active", tvActive);
-        fileSearchPanel.classList.toggle("hidden", tvActive);
-        tvModePanel.classList.toggle("hidden", !tvActive);
+        const fileResultsVisible = searchMode === "file" || searchMode === "music";
+        [
+          fileSearchModeBtn,
+          tvSearchModeBtn,
+          musicSearchModeBtn,
+          discoverySearchModeBtn,
+          kidsSearchModeBtn,
+        ].forEach((btn) => {
+          if (!btn) return;
+          const active = btn.dataset.searchMode === searchMode;
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+        });
+        fileSearchPanel?.classList.toggle("hidden", searchMode !== "file");
+        musicSearchPanel?.classList.toggle("hidden", searchMode !== "music");
+        movieDiscoveryPanel?.classList.toggle("hidden", searchMode !== "discovery");
+        kidsCatalogPanel?.classList.toggle("hidden", searchMode !== "kids");
+        tvModePanel?.classList.toggle("hidden", !tvActive);
+        if (searchModeHint) {
+          searchModeHint.textContent = SEARCH_MODE_HINTS[searchMode] || SEARCH_MODE_HINTS.file;
+        }
         fileResultsBlocks.forEach((node) => {
-          node.classList.toggle("hidden", tvActive);
+          node.classList.toggle("hidden", !fileResultsVisible);
         });
         if (tvActive) {
           renderTvActiveFilters();
@@ -207,6 +242,9 @@ export const initTvSearch = ({
 
       fileSearchModeBtn.addEventListener("click", () => setSearchMode("file"));
       tvSearchModeBtn.addEventListener("click", () => setSearchMode("tv"));
+      musicSearchModeBtn?.addEventListener("click", () => setSearchMode("music"));
+      discoverySearchModeBtn?.addEventListener("click", () => setSearchMode("discovery"));
+      kidsSearchModeBtn?.addEventListener("click", () => setSearchMode("kids"));
 
       queryInput?.addEventListener("input", () => {
         const q = queryInput.value.trim();

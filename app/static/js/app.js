@@ -52,6 +52,10 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const fileResultsEmpty = document.getElementById("fileResultsEmpty");
       const fileSearchModeBtn = document.getElementById("fileSearchModeBtn");
       const tvSearchModeBtn = document.getElementById("tvSearchModeBtn");
+      const musicSearchModeBtn = document.getElementById("musicSearchModeBtn");
+      const discoverySearchModeBtn = document.getElementById("discoverySearchModeBtn");
+      const kidsSearchModeBtn = document.getElementById("kidsSearchModeBtn");
+      const searchModeHint = document.getElementById("searchModeHint");
       const movieDiscoveryPanel = document.getElementById("movieDiscoveryPanel");
       const movieDiscoveryForm = document.getElementById("movieDiscoveryForm");
       const movieDiscoveryMode = document.getElementById("movieDiscoveryMode");
@@ -384,7 +388,14 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           maxResultsInput,
           fileSearchModeBtn,
           tvSearchModeBtn,
+          musicSearchModeBtn,
+          discoverySearchModeBtn,
+          kidsSearchModeBtn,
+          searchModeHint,
           fileSearchPanel,
+          musicSearchPanel,
+          movieDiscoveryPanel,
+          kidsCatalogPanel,
           tvModePanel,
           queryInput: input,
           suggestions: list,
@@ -459,6 +470,11 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       });
 
       const initialMode = (() => {
+        const params = new URLSearchParams(window.location.search || "");
+        const hasFileSearchParams = ["query", "category", "sort", "language", "release_year"].some((key) => params.has(key));
+        if (hasFileSearchParams) {
+          return (params.get("category") || "").toLowerCase() === "audio" ? "music" : "file";
+        }
         return readSearchMode();
       })();
       if (fileSearchAdvancedFilters) {

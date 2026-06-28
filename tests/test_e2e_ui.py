@@ -435,6 +435,28 @@ def test_file_search_view_and_filter_state_persist(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_file_search_url_overrides_stale_search_mode(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#discoverySearchModeBtn")
+        assert page.locator("#movieDiscoveryPanel").is_visible()
+
+        page.goto(f"{base_url}/?query=Bluey&category=video", wait_until="networkidle")
+        page.wait_for_selector("#fileSearchPanel:not(.hidden)")
+        page.wait_for_selector("#fileResultsToolbar:not(.hidden)")
+        assert page.locator("#fileSearchModeBtn").evaluate("node => node.classList.contains('active')")
+        assert page.locator("#movieDiscoveryPanel").is_hidden()
+
+        page.goto(f"{base_url}/?query=Bluey&category=audio", wait_until="networkidle")
+        page.wait_for_selector("#musicSearchPanel:not(.hidden)")
+        page.wait_for_selector("#fileResultsToolbar:not(.hidden)")
+        assert page.locator("#musicSearchModeBtn").evaluate("node => node.classList.contains('active')")
+
+
+@pytest.mark.e2e
 def test_download_job_card_exposes_copy_action(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
@@ -443,6 +465,11 @@ def test_download_job_card_exposes_copy_action(tmp_path) -> None:
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="downloads"]')
         page.wait_for_selector("#refreshDownloadsBtn")
+        queue_top = page.locator(".download-queue-section").bounding_box()["y"]
+        add_top = page.locator(".download-add-section").bounding_box()["y"]
+        settings_open = page.locator(".download-settings-section").get_attribute("open")
+        assert queue_top < add_top
+        assert settings_open is None
         page.click("#refreshDownloadsBtn")
         page.wait_for_selector('#downloadJobs [data-action="copy"]', state="attached")
         assert page.locator('#downloadJobs [data-action="copy"]').count() >= 1
@@ -478,10 +505,16 @@ def test_music_search_routes_audio_results_to_music_preset(tmp_path) -> None:
     with run_test_server(app) as base_url, launch_browser() as browser:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
-        page.click("#musicSearchPanel summary")
+        assert page.locator("#fileSearchPanel").is_visible()
+        assert page.locator("#musicSearchPanel").is_hidden()
+        assert page.locator("#movieDiscoveryPanel").is_hidden()
+        page.click("#musicSearchModeBtn")
+        assert page.locator("#musicSearchPanel").is_visible()
+        assert page.locator("#fileSearchPanel").is_hidden()
         page.fill("#musicSearchQuery", "Bluey")
         page.click('#musicSearchForm button[type="submit"]')
         page.wait_for_url("**/?query=Bluey&category=audio**")
+        page.wait_for_selector("#musicSearchPanel:not(.hidden)")
         page.wait_for_selector('.queue-dialog-btn[data-file-id="103"]')
 
         page.locator('.queue-dialog-btn[data-file-id="103"]').click()
@@ -511,7 +544,9 @@ def test_movie_discovery_without_tmdb_token_shows_setup_state(tmp_path, monkeypa
     with run_test_server(app) as base_url, launch_browser() as browser:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
-        page.click("#movieDiscoveryPanel summary")
+        page.click("#discoverySearchModeBtn")
+        assert page.locator("#movieDiscoveryPanel").is_visible()
+        assert page.locator("#fileSearchPanel").is_hidden()
         page.click('#movieDiscoveryForm button[type="submit"]')
         page.wait_for_function(
             "document.querySelector('#movieDiscoveryStatus')?.textContent.includes('TMDB_BEARER_TOKEN')"

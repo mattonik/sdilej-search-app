@@ -23,7 +23,10 @@ export const readFileResultsFilter = () => readValue(FILE_RESULTS_FILTER_KEY) ||
 
 export const writeFileResultsFilter = (value) => writeValue(FILE_RESULTS_FILTER_KEY, value);
 
-export const readSearchMode = () => (readValue("searchMode") === "tv" ? "tv" : "file");
+export const readSearchMode = () => {
+  const value = readValue("searchMode");
+  return ["file", "tv", "music", "discovery", "kids"].includes(value) ? value : "file";
+};
 
 export const writeSearchMode = (value) => writeValue("searchMode", value);
 

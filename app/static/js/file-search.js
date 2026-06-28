@@ -1,5 +1,5 @@
 import { buildFileQueueKey } from "./keys.js";
-import { writeFileResultsFilter, writeFileResultsView, writeFileSearchAdvancedOpen } from "./storage-state.js";
+import { writeFileResultsFilter, writeFileResultsView, writeFileSearchAdvancedOpen, writeSearchMode } from "./storage-state.js";
 
 export const initFileSearch = ({
   elements,
@@ -383,11 +383,12 @@ export const initFileSearch = ({
     params.set("category", "audio");
     params.set("sort", musicSearchSort?.value || "downloads");
     params.set("max_results", musicSearchMaxResults?.value || "120");
+    writeSearchMode("music");
     window.location.href = `/?${params.toString()}`;
   });
 
   if (musicSearchPanel && categorySelect?.value === "audio") {
-    musicSearchPanel.open = true;
+    writeSearchMode("music");
   }
 
   fileResultsCardsBtn?.addEventListener("click", () => {
