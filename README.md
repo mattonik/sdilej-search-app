@@ -249,6 +249,8 @@ SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
 
 YouTube downloads use `yt-dlp` inside the same background queue as sdilej downloads. The Docker image installs `ffmpeg`, which yt-dlp uses for common merge/output flows.
 
+In the Downloads tab, use the "YouTube quick download" form for direct video links. It only needs a YouTube URL; the full download form remains available when you want to manually route a YouTube item as TV/kids content.
+
 Example enqueue:
 
 ```bash

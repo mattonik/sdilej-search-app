@@ -18,6 +18,9 @@ export const initDownloads = ({
     accountPassword,
     accountVerify,
     accountClearBtn,
+    youtubeQuickForm,
+    youtubeQuickUrl,
+    youtubeQuickSubmit,
     downloadForm,
     downloadSourceType,
     downloadDetailUrl,
@@ -53,6 +56,11 @@ export const initDownloads = ({
   let refreshDownloadsInFlight = false;
   let refreshDownloadsQueued = false;
   let refreshDownloadsFailures = 0;
+
+  const isYoutubeLikeUrl = (value) => {
+    const text = String(value || "").trim().toLowerCase();
+    return /(^https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//.test(text);
+  };
 
   const copyTextToClipboard = async (text) => {
     const value = String(text || "").trim();
@@ -448,6 +456,69 @@ export const initDownloads = ({
     } else if (result.duplicateJob && result.duplicateIsActive) {
       await refreshDownloads();
       focusDownloadJob(result.duplicateJob.id);
+    }
+  });
+
+  youtubeQuickForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const detailUrl = youtubeQuickUrl?.value.trim() || "";
+    if (!detailUrl) {
+      setDownloadStatus({
+        message: "YouTube URL is required.",
+        mode: "error",
+        details: {
+          hint: "Paste a YouTube video URL before enqueueing.",
+        },
+      });
+      return;
+    }
+    if (!isYoutubeLikeUrl(detailUrl)) {
+      setDownloadStatus({
+        message: "This does not look like a YouTube URL.",
+        mode: "warning",
+        details: {
+          hint: "Use the full download form below for non-YouTube URLs.",
+        },
+      });
+      return;
+    }
+
+    if (youtubeQuickSubmit) {
+      youtubeQuickSubmit.disabled = true;
+    }
+    try {
+      const result = await enqueueDownload({
+        detail_url: detailUrl,
+        title: "YouTube video",
+        source_type: "youtube",
+        source_metadata: {
+          provider: "youtube_direct",
+          prefer_metadata_title: true,
+        },
+        preferred_mode: "auto",
+        media_kind: "movie",
+        is_kids: false,
+        chunk_count: 1,
+        priority: 0,
+      });
+      if (result.ok && youtubeQuickUrl) {
+        youtubeQuickUrl.value = "";
+      } else if (result.duplicateJob && result.duplicateIsActive) {
+        await refreshDownloads();
+        focusDownloadJob(result.duplicateJob.id);
+      }
+    } finally {
+      if (youtubeQuickSubmit) {
+        youtubeQuickSubmit.disabled = false;
+      }
+    }
+  });
+
+  downloadDetailUrl?.addEventListener("input", () => {
+    if (!downloadSourceType || !isYoutubeLikeUrl(downloadDetailUrl.value)) return;
+    if (downloadSourceType.value !== "youtube") {
+      downloadSourceType.value = "youtube";
+      updateDownloadSourceMode();
     }
   });
 

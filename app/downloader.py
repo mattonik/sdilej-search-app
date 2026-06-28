@@ -353,8 +353,12 @@ class DownloadWorker:
             output_dir = self._resolve_output_dir(job.get("output_dir"))
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            filename_stem = self._resolve_youtube_filename_stem(job)
-            output_template = str(self._resolve_unique_youtube_template(output_dir, filename_stem))
+            source_metadata = job.get("source_metadata") if isinstance(job.get("source_metadata"), dict) else {}
+            if source_metadata.get("prefer_metadata_title") and str(job.get("media_kind") or "").lower().strip() != "tv":
+                output_template = str(output_dir / "%(title).200B [%(id)s].%(ext)s")
+            else:
+                filename_stem = self._resolve_youtube_filename_stem(job)
+                output_template = str(self._resolve_unique_youtube_template(output_dir, filename_stem))
             self.storage.set_download_working_path(job_id, output_template.replace("%(ext)s", "part"))
 
             def on_progress(payload: dict) -> None:

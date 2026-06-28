@@ -32,6 +32,23 @@
           </div>
         </div>
 
+        <form id="youtubeQuickForm" class="youtube-quick-form" aria-label="YouTube quick download">
+          <div class="youtube-quick-copy">
+            <strong>YouTube quick download</strong>
+            <span>Paste a video link and enqueue it directly. Use the full form below for TV/kids routing.</span>
+          </div>
+          <label>
+            YouTube URL
+            <input
+              id="youtubeQuickUrl"
+              type="url"
+              placeholder="https://www.youtube.com/watch?v=..."
+              autocomplete="off"
+            />
+          </label>
+          <button type="submit" id="youtubeQuickSubmit" class="btn btn-primary">Download YouTube</button>
+        </form>
+
         <form id="downloadForm" class="download-form">
           <label>
             Source

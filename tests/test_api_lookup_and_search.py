@@ -371,6 +371,36 @@ def test_download_enqueue_accepts_youtube_source(app_factory) -> None:
     assert job["is_kids"] is True
 
 
+def test_download_enqueue_accepts_direct_youtube_quick_payload(app_factory) -> None:
+    app = app_factory()
+
+    payload = {
+        "detail_url": "https://www.youtube.com/watch?v=abc123XYZ",
+        "title": "YouTube video",
+        "source_type": "youtube",
+        "preferred_mode": "auto",
+        "media_kind": "movie",
+        "is_kids": False,
+        "source_metadata": {
+            "provider": "youtube_direct",
+            "prefer_metadata_title": True,
+        },
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/api/downloads", json=payload)
+
+    assert response.status_code == 200
+    job = response.json()
+    assert job["source_type"] == "youtube"
+    assert job["title"] == "YouTube video"
+    assert job["preferred_mode"] == "auto"
+    assert job["media_kind"] == "movie"
+    assert job["is_kids"] is False
+    assert job["source_metadata"]["provider"] == "youtube_direct"
+    assert job["source_metadata"]["prefer_metadata_title"] is True
+
+
 @responses.activate
 def test_download_enqueue_resolves_veselerozpravky_episode_url(app_factory) -> None:
     episode_url = "https://www.veselerozpravky.sk/masa-a-medved-ako-sa-stretli/"

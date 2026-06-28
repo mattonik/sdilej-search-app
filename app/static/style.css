@@ -231,6 +231,55 @@ textarea {
   align-items: end;
 }
 
+.youtube-quick-form {
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(240px, 1.4fr) auto;
+  gap: 0.8rem;
+  align-items: end;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top left, rgba(13, 148, 136, 0.14), transparent 38%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(236, 253, 245, 0.58));
+}
+
+.youtube-quick-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.youtube-quick-copy strong {
+  color: var(--text);
+}
+
+.youtube-quick-copy span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.youtube-quick-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.youtube-quick-form input {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.youtube-quick-form .btn {
+  min-height: 42px;
+}
+
 .settings-form {
   margin-top: 0.4rem;
   padding-top: 0.5rem;
@@ -2392,6 +2441,10 @@ textarea {
   }
 
   .download-form {
+    grid-template-columns: 1fr;
+  }
+
+  .youtube-quick-form {
     grid-template-columns: 1fr;
   }
 

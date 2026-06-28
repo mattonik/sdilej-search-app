@@ -449,6 +449,25 @@ def test_download_job_card_exposes_copy_action(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.fill("#youtubeQuickUrl", "https://www.youtube.com/watch?v=abc123XYZ")
+        with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith("/api/downloads")) as response_info:
+            page.click("#youtubeQuickSubmit")
+        assert response_info.value.status == 200
+        page.wait_for_function("document.querySelector('#downloadJobs')?.textContent.includes('YouTube video')")
+
+        job_text = page.locator("#downloadJobs").text_content() or ""
+        assert "YouTube video" in job_text
+        assert "youtube" in job_text
+
+
+@pytest.mark.e2e
 def test_download_queue_refresh_error_exposes_diagnostic_details(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 

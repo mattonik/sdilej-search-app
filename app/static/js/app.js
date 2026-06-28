@@ -74,6 +74,9 @@ import { initKidsCatalog } from "./kids-catalog.js";
       const accountPassword = document.getElementById("accountPassword");
       const accountVerify = document.getElementById("accountVerify");
       const accountClearBtn = document.getElementById("accountClearBtn");
+      const youtubeQuickForm = document.getElementById("youtubeQuickForm");
+      const youtubeQuickUrl = document.getElementById("youtubeQuickUrl");
+      const youtubeQuickSubmit = document.getElementById("youtubeQuickSubmit");
       const downloadForm = document.getElementById("downloadForm");
       const downloadSourceType = document.getElementById("downloadSourceType");
       const downloadDetailUrl = document.getElementById("downloadDetailUrl");
@@ -223,6 +226,9 @@ import { initKidsCatalog } from "./kids-catalog.js";
           accountPassword,
           accountVerify,
           accountClearBtn,
+          youtubeQuickForm,
+          youtubeQuickUrl,
+          youtubeQuickSubmit,
           downloadForm,
           downloadSourceType,
           downloadDetailUrl,
