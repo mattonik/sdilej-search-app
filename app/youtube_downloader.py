@@ -18,7 +18,7 @@ class YoutubeDownloader:
         self.is_canceled = is_canceled
         self.on_progress = on_progress
 
-    def download(self, url: str, *, output_template: str) -> dict[str, Any]:
+    def download(self, url: str, *, output_template: str, auth: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
             import yt_dlp
         except Exception as exc:  # noqa: BLE001
@@ -47,15 +47,47 @@ class YoutubeDownloader:
             "retries": 3,
             "fragment_retries": 3,
         }
+        self._apply_auth_options(options, auth or {})
 
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=True)
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=True)
+        except YoutubeDownloadError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise YoutubeDownloadError(self._format_download_error(exc)) from exc
 
         final_path = self._resolve_final_path(output_template, last_filename)
         return {
             "info": info or {},
             "filepath": str(final_path) if final_path else last_filename,
         }
+
+    def _apply_auth_options(self, options: dict[str, Any], auth: dict[str, Any]) -> None:
+        mode = str(auth.get("mode") or "none")
+        if mode == "cookies_file":
+            cookies_path = str(auth.get("cookies_path") or "").strip()
+            if cookies_path:
+                options["cookiefile"] = cookies_path
+        elif mode == "cookies_from_browser":
+            browser = str(auth.get("cookies_from_browser") or "").strip()
+            if browser:
+                options["cookiesfrombrowser"] = self._parse_cookies_from_browser(browser)
+
+    def _parse_cookies_from_browser(self, value: str) -> tuple[str, ...]:
+        parts = [part.strip() for part in value.split(":") if part.strip()]
+        return tuple(parts[:2]) if parts else ("firefox",)
+
+    def _format_download_error(self, exc: Exception) -> str:
+        message = str(exc) or exc.__class__.__name__
+        lower = message.lower()
+        auth_markers = ("private", "sign in", "login", "cookies", "confirm your age", "not available")
+        if any(marker in lower for marker in auth_markers):
+            return (
+                f"{message} Configure YouTube cookies in Account > YouTube authentication "
+                "and retry the job."
+            )
+        return message
 
     def _resolve_final_path(self, output_template: str, last_filename: str | None) -> Path | None:
         if last_filename:

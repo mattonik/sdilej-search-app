@@ -3,6 +3,8 @@ import { esc } from "./dom-utils.js";
 const DETAIL_LABELS = [
   ["error_code", "Error code"],
   ["request_id", "Request ID"],
+  ["status", "HTTP status"],
+  ["request_url", "Request URL"],
   ["hint", "Hint"],
   ["retryable", "Retryable"],
   ["details", "Details"],

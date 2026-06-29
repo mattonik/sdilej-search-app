@@ -296,6 +296,27 @@ class Storage:
             return None
         return login, password
 
+    def get_youtube_auth_settings(self) -> dict[str, Any]:
+        return self.settings.get_youtube_auth_settings()
+
+    def set_youtube_auth_settings(
+        self,
+        *,
+        mode: str,
+        cookies_path: str | None = None,
+        cookies_from_browser: str | None = None,
+        managed_cookies: bool = False,
+    ) -> dict[str, Any]:
+        return self.settings.set_youtube_auth_settings(
+            mode=mode,
+            cookies_path=cookies_path,
+            cookies_from_browser=cookies_from_browser,
+            managed_cookies=managed_cookies,
+        )
+
+    def clear_youtube_auth_settings(self) -> None:
+        self.settings.clear_youtube_auth_settings()
+
     def get_title_metadata_cache_entry(
         self,
         lookup_kind: str,

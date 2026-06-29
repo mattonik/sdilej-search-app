@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
@@ -13,6 +16,7 @@ from ..main import (
     MediaClassificationPayload,
     UpdateDownloadClassificationPayload,
     UpdatePriorityPayload,
+    YoutubeAuthPayload,
     _build_media_plan,
     _extract_file_id,
     _get_services,
@@ -22,6 +26,39 @@ from ..sdilej_client import SdilejClient, SdilejClientError
 from ..kids_catalog import KidsCatalogError, VeseleRozpravkyClient
 
 router = APIRouter()
+
+
+def _managed_youtube_cookies_path() -> Path:
+    configured = os.getenv("YOUTUBE_MANAGED_COOKIES_PATH", "./data/secrets/youtube-cookies.txt")
+    return Path(configured).expanduser().resolve()
+
+
+def _write_managed_youtube_cookies(cookies_text: str) -> Path:
+    target = _managed_youtube_cookies_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        target.parent.chmod(0o700)
+    except OSError:
+        pass
+    target.write_text(cookies_text, encoding="utf-8")
+    try:
+        target.chmod(0o600)
+    except OSError:
+        pass
+    return target
+
+
+def _public_youtube_auth(settings: dict) -> dict:
+    mode = settings.get("mode") or "none"
+    cookies_path = settings.get("cookies_path") if mode == "cookies_file" else None
+    return {
+        "mode": mode,
+        "configured": bool(settings.get("configured")),
+        "cookies_path": cookies_path,
+        "cookies_from_browser": settings.get("cookies_from_browser") if mode == "cookies_from_browser" else None,
+        "managed_cookies": bool(settings.get("managed_cookies")),
+        "updated_at": settings.get("updated_at"),
+    }
 
 
 def _download_error(
@@ -123,6 +160,145 @@ def api_account_set(request: Request, payload: AccountPayload):
 def api_account_delete(request: Request):
     _get_services(request).storage.clear_account_credentials()
     return JSONResponse({"cleared": True})
+
+
+@router.get("/api/youtube-auth")
+def api_youtube_auth_get(request: Request):
+    try:
+        settings = _get_services(request).storage.get_youtube_auth_settings()
+        return JSONResponse(_public_youtube_auth(settings))
+    except Exception as exc:  # noqa: BLE001
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to load YouTube authentication settings.",
+            error_code="youtube_auth_load_failed",
+            hint="Retry the request or check the storage layer.",
+            retryable=True,
+            details=str(exc),
+        )
+
+
+@router.post("/api/youtube-auth")
+def api_youtube_auth_set(request: Request, payload: YoutubeAuthPayload):
+    try:
+        services = _get_services(request)
+        mode = payload.mode
+        cookies_text = (payload.cookies_text or "").strip()
+        cookies_path = (payload.cookies_path or "").strip()
+        cookies_from_browser = (payload.cookies_from_browser or "").strip()
+        managed_cookies = False
+
+        if mode == "none":
+            previous = services.storage.get_youtube_auth_settings()
+            services.storage.clear_youtube_auth_settings()
+            if previous.get("managed_cookies") and previous.get("cookies_path"):
+                try:
+                    Path(str(previous["cookies_path"])).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            return JSONResponse(_public_youtube_auth(services.storage.get_youtube_auth_settings()))
+
+        if mode == "cookies_file":
+            if cookies_text:
+                target = _write_managed_youtube_cookies(cookies_text)
+                cookies_path = str(target)
+                managed_cookies = True
+            elif not cookies_path:
+                return _download_error(
+                    request,
+                    status_code=400,
+                    error="Cookies file path or pasted cookies text is required.",
+                    error_code="youtube_auth_missing_cookies",
+                    hint="Paste a Netscape cookies.txt export or provide a readable cookies file path.",
+                    retryable=False,
+                )
+
+            candidate = Path(cookies_path).expanduser()
+            if not candidate.is_file():
+                return _download_error(
+                    request,
+                    status_code=400,
+                    error="YouTube cookies file does not exist.",
+                    error_code="youtube_auth_cookies_file_missing",
+                    hint="Check the path from the app runtime, especially when running in Docker.",
+                    retryable=False,
+                    details=str(candidate),
+                )
+            if not os.access(candidate, os.R_OK):
+                return _download_error(
+                    request,
+                    status_code=400,
+                    error="YouTube cookies file is not readable.",
+                    error_code="youtube_auth_cookies_file_unreadable",
+                    hint="Fix file permissions so the app process can read it.",
+                    retryable=False,
+                    details=str(candidate),
+                )
+            settings = services.storage.set_youtube_auth_settings(
+                mode="cookies_file",
+                cookies_path=str(candidate.resolve()),
+                managed_cookies=managed_cookies,
+            )
+            return JSONResponse(_public_youtube_auth(settings))
+
+        if mode == "cookies_from_browser":
+            if not cookies_from_browser:
+                return _download_error(
+                    request,
+                    status_code=400,
+                    error="Browser cookies source is required.",
+                    error_code="youtube_auth_missing_browser",
+                    hint="Use a yt-dlp browser source such as firefox, chrome, or chrome:Profile 1.",
+                    retryable=False,
+                )
+            settings = services.storage.set_youtube_auth_settings(
+                mode="cookies_from_browser",
+                cookies_from_browser=cookies_from_browser,
+            )
+            return JSONResponse(_public_youtube_auth(settings))
+
+        return _download_error(
+            request,
+            status_code=400,
+            error="Unsupported YouTube authentication mode.",
+            error_code="youtube_auth_invalid_mode",
+            retryable=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to save YouTube authentication settings.",
+            error_code="youtube_auth_save_failed",
+            hint="Retry the save or check storage/file permissions.",
+            retryable=True,
+            details=str(exc),
+        )
+
+
+@router.delete("/api/youtube-auth")
+def api_youtube_auth_delete(request: Request):
+    try:
+        services = _get_services(request)
+        previous = services.storage.get_youtube_auth_settings()
+        services.storage.clear_youtube_auth_settings()
+        if previous.get("managed_cookies") and previous.get("cookies_path"):
+            try:
+                Path(str(previous["cookies_path"])).unlink(missing_ok=True)
+            except OSError:
+                pass
+        return JSONResponse({"cleared": True, **_public_youtube_auth(services.storage.get_youtube_auth_settings())})
+    except Exception as exc:  # noqa: BLE001
+        return _download_error(
+            request,
+            status_code=500,
+            error="Failed to clear YouTube authentication settings.",
+            error_code="youtube_auth_clear_failed",
+            hint="Retry the action or check storage/file permissions.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.get("/api/downloads")

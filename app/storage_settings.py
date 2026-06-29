@@ -168,6 +168,83 @@ class StorageSettingsRepository:
 
         return self.get_library_paths()
 
+    def get_youtube_auth_settings(self) -> dict[str, Any]:
+        with self.storage._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT key, value, updated_at
+                FROM app_settings
+                WHERE key IN (
+                    'youtube_auth_mode',
+                    'youtube_cookies_path',
+                    'youtube_cookies_from_browser',
+                    'youtube_cookies_managed'
+                )
+                """
+            ).fetchall()
+
+        mapping = {row["key"]: row["value"] for row in rows}
+        updated_at = next((row["updated_at"] for row in rows if row["key"] == "youtube_auth_mode"), None)
+        mode = mapping.get("youtube_auth_mode") or "none"
+        if mode not in {"none", "cookies_file", "cookies_from_browser"}:
+            mode = "none"
+        cookies_path = mapping.get("youtube_cookies_path") or None
+        cookies_from_browser = mapping.get("youtube_cookies_from_browser") or None
+        managed_cookies = mapping.get("youtube_cookies_managed") in {"1", "true", "yes", "on"}
+        configured = mode == "cookies_file" and bool(cookies_path) or mode == "cookies_from_browser" and bool(cookies_from_browser)
+        return {
+            "mode": mode,
+            "configured": bool(configured),
+            "cookies_path": cookies_path,
+            "cookies_from_browser": cookies_from_browser,
+            "managed_cookies": managed_cookies,
+            "updated_at": updated_at,
+        }
+
+    def set_youtube_auth_settings(
+        self,
+        *,
+        mode: str,
+        cookies_path: str | None = None,
+        cookies_from_browser: str | None = None,
+        managed_cookies: bool = False,
+    ) -> dict[str, Any]:
+        if mode not in {"none", "cookies_file", "cookies_from_browser"}:
+            mode = "none"
+        value_map = {
+            "youtube_auth_mode": mode,
+            "youtube_cookies_path": cookies_path or "",
+            "youtube_cookies_from_browser": cookies_from_browser or "",
+            "youtube_cookies_managed": "1" if managed_cookies else "0",
+        }
+        with self.storage._connect() as conn:
+            for key, value in value_map.items():
+                conn.execute(
+                    """
+                    INSERT INTO app_settings (key, value, updated_at)
+                    VALUES (?, ?, datetime('now'))
+                    ON CONFLICT(key) DO UPDATE SET
+                        value=excluded.value,
+                        updated_at=datetime('now')
+                    """,
+                    (key, value),
+                )
+        return self.get_youtube_auth_settings()
+
+    def clear_youtube_auth_settings(self) -> None:
+        with self.storage._connect() as conn:
+            conn.execute(
+                """
+                DELETE FROM app_settings
+                WHERE key IN (
+                    'youtube_auth_mode',
+                    'youtube_cookies_path',
+                    'youtube_cookies_from_browser',
+                    'youtube_cookies_managed'
+                )
+                """
+            )
+
 
 from typing import TYPE_CHECKING
 

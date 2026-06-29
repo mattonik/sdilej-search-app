@@ -169,6 +169,13 @@ class AccountPayload(BaseModel):
     verify: bool = True
 
 
+class YoutubeAuthPayload(BaseModel):
+    mode: Literal["none", "cookies_file", "cookies_from_browser"] = "none"
+    cookies_path: str | None = Field(default=None, max_length=1000)
+    cookies_text: str | None = Field(default=None, max_length=2_000_000)
+    cookies_from_browser: str | None = Field(default=None, max_length=200)
+
+
 DestinationPreset = Literal["auto", "movies", "tv", "kids_movies", "kids_tv", "music", "unsorted"]
 
 

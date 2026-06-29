@@ -1,21 +1,27 @@
-const readJson = async (response) => {
+const readJson = async (response, requestUrl) => {
   const data = await response.json();
+  if (!response.ok && data && typeof data === "object") {
+    data.status = response.status;
+    data.request_url = requestUrl;
+  }
   return { ok: response.ok, status: response.status, data };
 };
 
-const buildNetworkErrorPayload = (error) => ({
+const buildNetworkErrorPayload = (error, requestUrl) => ({
   error: "Network request failed.",
   error_code: "network_error",
   retryable: true,
   hint: "Check the browser console, local app health, and network connectivity.",
   details: error?.message || String(error || "unknown network error"),
+  request_url: requestUrl,
+  status: 0,
 });
 
 const jsonRequest = async (url, options = {}) => {
   try {
-    return await readJson(await fetch(url, options));
+    return await readJson(await fetch(url, options), url);
   } catch (error) {
-    return { ok: false, status: 0, data: buildNetworkErrorPayload(error) };
+    return { ok: false, status: 0, data: buildNetworkErrorPayload(error, url) };
   }
 };
 
@@ -143,6 +149,9 @@ export const api = {
   getAccount() {
     return jsonRequest("/api/account");
   },
+  getYoutubeAuth() {
+    return jsonRequest("/api/youtube-auth");
+  },
   clearDownloads(payload) {
     return jsonRequest("/api/downloads/clear", {
       method: "POST",
@@ -166,5 +175,15 @@ export const api = {
   },
   deleteAccount() {
     return jsonRequest("/api/account", { method: "DELETE" });
+  },
+  setYoutubeAuth(payload) {
+    return jsonRequest("/api/youtube-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteYoutubeAuth() {
+    return jsonRequest("/api/youtube-auth", { method: "DELETE" });
   },
 };

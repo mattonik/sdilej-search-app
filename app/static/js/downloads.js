@@ -18,6 +18,13 @@ export const initDownloads = ({
     accountPassword,
     accountVerify,
     accountClearBtn,
+    youtubeAuthStatus,
+    youtubeAuthForm,
+    youtubeAuthMode,
+    youtubeCookiesPath,
+    youtubeCookiesText,
+    youtubeCookiesBrowser,
+    youtubeAuthClearBtn,
     youtubeQuickForm,
     youtubeQuickUrl,
     youtubeQuickSubmit,
@@ -53,6 +60,14 @@ export const initDownloads = ({
     const nextMode = typeof value === "object" && value !== null ? value.mode || mode : mode;
     accountStatus.textContent = text || "";
     accountStatus.dataset.mode = nextMode;
+  };
+
+  const setYoutubeAuthStatus = (value, mode = "neutral") => {
+    if (!youtubeAuthStatus) return;
+    const text = typeof value === "object" && value !== null ? value.message || value.text || value.error || "" : value;
+    const nextMode = typeof value === "object" && value !== null ? value.mode || mode : mode;
+    youtubeAuthStatus.textContent = text || "";
+    youtubeAuthStatus.dataset.mode = nextMode;
   };
 
   let refreshDownloadsInFlight = false;
@@ -343,8 +358,10 @@ export const initDownloads = ({
       return;
     }
     refreshDownloadsInFlight = true;
+    let refreshPhase = "request";
     try {
       const { ok, data } = await api.listDownloads(200);
+      refreshPhase = "response";
       if (!ok) {
         refreshDownloadsFailures += 1;
         if (notifyOnFailure && refreshDownloadsFailures === 1) {
@@ -357,18 +374,24 @@ export const initDownloads = ({
       }
       refreshDownloadsFailures = 0;
       const summary = data.summary || {};
+      refreshPhase = "summary";
       downloadWorkerState.textContent = data.worker_alive ? "Worker: online" : "Worker: offline";
       downloadSummary.textContent = `Queue: ${summary.queued || 0} queued, ${summary.running || 0} running, ${summary.done || 0} done, ${summary.failed || 0} failed, ${summary.canceled || 0} canceled`;
+      refreshPhase = "render jobs";
       renderDownloadJobs(data.items || [], { refreshDownloads, enqueueDownload });
+      refreshPhase = "sync active queue state";
       setActiveQueueStateFromJobs(data.items || []);
-    } catch (_) {
+    } catch (error) {
       refreshDownloadsFailures += 1;
       if (notifyOnFailure && refreshDownloadsFailures === 1) {
         setDownloadStatus({
           message: "Queue refresh failed. Retrying in background.",
           mode: "warning",
           details: {
-            hint: "The last known queue state is preserved while the app retries in the background.",
+            error_code: "downloads_refresh_ui_failed",
+            hint: "The last known queue state is preserved while the app retries in the background. Copy these details so the failing refresh phase can be diagnosed.",
+            retryable: true,
+            details: `phase=${refreshPhase}; ${error?.stack || error?.message || String(error || "unknown error")}`,
           },
         });
       }
@@ -488,6 +511,39 @@ export const initDownloads = ({
       }
     } catch (_) {
       setAccountStatus("Status unavailable", "error");
+    }
+  };
+
+  const updateYoutubeAuthModeFields = () => {
+    const mode = youtubeAuthMode?.value || "none";
+    const fileFields = Array.from(document.querySelectorAll(".youtube-cookies-file-field, .youtube-cookies-text-field"));
+    const browserFields = Array.from(document.querySelectorAll(".youtube-cookies-browser-field"));
+    fileFields.forEach((el) => el.classList.toggle("hidden", mode !== "cookies_file"));
+    browserFields.forEach((el) => el.classList.toggle("hidden", mode !== "cookies_from_browser"));
+  };
+
+  const refreshYoutubeAuthStatus = async () => {
+    if (!youtubeAuthStatus || !api.getYoutubeAuth) return;
+    try {
+      const { ok, data } = await api.getYoutubeAuth();
+      if (!ok) {
+        setYoutubeAuthStatus(`YouTube auth status error: ${data.error || "unknown error"}`, "error");
+        return;
+      }
+      if (youtubeAuthMode) youtubeAuthMode.value = data.mode || "none";
+      if (youtubeCookiesPath) youtubeCookiesPath.value = data.mode === "cookies_file" ? data.cookies_path || "" : "";
+      if (youtubeCookiesBrowser) youtubeCookiesBrowser.value = data.mode === "cookies_from_browser" ? data.cookies_from_browser || "" : "";
+      if (youtubeCookiesText) youtubeCookiesText.value = "";
+      updateYoutubeAuthModeFields();
+      if (data.configured && data.mode === "cookies_file") {
+        setYoutubeAuthStatus(`Cookies file configured${data.managed_cookies ? " (managed)" : ""}`, "ok");
+      } else if (data.configured && data.mode === "cookies_from_browser") {
+        setYoutubeAuthStatus(`Browser cookies: ${data.cookies_from_browser}`, "ok");
+      } else {
+        setYoutubeAuthStatus("No YouTube cookies", "neutral");
+      }
+    } catch (_) {
+      setYoutubeAuthStatus("YouTube auth status unavailable", "error");
     }
   };
 
@@ -745,10 +801,83 @@ export const initDownloads = ({
     }
   });
 
+  youtubeAuthMode?.addEventListener("change", updateYoutubeAuthModeFields);
+
+  youtubeAuthForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const payload = {
+      mode: youtubeAuthMode?.value || "none",
+      cookies_path: youtubeCookiesPath?.value.trim() || null,
+      cookies_text: youtubeCookiesText?.value.trim() || null,
+      cookies_from_browser: youtubeCookiesBrowser?.value.trim() || null,
+    };
+    setYoutubeAuthStatus("Saving YouTube auth...", "neutral");
+    try {
+      const { ok, data } = await api.setYoutubeAuth(payload);
+      if (!ok) {
+        setYoutubeAuthStatus({
+          message: data.error || "Failed to save YouTube auth.",
+          mode: "error",
+          details: {
+            error_code: data.error_code || null,
+            request_id: data.request_id || null,
+            hint: data.hint || null,
+            retryable: data.retryable ?? null,
+            details: data.details || null,
+          },
+        });
+        return;
+      }
+      if (youtubeCookiesText) youtubeCookiesText.value = "";
+      await refreshYoutubeAuthStatus();
+    } catch (_) {
+      setYoutubeAuthStatus({
+        message: "Failed to save YouTube auth.",
+        mode: "error",
+        details: {
+          hint: "Retry the save or check the local cookies file path.",
+        },
+      });
+    }
+  });
+
+  youtubeAuthClearBtn?.addEventListener("click", async () => {
+    setYoutubeAuthStatus("Clearing YouTube auth...", "neutral");
+    try {
+      const { ok, data } = await api.deleteYoutubeAuth();
+      if (!ok || !data.cleared) {
+        setYoutubeAuthStatus({
+          message: data.error || "Failed to clear YouTube auth.",
+          mode: "error",
+          details: {
+            error_code: data.error_code || null,
+            request_id: data.request_id || null,
+            hint: data.hint || null,
+            retryable: data.retryable ?? null,
+            details: data.details || null,
+          },
+        });
+        return;
+      }
+      await refreshYoutubeAuthStatus();
+    } catch (_) {
+      setYoutubeAuthStatus({
+        message: "Failed to clear YouTube auth.",
+        mode: "error",
+        details: {
+          hint: "Retry the action or check the storage layer.",
+        },
+      });
+    }
+  });
+
+  updateYoutubeAuthModeFields();
+
   return {
     refreshDownloads,
     refreshDownloadSettings,
     refreshAccountStatus,
+    refreshYoutubeAuthStatus,
     enqueueDownload,
     setAccountStatus,
   };

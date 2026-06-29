@@ -94,6 +94,13 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const accountPassword = document.getElementById("accountPassword");
       const accountVerify = document.getElementById("accountVerify");
       const accountClearBtn = document.getElementById("accountClearBtn");
+      const youtubeAuthStatus = document.getElementById("youtubeAuthStatus");
+      const youtubeAuthForm = document.getElementById("youtubeAuthForm");
+      const youtubeAuthMode = document.getElementById("youtubeAuthMode");
+      const youtubeCookiesPath = document.getElementById("youtubeCookiesPath");
+      const youtubeCookiesText = document.getElementById("youtubeCookiesText");
+      const youtubeCookiesBrowser = document.getElementById("youtubeCookiesBrowser");
+      const youtubeAuthClearBtn = document.getElementById("youtubeAuthClearBtn");
       const libraryTvMissingForm = document.getElementById("libraryTvMissingForm");
       const libraryTvShowName = document.getElementById("libraryTvShowName");
       const libraryStatus = document.getElementById("libraryStatus");
@@ -254,6 +261,13 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           accountPassword,
           accountVerify,
           accountClearBtn,
+          youtubeAuthStatus,
+          youtubeAuthForm,
+          youtubeAuthMode,
+          youtubeCookiesPath,
+          youtubeCookiesText,
+          youtubeCookiesBrowser,
+          youtubeAuthClearBtn,
           youtubeQuickForm,
           youtubeQuickUrl,
           youtubeQuickSubmit,
@@ -499,6 +513,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       setFileResultsFilter(state.fileResultsFilter);
 
       refreshAccountStatus();
+      downloadsApi?.refreshYoutubeAuthStatus?.();
       refreshDownloadSettings();
       refreshDownloads({ notifyOnFailure: true });
       refreshSavedCandidates();

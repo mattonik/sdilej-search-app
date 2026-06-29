@@ -222,6 +222,57 @@
             </div>
           </form>
         </details>
+
+        <details id="youtubeAuthDetails" class="account-details youtube-auth-details">
+          <summary class="account-summary">
+            <div class="account-summary-copy">
+              <h2>YouTube Authentication</h2>
+              <div id="youtubeAuthStatus" class="account-status">Checking YouTube auth...</div>
+            </div>
+            <span class="account-summary-action btn btn-secondary btn-sm">Manage</span>
+          </summary>
+
+          <form id="youtubeAuthForm" class="account-form youtube-auth-form">
+            <label>
+              Mode
+              <select id="youtubeAuthMode">
+                <option value="none" selected>No cookies</option>
+                <option value="cookies_file">Cookies file / pasted cookies</option>
+                <option value="cookies_from_browser">Browser cookies</option>
+              </select>
+            </label>
+
+            <label class="youtube-cookies-file-field">
+              Cookies file path
+              <input id="youtubeCookiesPath" type="text" placeholder="/data/secrets/youtube-cookies.txt" autocomplete="off" />
+            </label>
+
+            <label class="youtube-cookies-browser-field hidden">
+              Browser source
+              <input id="youtubeCookiesBrowser" type="text" placeholder="firefox or chrome:Profile 1" autocomplete="off" />
+            </label>
+
+            <label class="youtube-cookies-text-field">
+              Paste cookies.txt
+              <textarea
+                id="youtubeCookiesText"
+                rows="5"
+                placeholder="# Netscape HTTP Cookie File"
+                autocomplete="off"
+                spellcheck="false"
+              ></textarea>
+            </label>
+
+            <p class="youtube-auth-help">
+              For private or age-gated videos, export YouTube cookies in Netscape cookies.txt format. Pasted cookies are stored locally and are never returned by the API.
+            </p>
+
+            <div class="account-actions">
+              <button type="submit" class="btn btn-primary">Save YouTube auth</button>
+              <button id="youtubeAuthClearBtn" type="button" class="secondary-btn btn btn-secondary">Clear YouTube auth</button>
+            </div>
+          </form>
+        </details>
       </section>
 
       <section class="panel library-panel tab-section tab-library">

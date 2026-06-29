@@ -385,7 +385,11 @@ class DownloadWorker:
                 is_canceled=lambda: self._stop_event.is_set() or self.storage.is_job_canceled(job_id),
                 on_progress=on_progress,
             )
-            result = downloader.download(detail_url, output_template=output_template)
+            result = downloader.download(
+                detail_url,
+                output_template=output_template,
+                auth=self.storage.get_youtube_auth_settings(),
+            )
             save_path = result.get("filepath")
             if not save_path:
                 raise YoutubeDownloadError("yt-dlp completed without producing a final file path.")

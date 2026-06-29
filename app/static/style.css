@@ -106,6 +106,10 @@ textarea {
   padding: 0.85rem;
 }
 
+.account-details + .account-details {
+  margin-top: 0.8rem;
+}
+
 .account-details > summary {
   list-style: none;
   display: flex;
@@ -168,12 +172,21 @@ textarea {
 }
 
 .account-form input,
+.account-form select,
+.account-form textarea,
 .account-form button {
   min-height: 42px;
   border-radius: 8px;
   border: 1px solid var(--border);
   padding: 0.55rem 0.7rem;
   font-size: 0.95rem;
+}
+
+.account-form textarea {
+  min-height: 120px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  line-height: 1.45;
 }
 
 .account-form button {
@@ -192,6 +205,18 @@ textarea {
 .account-actions .secondary-btn {
   background: #f4f7fa;
   color: var(--text);
+}
+
+.youtube-cookies-text-field,
+.youtube-auth-help {
+  grid-column: 1 / -1;
+}
+
+.youtube-auth-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .downloader-header {
@@ -719,14 +744,39 @@ textarea {
 
 .kids-catalog-shows {
   margin-top: 0.8rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
   gap: 0.55rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding-bottom: 0.25rem;
+  scroll-snap-type: x proximity;
+}
+
+.kids-catalog-shows::-webkit-scrollbar {
+  height: 8px;
+}
+
+.kids-catalog-shows::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
 }
 
 .kids-catalog-show {
+  min-width: min(260px, 78vw);
   justify-content: space-between;
   text-align: left;
+  gap: 0.55rem;
+  scroll-snap-align: start;
+}
+
+.kids-catalog-show.active {
+  border-color: var(--accent-dark);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff;
+}
+
+.kids-catalog-show.active small {
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .kids-catalog-show small,
@@ -737,6 +787,7 @@ textarea {
 
 .kids-catalog-episodes {
   margin-top: 0.9rem;
+  scroll-margin-top: 1rem;
 }
 
 .kids-catalog-episode-head,
@@ -750,6 +801,25 @@ textarea {
 .kids-catalog-episode-head {
   color: var(--muted);
   margin-bottom: 0.55rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.55rem 0.65rem;
+  background: rgba(248, 251, 253, 0.96);
+  backdrop-filter: blur(6px);
+}
+
+.kids-catalog-episode-head div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.55rem;
+  align-items: baseline;
+}
+
+.kids-catalog-episode-head a {
+  font-size: 0.82rem;
 }
 
 .kids-catalog-episode-list {
@@ -762,6 +832,16 @@ textarea {
   border-radius: 8px;
   padding: 0.65rem;
   background: #fff;
+}
+
+.kids-catalog-episode.queue-active {
+  border-color: #86efac;
+  box-shadow: 0 0 0 2px rgb(134 239 172 / 0.16);
+}
+
+.kids-catalog-enqueue-btn:disabled {
+  opacity: 0.8;
+  cursor: default;
 }
 
 .library-header {

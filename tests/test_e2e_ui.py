@@ -9,8 +9,10 @@ import time
 
 import pytest
 import requests
+import responses
 from uvicorn import Config, Server
 
+from app.kids_catalog import BASE_URL, SHOWS_URL
 from app.main import create_app
 from app.models import SearchResponse, SearchResult, TitleMetadata
 from app.storage import Storage
@@ -177,6 +179,59 @@ class FakeTvMazeClient:
 
     def get_akas(self, show_id: int) -> list[str]:
         return list(self.akas)
+
+
+KIDS_SHOWS_HTML = """
+<html><body>
+  <div class="media-index">
+    <div class="media-img">
+      <a href="https://www.veselerozpravky.sk/masa-a-medved/">
+        <div class="media-grid">
+          <span>2 časti</span>
+          <h2 class="media-heading col-xs-12">Máša a medveď</h2>
+        </div>
+      </a>
+    </div>
+    <div class="media-img">
+      <a href="https://www.veselerozpravky.sk/krtko/">
+        <div class="media-grid">
+          <span>1 časť</span>
+          <h2 class="media-heading col-xs-12">Krtko</h2>
+        </div>
+      </a>
+    </div>
+  </div>
+</body></html>
+"""
+
+KIDS_SHOW_HTML = """
+<html><body>
+  <h1 class="page-header-cat">Máša a medveď - video rozprávka</h1>
+  <div class="media-index">
+    <a href="https://www.veselerozpravky.sk/masa-a-medved-ako-sa-stretli/">
+      <div class="media-grid">
+        06:54
+        <h2 class="media-heading col-xs-12">1. Máša a medveď: Ako sa stretli</h2>
+      </div>
+    </a>
+    <a href="https://www.veselerozpravky.sk/masa-a-medved-do-jari-nebudit/">
+      <div class="media-grid">
+        06:54
+        <h2 class="media-heading col-xs-12">2. Máša a medveď: Do jari nebudiť</h2>
+      </div>
+    </a>
+  </div>
+</body></html>
+"""
+
+KIDS_EPISODE_HTML = """
+<html><head>
+  <meta property="og:image" content="https://img.youtube.com/vi/1V3ZY_TXKwU/0.jpg">
+</head><body>
+  <h1>Máša a medveď: Ako sa stretli</h1>
+  <script>var videoId = "1V3ZY_TXKwU";</script>
+</body></html>
+"""
 
 
 def _pick_free_port() -> int:
@@ -574,6 +629,44 @@ def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+@responses.activate
+def test_kids_catalog_episode_enqueue_updates_visible_state(tmp_path) -> None:
+    responses.add_passthru("http://127.0.0.1")
+    responses.get(SHOWS_URL, body=KIDS_SHOWS_HTML)
+    responses.get(f"{BASE_URL}/masa-a-medved/", body=KIDS_SHOW_HTML)
+    responses.get(f"{BASE_URL}/masa-a-medved-ako-sa-stretli/", body=KIDS_EPISODE_HTML)
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page(viewport={"width": 390, "height": 900})
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#kidsSearchModeBtn")
+        page.click("#kidsCatalogLoadBtn")
+        page.wait_for_selector(".kids-catalog-show")
+        page.locator(".kids-catalog-show", has_text="Máša").click()
+        page.wait_for_selector(".kids-catalog-episode")
+        page.wait_for_function("document.querySelector('#kidsCatalogEpisodes')?.getBoundingClientRect().top < 700")
+
+        shows_box = page.locator("#kidsCatalogShows").bounding_box()
+        episodes_box = page.locator("#kidsCatalogEpisodes").bounding_box()
+        assert shows_box["height"] < 90
+        assert episodes_box["y"] < 700
+
+        first_episode = page.locator(".kids-catalog-episode").first
+        with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith("/api/downloads")) as response_info:
+            first_episode.locator(".kids-catalog-enqueue-btn").click()
+        assert response_info.value.status == 200
+        page.wait_for_function(
+            """() => {
+              const card = document.querySelector('.kids-catalog-episode');
+              const btn = card?.querySelector('.kids-catalog-enqueue-btn');
+              const manage = card?.querySelector('.kids-catalog-manage-btn');
+              return Boolean(card?.classList.contains('queue-active') && btn?.disabled && /Queued #/.test(btn.textContent || '') && manage && !manage.classList.contains('hidden'));
+            }"""
+        )
+
+
+@pytest.mark.e2e
 def test_download_queue_refresh_error_exposes_diagnostic_details(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
@@ -617,7 +710,8 @@ def test_download_queue_refresh_error_exposes_diagnostic_details(tmp_path) -> No
 
 
 @pytest.mark.e2e
-def test_account_tab_is_separate_and_collapsed_by_default(tmp_path) -> None:
+def test_account_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("YOUTUBE_MANAGED_COOKIES_PATH", str(tmp_path / "secrets" / "youtube-cookies.txt"))
     app = _build_file_search_app(tmp_path)
 
     with run_test_server(app) as base_url, launch_browser() as browser:
@@ -633,10 +727,20 @@ def test_account_tab_is_separate_and_collapsed_by_default(tmp_path) -> None:
         page.wait_for_selector("#accountStatus")
         assert "Free" in page.locator("#accountStatus").text_content()
         assert page.locator("#accountDetails").get_attribute("open") is None
+        assert page.locator("#youtubeAuthDetails").get_attribute("open") is None
+        assert page.locator("#youtubeAuthForm").is_hidden()
 
         page.locator("#accountDetails > summary").click()
         page.wait_for_selector("#accountForm")
         assert page.locator("#accountForm").is_visible()
+
+        page.locator("#youtubeAuthDetails > summary").click()
+        page.select_option("#youtubeAuthMode", "cookies_file")
+        page.fill("#youtubeCookiesText", "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret-value")
+        page.click('#youtubeAuthForm button[type="submit"]')
+        page.wait_for_function("() => document.querySelector('#youtubeAuthStatus')?.textContent?.includes('Cookies file configured')")
+        auth_text = page.locator("#youtubeAuthDetails").text_content() or ""
+        assert "secret-value" not in auth_text
 
 
 @pytest.mark.e2e

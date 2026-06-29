@@ -22,6 +22,7 @@ export const initKidsCatalog = ({
 
   let shows = [];
   let selectedShow = null;
+  let queuedEpisodesByUrl = new Map();
 
   const setStatus = (value, mode = "neutral") => {
     if (!kidsCatalogStatus) return;
@@ -49,7 +50,11 @@ export const initKidsCatalog = ({
     kidsCatalogShows.innerHTML = items
       .map(
         (show) => `
-          <button type="button" class="kids-catalog-show btn btn-soft" data-slug="${esc(show.slug)}">
+          <button
+            type="button"
+            class="kids-catalog-show btn btn-soft${selectedShow?.slug === show.slug ? " active" : ""}"
+            data-slug="${esc(show.slug)}"
+          >
             <span>${esc(show.title)}</span>
             ${show.episode_count ? `<small>${esc(show.episode_count)} episodes</small>` : ""}
           </button>
@@ -64,20 +69,25 @@ export const initKidsCatalog = ({
   const renderEpisodes = (show) => {
     selectedShow = show;
     const episodes = Array.isArray(show?.episodes) ? show.episodes : [];
+    renderShows();
     if (!episodes.length) {
       kidsCatalogEpisodes.innerHTML = `<div class="download-empty">No episodes were found for this show.</div>`;
       return;
     }
     kidsCatalogEpisodes.innerHTML = `
       <div class="kids-catalog-episode-head">
-        <strong>${esc(show.title || "Kids show")}</strong>
-        <span>${esc(episodes.length)} episodes</span>
+        <div>
+          <strong>${esc(show.title || "Kids show")}</strong>
+          <span>${esc(episodes.length)} episodes</span>
+        </div>
+        <a href="${esc(show.url || "#")}" target="_blank" rel="noreferrer">Open source</a>
       </div>
       <div class="kids-catalog-episode-list">
         ${episodes
-          .map(
-            (episode) => `
-              <article class="kids-catalog-episode">
+          .map((episode) => {
+            const queuedJob = queuedEpisodesByUrl.get(episode.url) || null;
+            return `
+              <article class="kids-catalog-episode${queuedJob ? " queue-active" : ""}" data-episode-url="${esc(episode.url)}">
                 <div>
                   <a href="${esc(episode.url)}" target="_blank" rel="noreferrer">${esc(episode.title || "")}</a>
                   <div class="kids-catalog-episode-meta">
@@ -91,17 +101,32 @@ export const initKidsCatalog = ({
                   data-url="${esc(episode.url)}"
                   data-title="${esc(episode.title || "")}"
                   data-episode-number="${esc(episode.episode_number || "")}"
+                  data-job-id="${esc(queuedJob?.id || "")}"
+                  ${queuedJob ? "disabled" : ""}
                 >
-                  Add to queue
+                  ${queuedJob ? `Queued #${esc(queuedJob.id)}` : "Add to queue"}
+                </button>
+                <button
+                  type="button"
+                  class="kids-catalog-manage-btn btn btn-secondary btn-sm${queuedJob ? "" : " hidden"}"
+                  data-job-id="${esc(queuedJob?.id || "")}"
+                >
+                  Manage
                 </button>
               </article>
-            `
-          )
+            `;
+          })
           .join("")}
       </div>
     `;
     kidsCatalogEpisodes.querySelectorAll(".kids-catalog-enqueue-btn").forEach((btn) => {
       btn.addEventListener("click", () => enqueueEpisode(btn));
+    });
+    kidsCatalogEpisodes.querySelectorAll(".kids-catalog-manage-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const jobId = Number(btn.dataset.jobId || 0);
+        if (jobId) focusDownloadJob?.(jobId);
+      });
     });
   };
 
@@ -126,7 +151,27 @@ export const initKidsCatalog = ({
       return;
     }
     renderEpisodes(data);
+    window.requestAnimationFrame(() => {
+      kidsCatalogEpisodes.scrollIntoView({ behavior: "auto", block: "start" });
+    });
     setStatus(`Loaded ${data.episode_count || 0} episodes for ${data.title || slug}.`, "ok");
+  };
+
+  const markEpisodeQueued = (btn, job) => {
+    const card = btn.closest(".kids-catalog-episode");
+    const manageBtn = card?.querySelector(".kids-catalog-manage-btn");
+    const url = btn.dataset.url || card?.dataset.episodeUrl || "";
+    if (url && job) {
+      queuedEpisodesByUrl.set(url, job);
+    }
+    card?.classList.add("queue-active");
+    btn.disabled = true;
+    btn.textContent = job?.id ? `Queued #${job.id}` : "Queued";
+    btn.dataset.jobId = job?.id ? String(job.id) : "";
+    if (manageBtn) {
+      manageBtn.classList.remove("hidden");
+      manageBtn.dataset.jobId = job?.id ? String(job.id) : "";
+    }
   };
 
   const enqueueEpisode = async (btn) => {
@@ -158,13 +203,17 @@ export const initKidsCatalog = ({
         episode_number: Number.isFinite(episodeNumber) && episodeNumber > 0 ? episodeNumber : null,
       });
       if (result.ok) {
+        markEpisodeQueued(btn, result.job);
         setStatus(`Queued ${btn.dataset.title || data.title || "episode"}.`, "ok");
       } else if (result.duplicateJob && result.duplicateIsActive) {
+        markEpisodeQueued(btn, result.duplicateJob);
         await refreshDownloads?.();
         focusDownloadJob?.(result.duplicateJob.id);
       }
     } finally {
-      btn.disabled = false;
+      if (!btn.dataset.jobId) {
+        btn.disabled = false;
+      }
     }
   };
 

@@ -578,6 +578,58 @@ def test_download_enqueue_accepts_direct_youtube_quick_payload(app_factory) -> N
     assert job["source_metadata"]["prefer_metadata_title"] is True
 
 
+def test_youtube_auth_saves_pasted_cookies_without_returning_secret(app_factory, tmp_path, monkeypatch) -> None:
+    managed_path = tmp_path / "secrets" / "youtube-cookies.txt"
+    monkeypatch.setenv("YOUTUBE_MANAGED_COOKIES_PATH", str(managed_path))
+    app = app_factory()
+    cookies_text = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret-value\n"
+
+    with TestClient(app) as client:
+        save_response = client.post(
+            "/api/youtube-auth",
+            json={"mode": "cookies_file", "cookies_text": cookies_text},
+        )
+        get_response = client.get("/api/youtube-auth")
+
+    assert save_response.status_code == 200
+    assert managed_path.read_text(encoding="utf-8") == cookies_text.strip()
+    payload = get_response.json()
+    assert payload["configured"] is True
+    assert payload["mode"] == "cookies_file"
+    assert payload["managed_cookies"] is True
+    assert payload["cookies_path"] == str(managed_path.resolve())
+    assert "secret-value" not in str(payload)
+
+
+def test_youtube_auth_rejects_missing_cookies_file(app_factory, tmp_path) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/youtube-auth",
+            json={"mode": "cookies_file", "cookies_path": str(tmp_path / "missing.txt")},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error_code"] == "youtube_auth_cookies_file_missing"
+
+
+def test_youtube_auth_clear_deletes_managed_cookies(app_factory, tmp_path, monkeypatch) -> None:
+    managed_path = tmp_path / "secrets" / "youtube-cookies.txt"
+    monkeypatch.setenv("YOUTUBE_MANAGED_COOKIES_PATH", str(managed_path))
+    app = app_factory()
+
+    with TestClient(app) as client:
+        client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_text": "cookie-data"})
+        response = client.delete("/api/youtube-auth")
+        status_response = client.get("/api/youtube-auth")
+
+    assert response.status_code == 200
+    assert response.json()["cleared"] is True
+    assert not managed_path.exists()
+    assert status_response.json()["configured"] is False
+
+
 @responses.activate
 def test_download_enqueue_resolves_veselerozpravky_episode_url(app_factory) -> None:
     episode_url = "https://www.veselerozpravky.sk/masa-a-medved-ako-sa-stretli/"
