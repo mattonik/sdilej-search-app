@@ -252,6 +252,10 @@
               <input id="youtubeCookiesBrowser" type="text" placeholder="firefox or chrome:Profile 1" autocomplete="off" />
             </label>
 
+            <p class="youtube-cookies-browser-field youtube-auth-help hidden">
+              Browser cookies only work when this app runtime can read that browser profile. In Docker this usually does not work unless the profile directory is mounted into the container. Prefer pasted cookies.txt for private YouTube videos.
+            </p>
+
             <label class="youtube-cookies-text-field">
               Paste cookies.txt
               <textarea
@@ -264,7 +268,7 @@
             </label>
 
             <p class="youtube-auth-help">
-              For private or age-gated videos, export YouTube cookies in Netscape cookies.txt format. Pasted cookies are stored locally and are never returned by the API.
+              Recommended: export YouTube cookies in Netscape cookies.txt format and paste them here, or provide a readable cookies file path. Pasted cookies are stored locally and are never returned by the API.
             </p>
 
             <div class="account-actions">

@@ -8,6 +8,7 @@ services:
     environment:
       - APP_DB_PATH=/config/app.db
       - DOWNLOAD_DIR=/media
+      - TMDB_BEARER_TOKEN=${TMDB_BEARER_TOKEN:-}
     volumes:
       - ${SDILEJ_CONFIG_DIR:-./data}:/config
       - ${SDILEJ_MEDIA_DIR:-./downloads}:/media

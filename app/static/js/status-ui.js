@@ -100,18 +100,33 @@ const copyToClipboard = async (text) => {
   return ok;
 };
 
-export const buildStatusErrorState = (payload, fallbackMessage, { mode = "error", hint = null } = {}) => {
+export const buildStatusErrorState = (
+  payload,
+  fallbackMessage,
+  { mode = "error", hint = null, preferFallbackMessage = false, context = null } = {}
+) => {
   const data = payload && typeof payload === "object" ? payload : {};
+  const detailPayload = {
+    error_code: data.error_code || data.errorCode || null,
+    request_id: data.request_id || data.requestId || null,
+    status: data.status ?? data.http_status ?? null,
+    request_url: data.request_url || data.requestUrl || null,
+    hint: data.hint || hint || null,
+    retryable: data.retryable ?? null,
+    details: data.details || data.detail || data.message || null,
+  };
+  if (context && typeof context === "object") {
+    Object.assign(detailPayload, context);
+  }
+  for (const [key, value] of Object.entries(data)) {
+    if (["error", "errorCode", "requestId", "detail", "message"].includes(key)) continue;
+    if (detailPayload[key] !== undefined) continue;
+    detailPayload[key] = value;
+  }
   return {
-    message: normalizeText(data.error || fallbackMessage || "Unexpected error."),
+    message: normalizeText((preferFallbackMessage ? fallbackMessage : data.error) || fallbackMessage || "Unexpected error."),
     mode: data.retryable === false ? "error" : mode,
-    details: {
-      error_code: data.error_code || data.errorCode || null,
-      request_id: data.request_id || data.requestId || null,
-      hint: data.hint || hint || null,
-      retryable: data.retryable ?? null,
-      details: data.details || data.detail || data.message || null,
-    },
+    details: detailPayload,
   };
 };
 

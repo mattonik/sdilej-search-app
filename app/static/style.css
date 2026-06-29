@@ -156,6 +156,12 @@ textarea {
   border-color: #fecaca;
 }
 
+.account-status[data-mode="warning"] {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
 .account-form {
   margin-top: 0.85rem;
   display: grid;

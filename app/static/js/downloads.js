@@ -368,6 +368,11 @@ export const initDownloads = ({
           showDownloadError(data, "Queue refresh failed. Retrying in background.", {
             mode: "warning",
             hint: "The last known queue state is preserved while the app retries in the background.",
+            preferFallbackMessage: true,
+            context: {
+              phase: refreshPhase,
+              backend_error: data?.error || null,
+            },
           });
         }
         return;
@@ -538,7 +543,7 @@ export const initDownloads = ({
       if (data.configured && data.mode === "cookies_file") {
         setYoutubeAuthStatus(`Cookies file configured${data.managed_cookies ? " (managed)" : ""}`, "ok");
       } else if (data.configured && data.mode === "cookies_from_browser") {
-        setYoutubeAuthStatus(`Browser cookies: ${data.cookies_from_browser}`, "ok");
+        setYoutubeAuthStatus(`Browser cookies configured: ${data.cookies_from_browser} (runtime access required)`, "warning");
       } else {
         setYoutubeAuthStatus("No YouTube cookies", "neutral");
       }

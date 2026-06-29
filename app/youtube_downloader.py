@@ -74,9 +74,17 @@ class YoutubeDownloader:
             if browser:
                 options["cookiesfrombrowser"] = self._parse_cookies_from_browser(browser)
 
-    def _parse_cookies_from_browser(self, value: str) -> tuple[str, ...]:
-        parts = [part.strip() for part in value.split(":") if part.strip()]
-        return tuple(parts[:2]) if parts else ("firefox",)
+    def _parse_cookies_from_browser(self, value: str) -> tuple[str, str | None, str | None, str | None]:
+        browser_spec, _, container = value.strip().partition("::")
+        browser_profile, _, profile = browser_spec.partition(":")
+        browser, _, keyring = browser_profile.partition("+")
+        browser = browser.strip() or "firefox"
+        return (
+            browser,
+            profile.strip() or None,
+            keyring.strip() or None,
+            container.strip() or None,
+        )
 
     def _format_download_error(self, exc: Exception) -> str:
         message = str(exc) or exc.__class__.__name__

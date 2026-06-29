@@ -136,6 +136,7 @@ Optional config:
 - `TMDB_BEARER_TOKEN`
   - enables movie discovery via TMDB
   - when missing, the discovery UI shows a setup hint instead of failing app startup
+  - in Docker Compose, set it in the `.env` file next to `docker-compose.yml`; the compose file forwards it into the container
 - `TITLE_METADATA_CACHE_TTL_HOURS`
   - default: `168`
   - controls how long localized title metadata stays fresh before the resolver attempts a synchronous refresh
@@ -191,6 +192,7 @@ Example for your server-style layout (`.env` file next to `docker-compose.yml`):
 ```bash
 SDILEJ_CONFIG_DIR=/srv/appdata/sdilej-search
 SDILEJ_MEDIA_DIR=/srv/mergerfs/pool/media
+TMDB_BEARER_TOKEN=your_tmdb_read_access_token
 ```
 
 ## Raspberry Pi deployment (arm64)

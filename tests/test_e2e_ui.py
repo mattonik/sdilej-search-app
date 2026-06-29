@@ -703,9 +703,13 @@ def test_download_queue_refresh_error_exposes_diagnostic_details(tmp_path) -> No
         page.locator("#downloadStatus details summary").click()
         page.wait_for_selector("#downloadStatus .status-detail-row")
         status_text = page.locator("#downloadStatus").text_content() or ""
-        assert "Queue refresh failed." in status_text
+        assert "Queue refresh failed. Retrying in background." in status_text
         assert "req-downloads-123" in status_text
         assert "downloads_refresh_failed" in status_text
+        assert "500" in status_text
+        assert "/api/downloads" in status_text
+        assert "phase" in status_text
+        assert "backend error" in status_text
         assert page.locator("#downloadStatus .status-copy-btn").count() == 1
 
 
