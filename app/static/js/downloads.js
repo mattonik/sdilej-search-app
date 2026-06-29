@@ -72,7 +72,9 @@ export const initDownloads = ({
 
   let refreshDownloadsInFlight = false;
   let refreshDownloadsQueued = false;
+  let refreshDownloadsQueuedOptions = null;
   let refreshDownloadsFailures = 0;
+  let queueRefreshWarningVisible = false;
   let destinationPreviewSeq = 0;
 
   const isYoutubeLikeUrl = (value) => {
@@ -352,9 +354,13 @@ export const initDownloads = ({
     });
   };
 
-  const refreshDownloads = async ({ notifyOnFailure = false } = {}) => {
+  const refreshDownloads = async ({ notifyOnFailure = false, notifyOnSuccess = false } = {}) => {
     if (refreshDownloadsInFlight) {
       refreshDownloadsQueued = true;
+      refreshDownloadsQueuedOptions = {
+        notifyOnFailure: Boolean(refreshDownloadsQueuedOptions?.notifyOnFailure || notifyOnFailure),
+        notifyOnSuccess: Boolean(refreshDownloadsQueuedOptions?.notifyOnSuccess || notifyOnSuccess),
+      };
       return;
     }
     refreshDownloadsInFlight = true;
@@ -374,14 +380,22 @@ export const initDownloads = ({
               backend_error: data?.error || null,
             },
           });
+          queueRefreshWarningVisible = true;
         }
         return;
       }
+      const hadQueueRefreshWarning = queueRefreshWarningVisible || refreshDownloadsFailures > 0;
       refreshDownloadsFailures = 0;
       const summary = data.summary || {};
       refreshPhase = "summary";
       downloadWorkerState.textContent = data.worker_alive ? "Worker: online" : "Worker: offline";
       downloadSummary.textContent = `Queue: ${summary.queued || 0} queued, ${summary.running || 0} running, ${summary.done || 0} done, ${summary.failed || 0} failed, ${summary.canceled || 0} canceled`;
+      if (hadQueueRefreshWarning) {
+        queueRefreshWarningVisible = false;
+        setDownloadStatus("Queue recovered. Latest refresh succeeded.", "ok");
+      } else if (notifyOnSuccess) {
+        setDownloadStatus("Queue updated.", "ok");
+      }
       refreshPhase = "render jobs";
       renderDownloadJobs(data.items || [], { refreshDownloads, enqueueDownload });
       refreshPhase = "sync active queue state";
@@ -399,13 +413,16 @@ export const initDownloads = ({
             details: `phase=${refreshPhase}; ${error?.stack || error?.message || String(error || "unknown error")}`,
           },
         });
+        queueRefreshWarningVisible = true;
       }
     } finally {
       refreshDownloadsInFlight = false;
       if (refreshDownloadsQueued) {
+        const queuedOptions = refreshDownloadsQueuedOptions || {};
         refreshDownloadsQueued = false;
+        refreshDownloadsQueuedOptions = null;
         window.setTimeout(() => {
-          refreshDownloads();
+          refreshDownloads(queuedOptions);
         }, 0);
       }
     }
@@ -673,7 +690,7 @@ export const initDownloads = ({
 
   refreshDownloadsBtn.addEventListener("click", async () => {
     setDownloadStatus("Refreshing queue...", "neutral");
-    await refreshDownloads({ notifyOnFailure: true });
+    await refreshDownloads({ notifyOnFailure: true, notifyOnSuccess: true });
   });
 
   clearFinishedBtn.addEventListener("click", async () => {
@@ -810,8 +827,16 @@ export const initDownloads = ({
 
   youtubeAuthForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const selectedMode = youtubeAuthMode?.value || "none";
+    if (selectedMode === "none") {
+      setYoutubeAuthStatus(
+        "Choose Cookies file / pasted cookies or Browser cookies before saving. Use Clear YouTube auth to remove saved cookies.",
+        "warning"
+      );
+      return;
+    }
     const payload = {
-      mode: youtubeAuthMode?.value || "none",
+      mode: selectedMode,
       cookies_path: youtubeCookiesPath?.value.trim() || null,
       cookies_text: youtubeCookiesText?.value.trim() || null,
       cookies_from_browser: youtubeCookiesBrowser?.value.trim() || null,

@@ -739,6 +739,10 @@ def test_account_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch)
         assert page.locator("#accountForm").is_visible()
 
         page.locator("#youtubeAuthDetails > summary").click()
+        page.click('#youtubeAuthForm button[type="submit"]')
+        page.wait_for_function(
+            "() => document.querySelector('#youtubeAuthStatus')?.textContent?.includes('Choose Cookies file')"
+        )
         page.select_option("#youtubeAuthMode", "cookies_file")
         page.fill("#youtubeCookiesText", "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret-value")
         page.click('#youtubeAuthForm button[type="submit"]')

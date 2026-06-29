@@ -29,7 +29,13 @@ router = APIRouter()
 
 
 def _managed_youtube_cookies_path() -> Path:
-    configured = os.getenv("YOUTUBE_MANAGED_COOKIES_PATH", "./data/secrets/youtube-cookies.txt")
+    configured = os.getenv("YOUTUBE_MANAGED_COOKIES_PATH", "").strip()
+    if not configured:
+        db_path = os.getenv("APP_DB_PATH", "").strip()
+        if db_path:
+            configured = str(Path(db_path).expanduser().resolve().parent / "secrets" / "youtube-cookies.txt")
+        else:
+            configured = "./data/secrets/youtube-cookies.txt"
     return Path(configured).expanduser().resolve()
 
 

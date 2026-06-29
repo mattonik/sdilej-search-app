@@ -7,6 +7,7 @@ from app.main import create_app
 from app.models import TitleMetadata
 from app.routes.discovery import _parse_size_bytes, _score_candidate
 from app.sdilej_client import SdilejClientError
+from app.storage import Storage
 from app.title_metadata import CZDB_DETAIL_URL, CZDB_SEARCH_URL
 from app.tmdb_client import TMDB_BASE_URL, TmdbClient
 from app.tvmaze_client import TVMAZE_BASE_URL
@@ -599,6 +600,26 @@ def test_youtube_auth_saves_pasted_cookies_without_returning_secret(app_factory,
     assert payload["managed_cookies"] is True
     assert payload["cookies_path"] == str(managed_path.resolve())
     assert "secret-value" not in str(payload)
+
+
+def test_youtube_auth_defaults_managed_cookies_next_to_app_db(app_factory, tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("YOUTUBE_MANAGED_COOKIES_PATH", raising=False)
+    db_path = tmp_path / "config" / "app.db"
+    monkeypatch.setenv("APP_DB_PATH", str(db_path))
+    storage = Storage(db_path=str(db_path))
+    storage.init_db()
+    app = create_app(storage_instance=storage, start_workers=False)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/youtube-auth",
+            json={"mode": "cookies_file", "cookies_text": "cookie-data"},
+        )
+
+    assert response.status_code == 200
+    managed_path = tmp_path / "config" / "secrets" / "youtube-cookies.txt"
+    assert managed_path.read_text(encoding="utf-8") == "cookie-data"
+    assert response.json()["cookies_path"] == str(managed_path.resolve())
 
 
 def test_youtube_auth_rejects_missing_cookies_file(app_factory, tmp_path) -> None:

@@ -9,6 +9,7 @@ services:
       - APP_DB_PATH=/config/app.db
       - DOWNLOAD_DIR=/media
       - TMDB_BEARER_TOKEN=${TMDB_BEARER_TOKEN:-}
+      - YOUTUBE_MANAGED_COOKIES_PATH=/config/secrets/youtube-cookies.txt
     volumes:
       - ${SDILEJ_CONFIG_DIR:-./data}:/config
       - ${SDILEJ_MEDIA_DIR:-./downloads}:/media
