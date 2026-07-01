@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 import unicodedata
 from urllib.parse import urljoin, urlparse
@@ -7,7 +8,6 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
-from .dataclass_compat import dataclass
 from .models import Category, DetailProbeResponse, LanguageScope, SearchResponse, SearchResult, SortMode
 
 BASE_URL = "https://sdilej.cz"

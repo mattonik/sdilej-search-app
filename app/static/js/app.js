@@ -19,7 +19,6 @@ import {
   writeSearchMode,
 } from "./storage-state.js";
 import { api } from "./api.js";
-import { createRuntimeState } from "./runtime-state.js";
 import { initDownloads } from "./downloads.js";
 import { initFileSearch } from "./file-search.js";
 import { createQueueUiHelpers } from "./queue-ui.js";
@@ -155,22 +154,32 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const queueDialogChunkCount = document.getElementById("queueDialogChunkCount");
       const queueDialogPriority = document.getElementById("queueDialogPriority");
       const queueDialogPreview = document.getElementById("queueDialogPreview");
-      const state = createRuntimeState({
+      const state = {
+        timer: null,
+        tvLookupState: null,
+        tvResultsState: null,
+        tvResultsFilter: "all",
+        tvEpisodeResultsSortMode: "best",
         fileResultsView: readFileResultsView(),
         fileResultsFilter: readFileResultsFilter(),
         searchMode: "file",
         activeTvSearchJobId: readActiveTvSearchJobId(),
-      });
-      let timer = state.timer;
-      let tvLookupState = state.tvLookupState;
+        tvJobPollInFlight: false,
+        tvEpisodeSearchOverrides: new Map(),
+        tvEpisodeSearchesInFlight: new Set(),
+        tvShowSummarySignature: "",
+        savedResultsState: {
+          keys: new Set(),
+          itemsByKey: new Map(),
+        },
+        activeQueueState: {
+          fileJobs: new Map(),
+          episodeJobs: new Map(),
+          jobsById: new Map(),
+        },
+      };
       let tvResultsState = state.tvResultsState;
-      let tvResultsFilter = state.tvResultsFilter;
-      let searchMode = state.searchMode;
       let activeTvSearchJobId = state.activeTvSearchJobId;
-      let tvJobPollInFlight = state.tvJobPollInFlight;
-      let tvEpisodeSearchOverrides = state.tvEpisodeSearchOverrides;
-      let tvEpisodeSearchesInFlight = state.tvEpisodeSearchesInFlight;
-      let tvShowSummarySignature = state.tvShowSummarySignature;
       let activeQueueState = state.activeQueueState;
       const downloadStatusController = createStatusController(downloadStatus);
       const setDownloadStatus = downloadStatusController.setStatus;

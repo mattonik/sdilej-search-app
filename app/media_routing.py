@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import PurePosixPath
 from typing import Literal
 
-from .dataclass_compat import dataclass
 from .models import TitleMetadata
 
 MediaKind = Literal["movie", "tv", "music", "unknown"]

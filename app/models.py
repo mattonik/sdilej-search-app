@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict, field
+from dataclasses import asdict, dataclass, field
 from typing import Literal
-
-from .dataclass_compat import dataclass
 
 Category = Literal["all", "video", "audio", "archive", "image"]
 SortMode = Literal["relevance", "downloads", "newest", "size_desc", "size_asc"]

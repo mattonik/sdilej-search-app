@@ -17,6 +17,12 @@ if [[ ! -x "$PYTEST_BIN" ]]; then
   exit 1
 fi
 
+"$PYTHON_BIN" - <<'PY'
+import sys
+if sys.version_info < (3, 12):
+    raise SystemExit("error: Python 3.12+ is required")
+PY
+
 echo "[1/4] Python compile check"
 PYTHONPYCACHEPREFIX=/tmp/pycache "$PYTHON_BIN" -m py_compile app/*.py tests/*.py
 

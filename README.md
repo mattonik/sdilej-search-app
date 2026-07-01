@@ -78,14 +78,15 @@ Dockerized web app that proxies and enhances search for `sdilej.cz`.
 - `app/static/js/tv-view.js` - TV rendering helpers
 - `app/kids_catalog.py` - VeseleRozpravky parser/resolver
 - `app/static/js/api.js` - browser API wrapper
-- `app/static/js/runtime-state.js` - shared browser runtime state
 - `app/static/style.css` - styling
 - `docs/reverse-engineering.md` - endpoint and URL analysis notes
 
 ## Run locally (no Docker)
 
+Requires Python 3.12+.
+
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8080
@@ -98,7 +99,7 @@ Open: `http://localhost:8080`
 Install dev dependencies:
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 ```
