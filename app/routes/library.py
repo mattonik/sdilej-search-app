@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -11,6 +12,7 @@ from ..main import (
     _build_tv_lookup_payload,
     _get_services,
     _list_downloaded_tv_episode_files,
+    _resolve_library_root,
     _resolve_tv_show_local_context,
 )
 from ..tvmaze_client import TvMazeClientError
@@ -20,6 +22,25 @@ router = APIRouter()
 
 class TvMissingPayload(BaseModel):
     show_name: str = Field(min_length=1, max_length=200)
+
+
+def _list_tv_show_dirs(root: Path, *, q: str, limit: int) -> list[str]:
+    if not root.exists() or not root.is_dir():
+        return []
+    query = q.strip().lower()
+    items: list[str] = []
+    for child in sorted(root.iterdir(), key=lambda path: path.name.lower()):
+        if not child.is_dir():
+            continue
+        name = child.name.strip()
+        if not name:
+            continue
+        if query and query not in name.lower():
+            continue
+        items.append(name)
+        if len(items) >= limit:
+            break
+    return items
 
 
 def _library_error(
@@ -41,6 +62,30 @@ def _library_error(
         retryable=retryable,
         details=details,
     )
+
+
+@router.get("/api/library/tv/shows")
+def api_library_tv_shows(
+    request: Request,
+    q: str = Query(default="", max_length=200),
+    is_kids: bool = Query(default=False),
+    limit: int = Query(default=12, ge=1, le=100),
+):
+    try:
+        library_paths = _get_services(request).storage.get_library_paths()
+        root_key = "kids_tv_dir" if is_kids else "tv_dir"
+        root = _resolve_library_root(str(library_paths.get(root_key) or ("kids/tv" if is_kids else "tv")))
+        return JSONResponse({"items": _list_tv_show_dirs(root, q=q, limit=limit)})
+    except Exception as exc:  # noqa: BLE001
+        return _library_error(
+            request,
+            status_code=500,
+            error="Failed to list local TV shows.",
+            error_code="library_tv_shows_failed",
+            hint="Retry the request or check the configured TV library folders.",
+            retryable=True,
+            details=str(exc),
+        )
 
 
 @router.post("/api/library/tv/missing")

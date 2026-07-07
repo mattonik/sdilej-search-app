@@ -299,12 +299,19 @@ textarea {
   font-size: 0.9rem;
 }
 
-.youtube-quick-form input {
+.youtube-quick-form input,
+.youtube-quick-form select {
   min-height: 42px;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.55rem 0.7rem;
   font-size: 0.95rem;
+}
+
+.youtube-quick-tv-fields {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(110px, 0.45fr);
+  gap: 0.8rem;
 }
 
 .youtube-quick-form .btn {
@@ -2929,6 +2936,10 @@ textarea {
   }
 
   .youtube-quick-form {
+    grid-template-columns: 1fr;
+  }
+
+  .youtube-quick-tv-fields {
     grid-template-columns: 1fr;
   }
 

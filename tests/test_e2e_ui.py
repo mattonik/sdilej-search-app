@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import json
 import os
 from pathlib import Path
 import socket
@@ -282,6 +283,11 @@ def launch_browser():
 
 
 def _build_file_search_app(tmp_path: Path):
+    media_root = tmp_path / "media"
+    os.environ["DOWNLOAD_DIR"] = str(media_root)
+    (media_root / "tv" / "Reacher").mkdir(parents=True, exist_ok=True)
+    (media_root / "kids" / "tv" / "Bluey").mkdir(parents=True, exist_ok=True)
+
     storage = Storage(db_path=str(tmp_path / "app.db"))
     storage.init_db()
     storage.upsert_saved_candidate(
@@ -626,6 +632,34 @@ def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
         job_text = page.locator("#downloadJobs").text_content() or ""
         assert "YouTube video" in job_text
         assert "youtube" in job_text
+
+
+@pytest.mark.e2e
+def test_youtube_quick_download_tv_destination_uses_local_show_picker(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.select_option("#youtubeQuickDestinationPreset", "tv")
+        page.wait_for_selector("#youtubeQuickTvFields:not(.hidden)")
+        page.locator("#youtubeQuickSeriesName").focus()
+        page.wait_for_function(
+            "() => Array.from(document.querySelectorAll('#youtubeQuickSeriesSuggestions option')).some((option) => option.value === 'Reacher')"
+        )
+        page.fill("#youtubeQuickSeriesName", "Reacher")
+        page.fill("#youtubeQuickSeasonNumber", "1")
+        page.fill("#youtubeQuickUrl", "https://www.youtube.com/watch?v=tv123XYZ")
+        with page.expect_response(lambda response: response.request.method == 'POST' and response.url.endswith('/api/downloads')) as response_info:
+            page.click("#youtubeQuickSubmit")
+        assert response_info.value.status == 200
+        payload = json.loads(response_info.value.request.post_data or "{}")
+        assert payload["destination_preset"] == "tv"
+        assert payload["media_kind"] == "tv"
+        assert payload["is_kids"] is False
+        assert payload["series_name"] == "Reacher"
+        assert payload["season_number"] == 1
 
 
 @pytest.mark.e2e

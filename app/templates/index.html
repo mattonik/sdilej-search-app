@@ -57,8 +57,20 @@
           <form id="youtubeQuickForm" class="youtube-quick-form" aria-label="YouTube quick download">
             <div class="youtube-quick-copy">
               <strong>YouTube quick download</strong>
-              <span>Paste a video link and enqueue it directly. Use the full form for TV/kids routing.</span>
+              <span>Paste a video link and choose the target library route directly.</span>
             </div>
+            <label>
+              Destination
+              <select id="youtubeQuickDestinationPreset">
+                <option value="auto" selected>Auto route</option>
+                <option value="movies">Movies</option>
+                <option value="tv">TV Show</option>
+                <option value="kids_movies">Kids Movies</option>
+                <option value="kids_tv">Kids TV</option>
+                <option value="music">Music</option>
+                <option value="unsorted">Unsorted</option>
+              </select>
+            </label>
             <label>
               YouTube URL
               <input
@@ -68,6 +80,32 @@
                 autocomplete="off"
               />
             </label>
+            <div id="youtubeQuickTvFields" class="youtube-quick-tv-fields hidden">
+              <label>
+                TV show
+                <input
+                  id="youtubeQuickSeriesName"
+                  type="text"
+                  placeholder="Pick existing or type a new show"
+                  autocomplete="off"
+                  list="youtubeQuickSeriesSuggestions"
+                  disabled
+                />
+                <datalist id="youtubeQuickSeriesSuggestions"></datalist>
+              </label>
+              <label>
+                Season
+                <input
+                  id="youtubeQuickSeasonNumber"
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="1"
+                  inputmode="numeric"
+                  disabled
+                />
+              </label>
+            </div>
             <button type="submit" id="youtubeQuickSubmit" class="btn btn-primary">Download YouTube</button>
           </form>
 

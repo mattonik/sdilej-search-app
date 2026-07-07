@@ -26,7 +26,12 @@ export const initDownloads = ({
     youtubeCookiesBrowser,
     youtubeAuthClearBtn,
     youtubeQuickForm,
+    youtubeQuickDestinationPreset,
     youtubeQuickUrl,
+    youtubeQuickTvFields,
+    youtubeQuickSeriesName,
+    youtubeQuickSeriesSuggestions,
+    youtubeQuickSeasonNumber,
     youtubeQuickSubmit,
     downloadForm,
     downloadSourceType,
@@ -76,6 +81,7 @@ export const initDownloads = ({
   let refreshDownloadsFailures = 0;
   let queueRefreshWarningVisible = false;
   let destinationPreviewSeq = 0;
+  let youtubeQuickTvSuggestionsSeq = 0;
 
   const isYoutubeLikeUrl = (value) => {
     const text = String(value || "").trim().toLowerCase();
@@ -110,6 +116,68 @@ export const initDownloads = ({
     if (rawValue === "yes") return true;
     if (rawValue === "no") return false;
     return null;
+  };
+
+  const resolveYoutubeQuickPresetPlan = () => {
+    const preset = youtubeQuickDestinationPreset?.value || "auto";
+    if (preset === "movies") return { destination_preset: preset, media_kind: "movie", is_kids: false, needsTvFields: false };
+    if (preset === "kids_movies") return { destination_preset: preset, media_kind: "movie", is_kids: true, needsTvFields: false };
+    if (preset === "tv") return { destination_preset: preset, media_kind: "tv", is_kids: false, needsTvFields: true };
+    if (preset === "kids_tv") return { destination_preset: preset, media_kind: "tv", is_kids: true, needsTvFields: true };
+    if (preset === "music") return { destination_preset: preset, media_kind: "music", is_kids: false, needsTvFields: false };
+    if (preset === "unsorted") return { destination_preset: preset, media_kind: null, is_kids: null, needsTvFields: false };
+    return { destination_preset: "auto", media_kind: null, is_kids: null, needsTvFields: false };
+  };
+
+  const renderYoutubeQuickSeriesSuggestions = (items = []) => {
+    if (!youtubeQuickSeriesSuggestions) return;
+    youtubeQuickSeriesSuggestions.innerHTML = (Array.isArray(items) ? items : [])
+      .map((item) => `<option value="${esc(item)}"></option>`)
+      .join("");
+  };
+
+  const refreshYoutubeQuickSeriesSuggestions = async () => {
+    if (!api.listLocalTvShows) return;
+    const plan = resolveYoutubeQuickPresetPlan();
+    if (!plan.needsTvFields) {
+      renderYoutubeQuickSeriesSuggestions([]);
+      return;
+    }
+    const seq = ++youtubeQuickTvSuggestionsSeq;
+    const { ok, data } = await api.listLocalTvShows({
+      q: youtubeQuickSeriesName?.value.trim() || "",
+      isKids: Boolean(plan.is_kids),
+      limit: 20,
+    });
+    if (seq !== youtubeQuickTvSuggestionsSeq) return;
+    if (!ok) {
+      renderYoutubeQuickSeriesSuggestions([]);
+      return;
+    }
+    renderYoutubeQuickSeriesSuggestions(data.items || []);
+  };
+
+  const updateYoutubeQuickPresetFields = async () => {
+    const plan = resolveYoutubeQuickPresetPlan();
+    const showTvFields = Boolean(plan.needsTvFields);
+    youtubeQuickTvFields?.classList.toggle("hidden", !showTvFields);
+    if (youtubeQuickSeriesName) {
+      youtubeQuickSeriesName.disabled = !showTvFields;
+      if (!showTvFields) {
+        youtubeQuickSeriesName.value = "";
+      }
+    }
+    if (youtubeQuickSeasonNumber) {
+      youtubeQuickSeasonNumber.disabled = !showTvFields;
+      if (!showTvFields) {
+        youtubeQuickSeasonNumber.value = "";
+      }
+    }
+    if (!showTvFields) {
+      renderYoutubeQuickSeriesSuggestions([]);
+      return;
+    }
+    await refreshYoutubeQuickSeriesSuggestions();
   };
 
   const buildMediaRoutingPayload = () => {
@@ -604,6 +672,7 @@ export const initDownloads = ({
   youtubeQuickForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const detailUrl = youtubeQuickUrl?.value.trim() || "";
+    const quickPlan = resolveYoutubeQuickPresetPlan();
     if (!detailUrl) {
       setDownloadStatus({
         message: "YouTube URL is required.",
@@ -624,6 +693,28 @@ export const initDownloads = ({
       });
       return;
     }
+    const seriesName = youtubeQuickSeriesName?.value.trim() || "";
+    const seasonNumber = Number(youtubeQuickSeasonNumber?.value || 0);
+    if (quickPlan.needsTvFields && !seriesName) {
+      setDownloadStatus({
+        message: "TV show is required for this destination.",
+        mode: "error",
+        details: {
+          hint: "Pick an existing local show or type a new one before enqueueing.",
+        },
+      });
+      return;
+    }
+    if (quickPlan.needsTvFields && (!Number.isFinite(seasonNumber) || seasonNumber < 1)) {
+      setDownloadStatus({
+        message: "Season number is required for this destination.",
+        mode: "error",
+        details: {
+          hint: "Enter a season number greater than 0 before enqueueing.",
+        },
+      });
+      return;
+    }
 
     if (youtubeQuickSubmit) {
       youtubeQuickSubmit.disabled = true;
@@ -638,13 +729,18 @@ export const initDownloads = ({
           prefer_metadata_title: true,
         },
         preferred_mode: "auto",
-        media_kind: "movie",
-        is_kids: false,
+        destination_preset: quickPlan.destination_preset,
+        media_kind: quickPlan.media_kind,
+        is_kids: quickPlan.is_kids,
+        series_name: quickPlan.needsTvFields ? seriesName : null,
+        season_number: quickPlan.needsTvFields ? seasonNumber : null,
         chunk_count: 1,
         priority: 0,
       });
       if (result.ok && youtubeQuickUrl) {
         youtubeQuickUrl.value = "";
+        if (youtubeQuickSeriesName) youtubeQuickSeriesName.value = "";
+        if (youtubeQuickSeasonNumber) youtubeQuickSeasonNumber.value = "";
       } else if (result.duplicateJob && result.duplicateIsActive) {
         await refreshDownloads();
         focusDownloadJob(result.duplicateJob.id);
@@ -682,11 +778,21 @@ export const initDownloads = ({
       window.setTimeout(updateDownloadDestinationPreview, 0);
     });
   });
+  youtubeQuickDestinationPreset?.addEventListener("change", () => {
+    updateYoutubeQuickPresetFields();
+  });
+  youtubeQuickSeriesName?.addEventListener("focus", () => {
+    refreshYoutubeQuickSeriesSuggestions();
+  });
+  youtubeQuickSeriesName?.addEventListener("input", () => {
+    refreshYoutubeQuickSeriesSuggestions();
+  });
 
   downloadSourceType?.addEventListener("change", updateDownloadSourceMode);
   updateDownloadSourceMode();
   applyDestinationPresetToDownloadFields();
   updateDownloadDestinationPreview();
+  updateYoutubeQuickPresetFields();
 
   refreshDownloadsBtn.addEventListener("click", async () => {
     setDownloadStatus("Refreshing queue...", "neutral");

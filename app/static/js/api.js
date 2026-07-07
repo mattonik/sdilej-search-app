@@ -92,6 +92,11 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+  listLocalTvShows({ q = "", isKids = false, limit = 12 } = {}) {
+    return jsonRequest(
+      `/api/library/tv/shows?q=${encodeURIComponent(q)}&is_kids=${encodeURIComponent(isKids ? "true" : "false")}&limit=${encodeURIComponent(limit)}`
+    );
+  },
   listKidsCatalogShows() {
     return jsonRequest("/api/kids-catalog/shows");
   },

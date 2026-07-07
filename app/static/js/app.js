@@ -105,7 +105,12 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const libraryStatus = document.getElementById("libraryStatus");
       const libraryTvMissingResults = document.getElementById("libraryTvMissingResults");
       const youtubeQuickForm = document.getElementById("youtubeQuickForm");
+      const youtubeQuickDestinationPreset = document.getElementById("youtubeQuickDestinationPreset");
       const youtubeQuickUrl = document.getElementById("youtubeQuickUrl");
+      const youtubeQuickTvFields = document.getElementById("youtubeQuickTvFields");
+      const youtubeQuickSeriesName = document.getElementById("youtubeQuickSeriesName");
+      const youtubeQuickSeriesSuggestions = document.getElementById("youtubeQuickSeriesSuggestions");
+      const youtubeQuickSeasonNumber = document.getElementById("youtubeQuickSeasonNumber");
       const youtubeQuickSubmit = document.getElementById("youtubeQuickSubmit");
       const downloadForm = document.getElementById("downloadForm");
       const downloadSourceType = document.getElementById("downloadSourceType");
@@ -278,7 +283,12 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           youtubeCookiesBrowser,
           youtubeAuthClearBtn,
           youtubeQuickForm,
+          youtubeQuickDestinationPreset,
           youtubeQuickUrl,
+          youtubeQuickTvFields,
+          youtubeQuickSeriesName,
+          youtubeQuickSeriesSuggestions,
+          youtubeQuickSeasonNumber,
           youtubeQuickSubmit,
           downloadForm,
           downloadSourceType,

@@ -579,6 +579,23 @@ def test_download_enqueue_accepts_direct_youtube_quick_payload(app_factory) -> N
     assert job["source_metadata"]["prefer_metadata_title"] is True
 
 
+def test_library_tv_show_suggestions_reads_local_tv_roots(app_factory, media_root) -> None:
+    app = app_factory()
+    (media_root / "tv" / "Reacher").mkdir(parents=True)
+    (media_root / "tv" / "Bluey").mkdir(parents=True)
+    (media_root / "tv" / "ignore.txt").write_text("x", encoding="utf-8")
+    (media_root / "kids" / "tv" / "Masa a medved").mkdir(parents=True)
+
+    with TestClient(app) as client:
+        response = client.get("/api/library/tv/shows?q=bl")
+        kids_response = client.get("/api/library/tv/shows?is_kids=true")
+
+    assert response.status_code == 200
+    assert response.json()["items"] == ["Bluey"]
+    assert kids_response.status_code == 200
+    assert kids_response.json()["items"] == ["Masa a medved"]
+
+
 def test_youtube_auth_saves_pasted_cookies_without_returning_secret(app_factory, tmp_path, monkeypatch) -> None:
     managed_path = tmp_path / "secrets" / "youtube-cookies.txt"
     monkeypatch.setenv("YOUTUBE_MANAGED_COOKIES_PATH", str(managed_path))
