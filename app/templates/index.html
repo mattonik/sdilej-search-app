@@ -21,6 +21,8 @@
         <a href="/saved" class="workspace-tab-link btn btn-pill">Saved Picks</a>
       </nav>
 
+      <div id="downloadStatus" class="download-status global-status" aria-live="polite" aria-atomic="true">Queue idle.</div>
+
       <section class="panel downloader-panel tab-section tab-downloads">
         <div class="downloader-header">
           <h2>Premium Download Manager</h2>
@@ -44,7 +46,6 @@
               <button id="clearFinishedBtn" type="button" class="secondary-btn btn btn-secondary">Clear finished</button>
             </div>
           </div>
-          <div id="downloadStatus" class="download-status" aria-live="polite" aria-atomic="true">Queue idle.</div>
           <div id="downloadJobs" class="download-jobs"></div>
         </section>
 
@@ -309,8 +310,14 @@
               Recommended: export YouTube cookies in Netscape cookies.txt format and paste them here, or provide a readable cookies file path. Pasted cookies are stored locally and are never returned by the API.
             </p>
 
+            <label>
+              Test video URL
+              <input id="youtubeAuthTestUrl" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" />
+            </label>
+
             <div class="account-actions">
               <button type="submit" class="btn btn-primary">Save YouTube auth</button>
+              <button id="youtubeAuthTestBtn" type="button" class="btn btn-secondary">Test access</button>
               <button id="youtubeAuthClearBtn" type="button" class="secondary-btn btn btn-secondary">Clear YouTube auth</button>
             </div>
           </form>

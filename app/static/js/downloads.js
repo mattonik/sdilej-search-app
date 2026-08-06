@@ -1,7 +1,7 @@
 import { esc } from "./dom-utils.js";
 import { formatBytes, formatEta, formatSpeed } from "./formatters.js";
 import { ACTIVE_QUEUE_STATUSES } from "./keys.js";
-import { buildStatusErrorState } from "./status-ui.js";
+import { buildStatusErrorState, createStatusController } from "./status-ui.js";
 
 export const initDownloads = ({
   elements,
@@ -25,6 +25,8 @@ export const initDownloads = ({
     youtubeCookiesText,
     youtubeCookiesBrowser,
     youtubeAuthClearBtn,
+    youtubeAuthTestUrl,
+    youtubeAuthTestBtn,
     youtubeQuickForm,
     youtubeQuickDestinationPreset,
     youtubeQuickUrl,
@@ -67,19 +69,15 @@ export const initDownloads = ({
     accountStatus.dataset.mode = nextMode;
   };
 
-  const setYoutubeAuthStatus = (value, mode = "neutral") => {
-    if (!youtubeAuthStatus) return;
-    const text = typeof value === "object" && value !== null ? value.message || value.text || value.error || "" : value;
-    const nextMode = typeof value === "object" && value !== null ? value.mode || mode : mode;
-    youtubeAuthStatus.textContent = text || "";
-    youtubeAuthStatus.dataset.mode = nextMode;
-  };
+  const youtubeAuthStatusController = createStatusController(youtubeAuthStatus);
+  const setYoutubeAuthStatus = (value, mode = "neutral") => youtubeAuthStatusController.setStatus(value, mode);
 
   let refreshDownloadsInFlight = false;
   let refreshDownloadsQueued = false;
   let refreshDownloadsQueuedOptions = null;
   let refreshDownloadsFailures = 0;
   let queueRefreshWarningVisible = false;
+  let nextBackgroundRefreshAt = 0;
   let destinationPreviewSeq = 0;
   let youtubeQuickTvSuggestionsSeq = 0;
 
@@ -422,12 +420,14 @@ export const initDownloads = ({
     });
   };
 
-  const refreshDownloads = async ({ notifyOnFailure = false, notifyOnSuccess = false } = {}) => {
+  const refreshDownloads = async ({ notifyOnFailure = false, notifyOnSuccess = false, background = false } = {}) => {
+    if (background && Date.now() < nextBackgroundRefreshAt) return;
     if (refreshDownloadsInFlight) {
       refreshDownloadsQueued = true;
       refreshDownloadsQueuedOptions = {
         notifyOnFailure: Boolean(refreshDownloadsQueuedOptions?.notifyOnFailure || notifyOnFailure),
         notifyOnSuccess: Boolean(refreshDownloadsQueuedOptions?.notifyOnSuccess || notifyOnSuccess),
+        background: refreshDownloadsQueuedOptions ? Boolean(refreshDownloadsQueuedOptions.background && background) : background,
       };
       return;
     }
@@ -438,6 +438,7 @@ export const initDownloads = ({
       refreshPhase = "response";
       if (!ok) {
         refreshDownloadsFailures += 1;
+        nextBackgroundRefreshAt = Date.now() + Math.min(30000, 2500 * (2 ** Math.min(refreshDownloadsFailures - 1, 4)));
         if (notifyOnFailure && refreshDownloadsFailures === 1) {
           showDownloadError(data, "Queue refresh failed. Retrying in background.", {
             mode: "warning",
@@ -454,6 +455,7 @@ export const initDownloads = ({
       }
       const hadQueueRefreshWarning = queueRefreshWarningVisible || refreshDownloadsFailures > 0;
       refreshDownloadsFailures = 0;
+      nextBackgroundRefreshAt = 0;
       const summary = data.summary || {};
       refreshPhase = "summary";
       downloadWorkerState.textContent = data.worker_alive ? "Worker: online" : "Worker: offline";
@@ -470,13 +472,17 @@ export const initDownloads = ({
       setActiveQueueStateFromJobs(data.items || []);
     } catch (error) {
       refreshDownloadsFailures += 1;
+      nextBackgroundRefreshAt = Date.now() + Math.min(30000, 2500 * (2 ** Math.min(refreshDownloadsFailures - 1, 4)));
+      const displayFailure = refreshPhase !== "request" && refreshPhase !== "response";
       if (notifyOnFailure && refreshDownloadsFailures === 1) {
         setDownloadStatus({
-          message: "Queue refresh failed. Retrying in background.",
-          mode: "warning",
+          message: displayFailure ? "Queue data loaded, but display update failed." : "Queue refresh failed. Retrying in background.",
+          mode: displayFailure ? "error" : "warning",
           details: {
-            error_code: "downloads_refresh_ui_failed",
-            hint: "The last known queue state is preserved while the app retries in the background. Copy these details so the failing refresh phase can be diagnosed.",
+            error_code: displayFailure ? "downloads_render_failed" : "downloads_refresh_failed",
+            hint: displayFailure
+              ? "The queue response was received, but a browser update failed. Copy these details for diagnosis."
+              : "The last known queue state is preserved while the app retries in the background.",
             retryable: true,
             details: `phase=${refreshPhase}; ${error?.stack || error?.message || String(error || "unknown error")}`,
           },
@@ -796,7 +802,7 @@ export const initDownloads = ({
 
   refreshDownloadsBtn.addEventListener("click", async () => {
     setDownloadStatus("Refreshing queue...", "neutral");
-    await refreshDownloads({ notifyOnFailure: true, notifyOnSuccess: true });
+    await refreshDownloads({ notifyOnFailure: true, notifyOnSuccess: true, background: false });
   });
 
   clearFinishedBtn.addEventListener("click", async () => {
@@ -930,6 +936,21 @@ export const initDownloads = ({
   });
 
   youtubeAuthMode?.addEventListener("change", updateYoutubeAuthModeFields);
+
+  youtubeAuthTestBtn?.addEventListener("click", async () => {
+    const detailUrl = youtubeAuthTestUrl?.value.trim() || "";
+    if (!isYoutubeLikeUrl(detailUrl)) {
+      setYoutubeAuthStatus({ message: "Enter a valid YouTube video URL.", mode: "warning", details: { hint: "Use a youtube.com or youtu.be video link." } });
+      return;
+    }
+    setYoutubeAuthStatus("Testing YouTube access...", "neutral");
+    const { ok, data } = await api.testYoutubeAuth({ detail_url: detailUrl });
+    if (!ok) {
+      setYoutubeAuthStatus(buildStatusErrorState(data, "YouTube access test failed."));
+      return;
+    }
+    setYoutubeAuthStatus(`YouTube access works${data.title ? `: ${data.title}` : "."}`, "ok");
+  });
 
   youtubeAuthForm?.addEventListener("submit", async (event) => {
     event.preventDefault();

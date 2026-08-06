@@ -11,6 +11,7 @@ from app.storage import Storage
 from app.title_metadata import CZDB_DETAIL_URL, CZDB_SEARCH_URL
 from app.tmdb_client import TMDB_BASE_URL, TmdbClient
 from app.tvmaze_client import TVMAZE_BASE_URL
+from app.youtube_downloader import YoutubeDownloader
 from tests.conftest import FakeSdilejClient, StaticMetadataResolver, build_search_result
 
 
@@ -273,8 +274,8 @@ def test_movie_discovery_endpoint_reports_weak_and_not_found_availability(app_fa
 
     assert response.status_code == 200
     items = response.json()["items"]
-    assert items[0]["availability"]["status"] == "weak_match"
-    assert items[0]["availability"]["best_result"]["file_id"] == 901
+    assert items[0]["availability"]["status"] == "not_found"
+    assert items[0]["availability"]["best_result"] is None
     assert items[1]["availability"]["status"] == "not_found"
     assert fake_client.calls == ["Known Film", "Missing Film"]
 
@@ -617,6 +618,42 @@ def test_youtube_auth_saves_pasted_cookies_without_returning_secret(app_factory,
     assert payload["managed_cookies"] is True
     assert payload["cookies_path"] == str(managed_path.resolve())
     assert "secret-value" not in str(payload)
+
+
+def test_youtube_auth_test_probes_configured_runtime(app_factory, monkeypatch) -> None:
+    app = app_factory()
+    monkeypatch.setattr(
+        YoutubeDownloader,
+        "probe",
+        lambda self, url, auth=None: {"title": "Private clip", "webpage_url": url},
+    )
+
+    with TestClient(app) as client:
+        client.post("/api/youtube-auth", json={"mode": "cookies_from_browser", "cookies_from_browser": "firefox"})
+        response = client.post(
+            "/api/youtube-auth/test",
+            json={"detail_url": "https://www.youtube.com/watch?v=private"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "title": "Private clip",
+        "webpage_url": "https://www.youtube.com/watch?v=private",
+    }
+
+
+def test_youtube_auth_test_requires_saved_auth(app_factory) -> None:
+    app = app_factory()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/youtube-auth/test",
+            json={"detail_url": "https://www.youtube.com/watch?v=private"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error_code"] == "youtube_auth_not_configured"
 
 
 def test_youtube_auth_defaults_managed_cookies_next_to_app_db(app_factory, tmp_path, monkeypatch) -> None:

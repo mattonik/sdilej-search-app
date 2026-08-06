@@ -36,7 +36,7 @@ This document records the closed UX and stability backlog after the TV, file, an
 
 ## Deferred
 
-- None. The remaining ideas were either already completed or verified as guardrails rather than open tasks.
+- 30-day movie discovery window: add after the current day/week discovery flow has enough usage data to justify another provider query mode.
 
 ## References
 

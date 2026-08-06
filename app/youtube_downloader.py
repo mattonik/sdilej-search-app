@@ -18,7 +18,14 @@ class YoutubeDownloader:
         self.is_canceled = is_canceled
         self.on_progress = on_progress
 
-    def download(self, url: str, *, output_template: str, auth: dict[str, Any] | None = None) -> dict[str, Any]:
+    def download(
+        self,
+        url: str,
+        *,
+        output_template: str,
+        auth: dict[str, Any] | None = None,
+        media_kind: str | None = None,
+    ) -> dict[str, Any]:
         try:
             import yt_dlp
         except Exception as exc:  # noqa: BLE001
@@ -36,8 +43,7 @@ class YoutubeDownloader:
             self.on_progress(payload)
 
         options = {
-            "format": "bestvideo+bestaudio/best",
-            "merge_output_format": "mp4",
+            "format": "bestaudio/best" if str(media_kind or "").lower() == "music" else "bestvideo+bestaudio/best",
             "outtmpl": output_template,
             "noplaylist": True,
             "quiet": True,
@@ -47,6 +53,10 @@ class YoutubeDownloader:
             "retries": 3,
             "fragment_retries": 3,
         }
+        if str(media_kind or "").lower() == "music":
+            options["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "m4a"}]
+        else:
+            options["merge_output_format"] = "mp4"
         self._apply_auth_options(options, auth or {})
 
         try:
@@ -62,6 +72,20 @@ class YoutubeDownloader:
             "info": info or {},
             "filepath": str(final_path) if final_path else last_filename,
         }
+
+    def probe(self, url: str, *, auth: dict[str, Any] | None = None) -> dict[str, Any]:
+        try:
+            import yt_dlp
+        except Exception as exc:  # noqa: BLE001
+            raise YoutubeDownloadError("yt-dlp is not installed in this runtime.") from exc
+
+        options = {"quiet": True, "no_warnings": True, "noplaylist": True, "skip_download": True}
+        self._apply_auth_options(options, auth or {})
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                return ydl.extract_info(url, download=False) or {}
+        except Exception as exc:  # noqa: BLE001
+            raise YoutubeDownloadError(self._format_download_error(exc)) from exc
 
     def _apply_auth_options(self, options: dict[str, Any], auth: dict[str, Any]) -> None:
         mode = str(auth.get("mode") or "none")

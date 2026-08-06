@@ -100,6 +100,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const youtubeCookiesText = document.getElementById("youtubeCookiesText");
       const youtubeCookiesBrowser = document.getElementById("youtubeCookiesBrowser");
       const youtubeAuthClearBtn = document.getElementById("youtubeAuthClearBtn");
+      const youtubeAuthTestUrl = document.getElementById("youtubeAuthTestUrl");
+      const youtubeAuthTestBtn = document.getElementById("youtubeAuthTestBtn");
       const libraryTvMissingForm = document.getElementById("libraryTvMissingForm");
       const libraryTvShowName = document.getElementById("libraryTvShowName");
       const libraryStatus = document.getElementById("libraryStatus");
@@ -282,6 +284,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           youtubeCookiesText,
           youtubeCookiesBrowser,
           youtubeAuthClearBtn,
+          youtubeAuthTestUrl,
+          youtubeAuthTestBtn,
           youtubeQuickForm,
           youtubeQuickDestinationPreset,
           youtubeQuickUrl,
@@ -540,7 +544,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         refreshActiveTvSearchJob({ force: true });
       }
       setInterval(() => {
-        refreshDownloads({ notifyOnFailure: true });
+        refreshDownloads({ notifyOnFailure: true, background: true });
       }, 2500);
       setInterval(() => {
         refreshActiveTvSearchJob();

@@ -560,6 +560,38 @@ def test_queue_dialog_destination_preset_routes_to_kids_movies(tmp_path) -> None
 
 
 @pytest.mark.e2e
+def test_search_queue_action_reports_status_on_search_tab(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+
+        def fail_enqueue(route) -> None:
+            if route.request.method == "POST" and route.request.url.endswith("/api/downloads"):
+                route.fulfill(
+                    status=500,
+                    json={
+                        "error": "Failed to enqueue job.",
+                        "error_code": "download_enqueue_failed",
+                        "hint": "Retry the enqueue.",
+                        "details": "test failure",
+                    },
+                )
+                return
+            route.continue_()
+
+        page.route("**/api/downloads*", fail_enqueue)
+        page.goto(f"{base_url}/?query=Bluey&category=video", wait_until="networkidle")
+        page.locator('.queue-dialog-btn[data-file-id="103"]').click()
+        page.wait_for_selector("#queueDialogBackdrop:not(.hidden)")
+        page.click("#queueDialogConfirm")
+        page.wait_for_function(
+            "() => document.querySelector('#downloadStatus')?.textContent.includes('Failed to enqueue job.')"
+        )
+        assert page.locator("#downloadStatus").is_visible()
+
+
+@pytest.mark.e2e
 def test_music_search_routes_audio_results_to_music_preset(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 

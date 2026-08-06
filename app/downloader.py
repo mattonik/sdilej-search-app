@@ -389,6 +389,7 @@ class DownloadWorker:
                 detail_url,
                 output_template=output_template,
                 auth=self.storage.get_youtube_auth_settings(),
+                media_kind=job.get("media_kind"),
             )
             save_path = result.get("filepath")
             if not save_path:

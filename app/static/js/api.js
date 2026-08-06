@@ -188,6 +188,13 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+  testYoutubeAuth(payload) {
+    return jsonRequest("/api/youtube-auth/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
   deleteYoutubeAuth() {
     return jsonRequest("/api/youtube-auth", { method: "DELETE" });
   },

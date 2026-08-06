@@ -176,6 +176,10 @@ class YoutubeAuthPayload(BaseModel):
     cookies_from_browser: str | None = Field(default=None, max_length=200)
 
 
+class YoutubeAuthTestPayload(BaseModel):
+    detail_url: str = Field(min_length=1, max_length=500)
+
+
 DestinationPreset = Literal["auto", "movies", "tv", "kids_movies", "kids_tv", "music", "unsorted"]
 
 
