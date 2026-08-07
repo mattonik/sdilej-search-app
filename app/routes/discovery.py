@@ -89,7 +89,12 @@ def _availability_for_movie(request: Request, movie: dict, *, language: str | No
                 best_query = query
 
     if best_result is None:
-        return {"status": "not_found", "query": queries[0] if queries else "", "result_count": 0, "best_result": None}
+        return {
+            "status": "not_found",
+            "query": queries[0] if queries else "",
+            "result_count": total_results,
+            "best_result": None,
+        }
 
     status = "available" if best_score >= 55 else "weak_match"
     return {

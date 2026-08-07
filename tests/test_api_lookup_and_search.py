@@ -276,6 +276,7 @@ def test_movie_discovery_endpoint_reports_weak_and_not_found_availability(app_fa
     items = response.json()["items"]
     assert items[0]["availability"]["status"] == "not_found"
     assert items[0]["availability"]["best_result"] is None
+    assert items[0]["availability"]["result_count"] == 1
     assert items[1]["availability"]["status"] == "not_found"
     assert fake_client.calls == ["Known Film", "Missing Film"]
 

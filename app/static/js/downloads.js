@@ -78,6 +78,7 @@ export const initDownloads = ({
   let refreshDownloadsFailures = 0;
   let queueRefreshWarningVisible = false;
   let nextBackgroundRefreshAt = 0;
+  let lastSuccessfulRefreshAt = 0;
   let destinationPreviewSeq = 0;
   let youtubeQuickTvSuggestionsSeq = 0;
 
@@ -85,6 +86,8 @@ export const initDownloads = ({
     const text = String(value || "").trim().toLowerCase();
     return /(^https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//.test(text);
   };
+
+  const formatRefreshTime = (timestamp) => timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "n/a";
 
   const copyTextToClipboard = async (text) => {
     const value = String(text || "").trim();
@@ -456,10 +459,11 @@ export const initDownloads = ({
       const hadQueueRefreshWarning = queueRefreshWarningVisible || refreshDownloadsFailures > 0;
       refreshDownloadsFailures = 0;
       nextBackgroundRefreshAt = 0;
+      lastSuccessfulRefreshAt = Date.now();
       const summary = data.summary || {};
       refreshPhase = "summary";
       downloadWorkerState.textContent = data.worker_alive ? "Worker: online" : "Worker: offline";
-      downloadSummary.textContent = `Queue: ${summary.queued || 0} queued, ${summary.running || 0} running, ${summary.done || 0} done, ${summary.failed || 0} failed, ${summary.canceled || 0} canceled`;
+      downloadSummary.textContent = `Queue: ${summary.queued || 0} queued, ${summary.running || 0} running, ${summary.done || 0} done, ${summary.failed || 0} failed, ${summary.canceled || 0} canceled · Updated ${formatRefreshTime(lastSuccessfulRefreshAt)}`;
       if (hadQueueRefreshWarning) {
         queueRefreshWarningVisible = false;
         setDownloadStatus("Queue recovered. Latest refresh succeeded.", "ok");
