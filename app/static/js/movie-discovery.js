@@ -76,6 +76,14 @@ export const initMovieDiscovery = ({
               </div>
               <button
                 type="button"
+                class="movie-discovery-search btn btn-secondary btn-sm"
+                data-search-title="${esc(movieTitle(item))}"
+                data-search-year="${esc(item.year || "")}"
+              >
+                Full search
+              </button>
+              <button
+                type="button"
                 class="movie-discovery-queue btn btn-primary btn-sm"
                 data-file-id="${esc(best.file_id || "")}"
                 data-title="${esc(best.title || "")}"
@@ -89,6 +97,19 @@ export const initMovieDiscovery = ({
         </article>
       `;
     }).join("");
+
+    movieDiscoveryResults.querySelectorAll(".movie-discovery-search").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const params = new URLSearchParams({
+          query: btn.dataset.searchTitle || "",
+          category: "video",
+        });
+        if (/^(19|20)\d{2}$/.test(btn.dataset.searchYear || "")) {
+          params.set("release_year", btn.dataset.searchYear);
+        }
+        window.location.href = `/?${params.toString()}#search`;
+      });
+    });
 
     movieDiscoveryResults.querySelectorAll(".movie-discovery-queue").forEach((btn) => {
       btn.addEventListener("click", async () => {

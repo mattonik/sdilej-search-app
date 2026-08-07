@@ -663,6 +663,51 @@ def test_movie_discovery_without_tmdb_token_shows_setup_state(tmp_path, monkeypa
 
 
 @pytest.mark.e2e
+def test_movie_discovery_opens_full_search_for_available_movie(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.route(
+            "**/api/discovery/movie-genres**",
+            lambda route: route.fulfill(json={"configured": True, "items": []}),
+        )
+        page.route(
+            "**/api/discovery/movies**",
+            lambda route: route.fulfill(
+                json={
+                    "configured": True,
+                    "items": [
+                        {
+                            "title": "The Matrix",
+                            "year": 1999,
+                            "vote_average": 8.7,
+                            "vote_count": 100,
+                            "availability": {
+                                "status": "available",
+                                "best_result": {
+                                    "file_id": 901,
+                                    "title": "The Matrix 1999 1080p",
+                                    "detail_url": "https://sdilej.cz/901/matrix",
+                                    "size": "4 GB",
+                                    "primary_year": 1999,
+                                    "detected_languages": ["EN"],
+                                },
+                            },
+                        }
+                    ],
+                }
+            ),
+        )
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#discoverySearchModeBtn")
+        page.click('#movieDiscoveryForm button[type="submit"]')
+        page.wait_for_selector(".movie-discovery-search")
+        page.click(".movie-discovery-search")
+        page.wait_for_url("**/?query=The+Matrix&category=video&release_year=1999#search")
+
+
+@pytest.mark.e2e
 def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
