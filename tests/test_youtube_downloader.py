@@ -101,3 +101,18 @@ def test_youtube_downloader_probe_does_not_download(tmp_path, monkeypatch) -> No
 
     assert result["title"] == "Probe clip"
     assert "outtmpl" not in FakeYoutubeDL.captured_options
+
+
+def test_youtube_downloader_rejects_missing_cookie_file(tmp_path, monkeypatch) -> None:
+    install_fake_ytdlp(monkeypatch)
+    downloader = YoutubeDownloader(is_canceled=lambda: False, on_progress=lambda payload: None)
+
+    try:
+        downloader.probe(
+            "https://www.youtube.com/watch?v=abc123",
+            auth={"mode": "cookies_file", "cookies_path": str(tmp_path / "missing.txt")},
+        )
+    except Exception as exc:  # noqa: BLE001
+        assert "was not found" in str(exc)
+    else:
+        raise AssertionError("missing cookies file should fail before yt-dlp is called")

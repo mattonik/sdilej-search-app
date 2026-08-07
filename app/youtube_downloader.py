@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -92,6 +93,11 @@ class YoutubeDownloader:
         if mode == "cookies_file":
             cookies_path = str(auth.get("cookies_path") or "").strip()
             if cookies_path:
+                path = Path(cookies_path).expanduser()
+                if not path.is_file():
+                    raise YoutubeDownloadError(f"Configured YouTube cookies file was not found: {path}")
+                if not os.access(path, os.R_OK):
+                    raise YoutubeDownloadError(f"Configured YouTube cookies file is not readable: {path}")
                 options["cookiefile"] = cookies_path
         elif mode == "cookies_from_browser":
             browser = str(auth.get("cookies_from_browser") or "").strip()
@@ -119,6 +125,8 @@ class YoutubeDownloader:
                 f"{message} Configure YouTube cookies in Account > YouTube authentication "
                 "and retry the job."
             )
+        if "ffmpeg" in lower:
+            return f"{message} Install ffmpeg in the application runtime and retry the job."
         return message
 
     def _resolve_final_path(self, output_template: str, last_filename: str | None) -> Path | None:
