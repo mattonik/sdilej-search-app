@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import responses
 
@@ -164,7 +164,7 @@ def test_movie_metadata_refreshes_stale_cache_and_updates_payload(
         },
         "fallback",
     )
-    stale_timestamp = (datetime.utcnow() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+    stale_timestamp = (datetime.now(timezone.utc) - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
     with storage._connect() as conn:
         conn.execute(
             """
@@ -216,7 +216,7 @@ def test_movie_metadata_returns_stale_cache_when_refresh_fails(storage, monkeypa
         },
         "fallback",
     )
-    stale_timestamp = (datetime.utcnow() - timedelta(days=8)).strftime("%Y-%m-%d %H:%M:%S")
+    stale_timestamp = (datetime.now(timezone.utc) - timedelta(days=8)).strftime("%Y-%m-%d %H:%M:%S")
     with storage._connect() as conn:
         conn.execute(
             """
