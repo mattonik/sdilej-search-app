@@ -241,8 +241,11 @@ export const initFileSearch = ({
   musicQueueAllBtn?.addEventListener("click", async () => {
     const cards = Array.from(fileResultsGrid?.querySelectorAll(".result-card[data-detail-url]") || []);
     const activeJobs = getActiveQueueState().fileJobs;
+    const seenKeys = new Set();
     const candidates = cards.filter((card) => {
       const key = buildFileQueueKey({ fileId: card.dataset.fileId, detailUrl: card.dataset.detailUrl });
+      if (key && seenKeys.has(key)) return false;
+      if (key) seenKeys.add(key);
       return !key || !activeJobs.get(key);
     });
     if (!candidates.length) {
@@ -252,6 +255,7 @@ export const initFileSearch = ({
 
     musicQueueAllBtn.disabled = true;
     let queued = 0;
+    let skipped = 0;
     let failed = 0;
     if (musicAlbumQueueStatus) musicAlbumQueueStatus.textContent = `Queueing ${candidates.length} music results...`;
     try {
@@ -269,11 +273,12 @@ export const initFileSearch = ({
           priority: 0,
         });
         if (result?.ok) queued += 1;
+        else if (result?.duplicateDone) skipped += 1;
         else failed += 1;
       }
       await refreshDownloads?.();
       if (musicAlbumQueueStatus) {
-        musicAlbumQueueStatus.textContent = `${queued} music results queued${failed ? `, ${failed} failed` : "."}`;
+        musicAlbumQueueStatus.textContent = `${queued} music results queued${skipped ? `, ${skipped} already present` : ""}${failed ? `, ${failed} failed` : "."}`;
         musicAlbumQueueStatus.dataset.mode = failed ? "warning" : "ok";
       }
     } finally {

@@ -410,10 +410,22 @@ class DownloadWorker:
                 raise YoutubeDownloadError("yt-dlp completed without producing a final file path.")
 
             final_path = Path(str(save_path))
-            bytes_total = final_path.stat().st_size if final_path.exists() else int(job.get("bytes_downloaded") or 0)
+            if download_playlist:
+                playlist_dir = final_path.parent.resolve()
+                output_root = Path(str(job.get("output_dir") or output_dir)).resolve()
+                if playlist_dir == output_root or not playlist_dir.is_relative_to(output_root):
+                    raise YoutubeDownloadError("yt-dlp returned an unsafe playlist output directory.")
+                save_path = str(playlist_dir)
+                bytes_total = sum(
+                    item.stat().st_size
+                    for item in playlist_dir.iterdir()
+                    if item.is_file() and item.suffix.lower() not in {".part", ".ytdl"}
+                ) if playlist_dir.exists() else 0
+            else:
+                bytes_total = final_path.stat().st_size if final_path.exists() else int(job.get("bytes_downloaded") or 0)
             self.storage.complete_download_job(
                 job_id,
-                save_path=str(final_path),
+                save_path=str(save_path),
                 final_url=detail_url,
                 bytes_total=bytes_total,
                 status_code=None,

@@ -572,6 +572,7 @@ export const initDownloads = ({
             ok: false,
             duplicateJob: dup,
             duplicateIsActive: ACTIVE_QUEUE_STATUSES.has(String(dup.status || "")),
+            duplicateDone: String(dup.status || "") === "done",
           };
         }
         if (status === 409 && data.requires_confirmation) {
