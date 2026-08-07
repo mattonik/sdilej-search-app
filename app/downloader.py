@@ -354,7 +354,10 @@ class DownloadWorker:
             output_dir.mkdir(parents=True, exist_ok=True)
 
             source_metadata = job.get("source_metadata") if isinstance(job.get("source_metadata"), dict) else {}
-            if source_metadata.get("prefer_metadata_title") and str(job.get("media_kind") or "").lower().strip() != "tv":
+            download_playlist = bool(source_metadata.get("download_playlist"))
+            if download_playlist and str(job.get("media_kind") or "").lower().strip() != "tv":
+                output_template = str(output_dir / "%(playlist_title)s" / "%(playlist_index)03d - %(title).200B [%(id)s].%(ext)s")
+            elif source_metadata.get("prefer_metadata_title") and str(job.get("media_kind") or "").lower().strip() != "tv":
                 output_template = str(output_dir / "%(title).200B [%(id)s].%(ext)s")
             else:
                 filename_stem = self._resolve_youtube_filename_stem(job)
@@ -390,8 +393,12 @@ class DownloadWorker:
                 output_template=output_template,
                 auth=self.storage.get_youtube_auth_settings(),
                 media_kind=job.get("media_kind"),
+                download_playlist=download_playlist,
             )
-            resolved_title = result.get("info", {}).get("title") if isinstance(result.get("info"), dict) else None
+            resolved_info = result.get("info") if isinstance(result.get("info"), dict) else {}
+            resolved_title = (
+                resolved_info.get("playlist_title") if download_playlist else resolved_info.get("title")
+            )
             if (
                 resolved_title
                 and source_metadata.get("prefer_metadata_title")

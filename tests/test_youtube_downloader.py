@@ -93,6 +93,19 @@ def test_youtube_downloader_uses_audio_mode_for_music(tmp_path, monkeypatch) -> 
     assert FakeYoutubeDL.captured_options["postprocessors"][0]["key"] == "FFmpegExtractAudio"
 
 
+def test_youtube_downloader_allows_full_playlist(tmp_path, monkeypatch) -> None:
+    install_fake_ytdlp(monkeypatch)
+    downloader = YoutubeDownloader(is_canceled=lambda: False, on_progress=lambda payload: None)
+
+    downloader.download(
+        "https://www.youtube.com/playlist?list=abc123",
+        output_template=str(tmp_path / "playlist.%(ext)s"),
+        download_playlist=True,
+    )
+
+    assert FakeYoutubeDL.captured_options["noplaylist"] is False
+
+
 def test_youtube_downloader_probe_does_not_download(tmp_path, monkeypatch) -> None:
     install_fake_ytdlp(monkeypatch)
     downloader = YoutubeDownloader(is_canceled=lambda: False, on_progress=lambda payload: None)

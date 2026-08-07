@@ -630,6 +630,21 @@ def test_music_search_routes_audio_results_to_music_preset(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_music_search_can_queue_all_results_as_music(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(f"{base_url}/?query=Bluey&category=audio", wait_until="networkidle")
+        page.wait_for_selector("#musicSearchPanel:not(.hidden)")
+        page.wait_for_selector("#musicQueueAllBtn")
+        with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith("/api/downloads")) as first_response:
+            page.click("#musicQueueAllBtn")
+        assert first_response.value.status == 200
+        page.wait_for_function("document.querySelector('#musicAlbumQueueStatus')?.textContent.includes('2 music results queued')")
+
+
+@pytest.mark.e2e
 def test_movie_discovery_without_tmdb_token_shows_setup_state(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("TMDB_BEARER_TOKEN", raising=False)
     app = _build_file_search_app(tmp_path)

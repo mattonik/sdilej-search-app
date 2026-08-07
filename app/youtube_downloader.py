@@ -26,6 +26,7 @@ class YoutubeDownloader:
         output_template: str,
         auth: dict[str, Any] | None = None,
         media_kind: str | None = None,
+        download_playlist: bool = False,
     ) -> dict[str, Any]:
         try:
             import yt_dlp
@@ -46,7 +47,7 @@ class YoutubeDownloader:
         options = {
             "format": "bestaudio/best" if str(media_kind or "").lower() == "music" else "bestvideo+bestaudio/best",
             "outtmpl": output_template,
-            "noplaylist": True,
+            "noplaylist": not download_playlist,
             "quiet": True,
             "no_warnings": True,
             "progress_hooks": [progress_hook],

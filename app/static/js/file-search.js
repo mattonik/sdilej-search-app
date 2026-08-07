@@ -9,6 +9,8 @@ export const initFileSearch = ({
   bindQueueManageButtons,
   getActiveQueueState,
   openQueueDialog,
+  enqueueDownload,
+  refreshDownloads,
 }) => {
   const {
     categorySelect,
@@ -32,6 +34,8 @@ export const initFileSearch = ({
     musicSearchQuery,
     musicSearchSort,
     musicSearchMaxResults,
+    musicQueueAllBtn,
+    musicAlbumQueueStatus,
   } = elements;
 
   const buildSavedStateFromItems = (items) => {
@@ -233,6 +237,49 @@ export const initFileSearch = ({
     statusEl.textContent = message || "";
     statusEl.dataset.mode = mode;
   };
+
+  musicQueueAllBtn?.addEventListener("click", async () => {
+    const cards = Array.from(fileResultsGrid?.querySelectorAll(".result-card[data-detail-url]") || []);
+    const activeJobs = getActiveQueueState().fileJobs;
+    const candidates = cards.filter((card) => {
+      const key = buildFileQueueKey({ fileId: card.dataset.fileId, detailUrl: card.dataset.detailUrl });
+      return !key || !activeJobs.get(key);
+    });
+    if (!candidates.length) {
+      if (musicAlbumQueueStatus) musicAlbumQueueStatus.textContent = "No unqueued music results are available.";
+      return;
+    }
+
+    musicQueueAllBtn.disabled = true;
+    let queued = 0;
+    let failed = 0;
+    if (musicAlbumQueueStatus) musicAlbumQueueStatus.textContent = `Queueing ${candidates.length} music results...`;
+    try {
+      for (const card of candidates) {
+        const result = await enqueueDownload?.({
+          detail_url: card.dataset.detailUrl,
+          file_id: card.dataset.fileId ? Number(card.dataset.fileId) : null,
+          title: card.dataset.title || card.querySelector("h3")?.textContent?.trim() || "Music result",
+          source_type: "sdilej",
+          preferred_mode: "premium",
+          destination_preset: "music",
+          media_kind: "music",
+          is_kids: false,
+          chunk_count: 1,
+          priority: 0,
+        });
+        if (result?.ok) queued += 1;
+        else failed += 1;
+      }
+      await refreshDownloads?.();
+      if (musicAlbumQueueStatus) {
+        musicAlbumQueueStatus.textContent = `${queued} music results queued${failed ? `, ${failed} failed` : "."}`;
+        musicAlbumQueueStatus.dataset.mode = failed ? "warning" : "ok";
+      }
+    } finally {
+      musicQueueAllBtn.disabled = false;
+    }
+  });
 
   const copyTextToClipboard = async (text) => {
     const value = String(text || "").trim();

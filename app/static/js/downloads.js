@@ -30,6 +30,7 @@ export const initDownloads = ({
     youtubeQuickForm,
     youtubeQuickDestinationPreset,
     youtubeQuickUrl,
+    youtubeQuickPlaylist,
     youtubeQuickTvFields,
     youtubeQuickSeriesName,
     youtubeQuickSeriesSuggestions,
@@ -725,6 +726,14 @@ export const initDownloads = ({
       });
       return;
     }
+    if (youtubeQuickPlaylist?.checked && quickPlan.needsTvFields) {
+      setDownloadStatus({
+        message: "Full playlists cannot use TV episode routing.",
+        mode: "warning",
+        details: { hint: "Choose Music, Movies, or Unsorted for a playlist download." },
+      });
+      return;
+    }
 
     if (youtubeQuickSubmit) {
       youtubeQuickSubmit.disabled = true;
@@ -737,6 +746,7 @@ export const initDownloads = ({
         source_metadata: {
           provider: "youtube_direct",
           prefer_metadata_title: true,
+          download_playlist: Boolean(youtubeQuickPlaylist?.checked),
         },
         preferred_mode: "auto",
         destination_preset: quickPlan.destination_preset,
@@ -749,6 +759,7 @@ export const initDownloads = ({
       });
       if (result.ok && youtubeQuickUrl) {
         youtubeQuickUrl.value = "";
+        if (youtubeQuickPlaylist) youtubeQuickPlaylist.checked = false;
         if (youtubeQuickSeriesName) youtubeQuickSeriesName.value = "";
         if (youtubeQuickSeasonNumber) youtubeQuickSeasonNumber.value = "";
       } else if (result.duplicateJob && result.duplicateIsActive) {

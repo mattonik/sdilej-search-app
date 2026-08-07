@@ -70,6 +70,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const musicSearchQuery = document.getElementById("musicSearchQuery");
       const musicSearchSort = document.getElementById("musicSearchSort");
       const musicSearchMaxResults = document.getElementById("musicSearchMaxResults");
+      const musicQueueAllBtn = document.getElementById("musicQueueAllBtn");
+      const musicAlbumQueueStatus = document.getElementById("musicAlbumQueueStatus");
       const tvModePanel = document.getElementById("tvModePanel");
       const tvLookupForm = document.getElementById("tvLookupForm");
       const tvShowName = document.getElementById("tvShowName");
@@ -109,6 +111,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const youtubeQuickForm = document.getElementById("youtubeQuickForm");
       const youtubeQuickDestinationPreset = document.getElementById("youtubeQuickDestinationPreset");
       const youtubeQuickUrl = document.getElementById("youtubeQuickUrl");
+      const youtubeQuickPlaylist = document.getElementById("youtubeQuickPlaylist");
       const youtubeQuickTvFields = document.getElementById("youtubeQuickTvFields");
       const youtubeQuickSeriesName = document.getElementById("youtubeQuickSeriesName");
       const youtubeQuickSeriesSuggestions = document.getElementById("youtubeQuickSeriesSuggestions");
@@ -289,6 +292,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           youtubeQuickForm,
           youtubeQuickDestinationPreset,
           youtubeQuickUrl,
+          youtubeQuickPlaylist,
           youtubeQuickTvFields,
           youtubeQuickSeriesName,
           youtubeQuickSeriesSuggestions,
@@ -397,6 +401,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           musicSearchQuery,
           musicSearchSort,
           musicSearchMaxResults,
+          musicQueueAllBtn,
+          musicAlbumQueueStatus,
           categorySelect,
         },
         api,
@@ -405,6 +411,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         bindQueueManageButtons,
         getActiveQueueState: () => activeQueueState,
         openQueueDialog: (...args) => openQueueDialog?.(...args),
+        enqueueDownload: (payload) => downloadsApi?.enqueueDownload?.(payload),
+        refreshDownloads: () => downloadsApi?.refreshDownloads?.(),
       });
 
       const {
