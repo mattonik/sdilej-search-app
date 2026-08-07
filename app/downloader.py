@@ -391,6 +391,13 @@ class DownloadWorker:
                 auth=self.storage.get_youtube_auth_settings(),
                 media_kind=job.get("media_kind"),
             )
+            resolved_title = result.get("info", {}).get("title") if isinstance(result.get("info"), dict) else None
+            if (
+                resolved_title
+                and source_metadata.get("prefer_metadata_title")
+                and str(job.get("media_kind") or "").lower().strip() != "tv"
+            ):
+                self.storage.update_download_title(job_id, str(resolved_title).strip())
             save_path = result.get("filepath")
             if not save_path:
                 raise YoutubeDownloadError("yt-dlp completed without producing a final file path.")

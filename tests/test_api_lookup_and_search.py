@@ -579,6 +579,9 @@ def test_download_enqueue_accepts_direct_youtube_quick_payload(app_factory) -> N
     assert job["source_metadata"]["provider"] == "youtube_direct"
     assert job["source_metadata"]["prefer_metadata_title"] is True
 
+    app.state.services.storage.update_download_title(job["id"], "Resolved YouTube title")
+    assert app.state.services.storage.get_download_job(job["id"])["title"] == "Resolved YouTube title"
+
 
 def test_library_tv_show_suggestions_reads_local_tv_roots(app_factory, media_root) -> None:
     app = app_factory()

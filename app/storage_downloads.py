@@ -253,6 +253,13 @@ class StorageDownloadsRepository:
                 (working_path, job_id),
             )
 
+    def update_download_title(self, job_id: int, title: str) -> None:
+        with self.storage._connect() as conn:
+            conn.execute(
+                "UPDATE download_jobs SET title = ?, updated_at = datetime('now') WHERE id = ?",
+                (title, job_id),
+            )
+
     def complete_download_job(
         self,
         job_id: int,
