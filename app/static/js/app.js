@@ -218,7 +218,6 @@ import { initMovieDiscovery } from "./movie-discovery.js";
             tvApi.refreshTvResultsQueueUi();
           }
         }
-        applyActiveQueueStateToSearchResults();
       };
 
       const upsertActiveQueueJob = (job) => {

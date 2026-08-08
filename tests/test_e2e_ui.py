@@ -523,6 +523,8 @@ def test_download_job_card_exposes_copy_action(tmp_path) -> None:
 
     with run_test_server(app) as base_url, launch_browser() as browser:
         page = browser.new_page()
+        page_errors = []
+        page.on("pageerror", lambda error: page_errors.append(str(error)))
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="downloads"]')
         page.wait_for_selector("#refreshDownloadsBtn")
@@ -534,6 +536,8 @@ def test_download_job_card_exposes_copy_action(tmp_path) -> None:
         page.click("#refreshDownloadsBtn")
         page.wait_for_selector('#downloadJobs [data-action="copy"]', state="attached")
         assert page.locator('#downloadJobs [data-action="copy"]').count() >= 1
+        assert "downloads_refresh_ui_failed" not in (page.locator("#downloadStatus").text_content() or "")
+        assert page_errors == []
 
 
 @pytest.mark.e2e

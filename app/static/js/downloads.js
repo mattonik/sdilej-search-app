@@ -480,16 +480,22 @@ export const initDownloads = ({
       nextBackgroundRefreshAt = Date.now() + Math.min(30000, 2500 * (2 ** Math.min(refreshDownloadsFailures - 1, 4)));
       const displayFailure = refreshPhase !== "request" && refreshPhase !== "response";
       if (notifyOnFailure && refreshDownloadsFailures === 1) {
+        const errorName = String(error?.name || "Error");
+        const errorMessage = String(error?.message || error || "unknown error");
         setDownloadStatus({
           message: displayFailure ? "Queue data loaded, but display update failed." : "Queue refresh failed. Retrying in background.",
           mode: displayFailure ? "error" : "warning",
           details: {
             error_code: displayFailure ? "downloads_render_failed" : "downloads_refresh_failed",
+            phase: refreshPhase,
+            error_name: errorName,
+            error_message: errorMessage,
+            request_url: "/api/downloads?limit=200",
             hint: displayFailure
               ? "The queue response was received, but a browser update failed. Copy these details for diagnosis."
               : "The last known queue state is preserved while the app retries in the background.",
             retryable: true,
-            details: `phase=${refreshPhase}; ${error?.stack || error?.message || String(error || "unknown error")}`,
+            stack: error?.stack || null,
           },
         });
         queueRefreshWarningVisible = true;
