@@ -42,17 +42,16 @@ export const initMovieDiscovery = ({
   const movieLanguages = (best) => (Array.isArray(best?.detected_languages) ? best.detected_languages : []);
 
   const renderMovies = (items) => {
-    const availableItems = (Array.isArray(items) ? items : []).filter(
-      (item) => item?.availability?.status === "available"
-    );
-    if (!availableItems.length) {
-      movieDiscoveryResults.innerHTML = `<div class="download-empty">No movies with a reliable sdilej match were found.</div>`;
+    const discoveryItems = Array.isArray(items) ? items : [];
+    if (!discoveryItems.length) {
+      movieDiscoveryResults.innerHTML = `<div class="download-empty">No movies were found for this discovery filter.</div>`;
       return;
     }
-    movieDiscoveryResults.innerHTML = availableItems.map((item) => {
+    movieDiscoveryResults.innerHTML = discoveryItems.map((item) => {
       const availability = item.availability || {};
       const best = availability.best_result || null;
       const status = availability.status || "not_found";
+      const reliableBest = status === "available" ? best : null;
       return `
         <article class="movie-discovery-card" data-status="${esc(status)}">
           ${item.poster_url ? `<img src="${esc(item.poster_url)}" alt="" loading="lazy" />` : `<div class="movie-discovery-poster-fallback">No poster</div>`}
@@ -68,31 +67,31 @@ export const initMovieDiscovery = ({
             </div>
             ${item.overview ? `<p>${esc(truncateText(item.overview, 180))}</p>` : ""}
             ${availability.error ? `<div class="movie-discovery-error">${esc(availability.error)}</div>` : ""}
-            ${best ? `
+            ${reliableBest ? `
               <div class="movie-discovery-match">
                 <span>Best sdilej match</span>
-                <strong>${esc(best.title || "")}</strong>
-                <small>${esc(best.size || "n/a")} · ${esc(best.primary_year || "year n/a")} · ${esc(movieLanguages(best).join(", ") || "language n/a")}</small>
+                <strong>${esc(reliableBest.title || "")}</strong>
+                <small>${esc(reliableBest.size || "n/a")} · ${esc(reliableBest.primary_year || "year n/a")} · ${esc(movieLanguages(reliableBest).join(", ") || "language n/a")}</small>
               </div>
               <button
                 type="button"
-                class="movie-discovery-search btn btn-secondary btn-sm"
-                data-search-title="${esc(movieTitle(item))}"
-                data-search-year="${esc(item.year || "")}"
-              >
-                Full search
-              </button>
-              <button
-                type="button"
                 class="movie-discovery-queue btn btn-primary btn-sm"
-                data-file-id="${esc(best.file_id || "")}"
-                data-title="${esc(best.title || "")}"
-                data-detail-url="${esc(best.detail_url || "")}"
+                data-file-id="${esc(reliableBest.file_id || "")}"
+                data-title="${esc(reliableBest.title || "")}"
+                data-detail-url="${esc(reliableBest.detail_url || "")}"
                 data-status="${esc(status)}"
               >
                 Add match to queue
               </button>
-            ` : `<div class="movie-discovery-match muted">No usable sdilej match yet.</div>`}
+            ` : `<div class="movie-discovery-match muted">${esc(availabilityLabel(status))}: no reliable Sdilej result to queue.</div>`}
+            <button
+              type="button"
+              class="movie-discovery-search btn btn-secondary btn-sm"
+              data-search-title="${esc(movieTitle(item))}"
+              data-search-year="${esc(item.year || "")}"
+            >
+              Full search
+            </button>
           </div>
         </article>
       `;

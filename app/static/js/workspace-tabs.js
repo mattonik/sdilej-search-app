@@ -4,6 +4,9 @@ export const initWorkspaceTabs = ({ workspaceTabs, tabSections, initialTab, onTa
       tabName === "downloads" ? "downloads" : tabName === "library" ? "library" : tabName === "account" ? "account" : "search";
     workspaceTabs.forEach((tab) => {
       tab.classList.toggle("active", tab.dataset.tab === resolved);
+      if (tab.dataset.tab) {
+        tab.setAttribute("aria-current", tab.dataset.tab === resolved ? "page" : "false");
+      }
     });
     tabSections.forEach((section) => {
       const showSearch = section.classList.contains("tab-search");

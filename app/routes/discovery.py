@@ -16,12 +16,21 @@ router = APIRouter()
 
 
 def _normalize_key(value: str | None) -> str:
-    return (
+    normalized = (
         unicodedata.normalize("NFKD", value or "")
         .encode("ascii", "ignore")
         .decode("ascii")
         .lower()
     )
+    return re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+
+
+def _title_contains_phrase(title: str | None, phrase: str | None) -> bool:
+    title_key = _normalize_key(title)
+    phrase_key = _normalize_key(phrase)
+    if not title_key or not phrase_key:
+        return False
+    return f" {phrase_key} " in f" {title_key} "
 
 
 def _parse_size_bytes(value: str | None) -> int:
@@ -37,13 +46,12 @@ def _parse_size_bytes(value: str | None) -> int:
 
 
 def _score_candidate(result: SearchResult, *, movie: dict) -> int:
-    title_key = _normalize_key(result.title)
     movie_titles = [movie.get("title"), movie.get("original_title")]
     score = 0
     title_matches = False
     for candidate in movie_titles:
         candidate_key = _normalize_key(candidate)
-        if candidate_key and candidate_key in title_key:
+        if candidate_key and _title_contains_phrase(result.title, candidate):
             score += 50
             title_matches = True
             break

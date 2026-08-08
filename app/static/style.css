@@ -687,6 +687,8 @@ textarea {
 .status-detail-value {
   white-space: pre-wrap;
   word-break: break-word;
+  max-height: 12rem;
+  overflow: auto;
 }
 
 .download-status[data-mode="ok"] {
@@ -2893,14 +2895,21 @@ textarea {
 
 @media (max-width: 560px) {
   .workspace-tabs {
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    scrollbar-width: none;
+  }
+
+  .workspace-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .workspace-tab,
   .workspace-tab-link {
-    width: 100%;
+    flex: 0 0 auto;
     text-align: center;
+    white-space: nowrap;
   }
 
   .account-header {
@@ -2966,11 +2975,21 @@ textarea {
   }
 
   .search-mode-switch {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding-bottom: 0.2rem;
+    scrollbar-width: none;
     width: 100%;
   }
 
+  .search-mode-switch::-webkit-scrollbar {
+    display: none;
+  }
+
   .search-mode-switch button {
+    flex: 0 0 auto;
     padding-inline: 0.45rem;
     font-size: 0.8rem;
   }
