@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import re
 import unicodedata
@@ -471,14 +471,14 @@ class TitleMetadataResolver:
         updated_at = self._parse_cache_timestamp(entry.get("updated_at"))
         if updated_at is None:
             return False
-        return datetime.utcnow() - updated_at <= self.cache_ttl
+        return datetime.now(timezone.utc) - updated_at <= self.cache_ttl
 
     def _parse_cache_timestamp(self, value: Any) -> datetime | None:
         text = self._clean_optional_text(value)
         if not text:
             return None
         try:
-            return datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+            return datetime.strptime(text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
         except ValueError:
             return None
 

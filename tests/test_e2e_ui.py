@@ -560,6 +560,38 @@ def test_queue_dialog_destination_preset_routes_to_kids_movies(tmp_path) -> None
 
 
 @pytest.mark.e2e
+def test_search_queue_action_reports_status_on_search_tab(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+
+        def fail_enqueue(route) -> None:
+            if route.request.method == "POST" and route.request.url.endswith("/api/downloads"):
+                route.fulfill(
+                    status=500,
+                    json={
+                        "error": "Failed to enqueue job.",
+                        "error_code": "download_enqueue_failed",
+                        "hint": "Retry the enqueue.",
+                        "details": "test failure",
+                    },
+                )
+                return
+            route.continue_()
+
+        page.route("**/api/downloads*", fail_enqueue)
+        page.goto(f"{base_url}/?query=Bluey&category=video", wait_until="networkidle")
+        page.locator('.queue-dialog-btn[data-file-id="103"]').click()
+        page.wait_for_selector("#queueDialogBackdrop:not(.hidden)")
+        page.click("#queueDialogConfirm")
+        page.wait_for_function(
+            "() => document.querySelector('#downloadStatus')?.textContent.includes('Failed to enqueue job.')"
+        )
+        assert page.locator("#downloadStatus").is_visible()
+
+
+@pytest.mark.e2e
 def test_music_search_routes_audio_results_to_music_preset(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
@@ -598,6 +630,21 @@ def test_music_search_routes_audio_results_to_music_preset(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_music_search_can_queue_all_results_as_music(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(f"{base_url}/?query=Bluey&category=audio", wait_until="networkidle")
+        page.wait_for_selector("#musicSearchPanel:not(.hidden)")
+        page.wait_for_selector("#musicQueueAllBtn")
+        with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith("/api/downloads")) as first_response:
+            page.click("#musicQueueAllBtn")
+        assert first_response.value.status == 200
+        page.wait_for_function("document.querySelector('#musicAlbumQueueStatus')?.textContent.includes('2 music results queued')")
+
+
+@pytest.mark.e2e
 def test_movie_discovery_without_tmdb_token_shows_setup_state(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("TMDB_BEARER_TOKEN", raising=False)
     app = _build_file_search_app(tmp_path)
@@ -613,6 +660,51 @@ def test_movie_discovery_without_tmdb_token_shows_setup_state(tmp_path, monkeypa
             "document.querySelector('#movieDiscoveryStatus')?.textContent.includes('TMDB_BEARER_TOKEN')"
         )
         assert "TMDB_BEARER_TOKEN" in (page.locator("#movieDiscoveryResults").text_content() or "")
+
+
+@pytest.mark.e2e
+def test_movie_discovery_opens_full_search_for_available_movie(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.route(
+            "**/api/discovery/movie-genres**",
+            lambda route: route.fulfill(json={"configured": True, "items": []}),
+        )
+        page.route(
+            "**/api/discovery/movies**",
+            lambda route: route.fulfill(
+                json={
+                    "configured": True,
+                    "items": [
+                        {
+                            "title": "The Matrix",
+                            "year": 1999,
+                            "vote_average": 8.7,
+                            "vote_count": 100,
+                            "availability": {
+                                "status": "available",
+                                "best_result": {
+                                    "file_id": 901,
+                                    "title": "The Matrix 1999 1080p",
+                                    "detail_url": "https://sdilej.cz/901/matrix",
+                                    "size": "4 GB",
+                                    "primary_year": 1999,
+                                    "detected_languages": ["EN"],
+                                },
+                            },
+                        }
+                    ],
+                }
+            ),
+        )
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#discoverySearchModeBtn")
+        page.click('#movieDiscoveryForm button[type="submit"]')
+        page.wait_for_selector(".movie-discovery-search")
+        page.click(".movie-discovery-search")
+        page.wait_for_url("**/?query=The+Matrix&category=video&release_year=1999#search")
 
 
 @pytest.mark.e2e

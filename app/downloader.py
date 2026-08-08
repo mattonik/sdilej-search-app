@@ -354,7 +354,10 @@ class DownloadWorker:
             output_dir.mkdir(parents=True, exist_ok=True)
 
             source_metadata = job.get("source_metadata") if isinstance(job.get("source_metadata"), dict) else {}
-            if source_metadata.get("prefer_metadata_title") and str(job.get("media_kind") or "").lower().strip() != "tv":
+            download_playlist = bool(source_metadata.get("download_playlist"))
+            if download_playlist and str(job.get("media_kind") or "").lower().strip() != "tv":
+                output_template = str(output_dir / "%(playlist_title)s" / "%(playlist_index)03d - %(title).200B [%(id)s].%(ext)s")
+            elif source_metadata.get("prefer_metadata_title") and str(job.get("media_kind") or "").lower().strip() != "tv":
                 output_template = str(output_dir / "%(title).200B [%(id)s].%(ext)s")
             else:
                 filename_stem = self._resolve_youtube_filename_stem(job)
@@ -389,16 +392,40 @@ class DownloadWorker:
                 detail_url,
                 output_template=output_template,
                 auth=self.storage.get_youtube_auth_settings(),
+                media_kind=job.get("media_kind"),
+                download_playlist=download_playlist,
             )
+            resolved_info = result.get("info") if isinstance(result.get("info"), dict) else {}
+            resolved_title = (
+                resolved_info.get("playlist_title") if download_playlist else resolved_info.get("title")
+            )
+            if (
+                resolved_title
+                and source_metadata.get("prefer_metadata_title")
+                and str(job.get("media_kind") or "").lower().strip() != "tv"
+            ):
+                self.storage.update_download_title(job_id, str(resolved_title).strip())
             save_path = result.get("filepath")
             if not save_path:
                 raise YoutubeDownloadError("yt-dlp completed without producing a final file path.")
 
             final_path = Path(str(save_path))
-            bytes_total = final_path.stat().st_size if final_path.exists() else int(job.get("bytes_downloaded") or 0)
+            if download_playlist:
+                playlist_dir = final_path.parent.resolve()
+                output_root = Path(str(job.get("output_dir") or output_dir)).resolve()
+                if playlist_dir == output_root or not playlist_dir.is_relative_to(output_root):
+                    raise YoutubeDownloadError("yt-dlp returned an unsafe playlist output directory.")
+                save_path = str(playlist_dir)
+                bytes_total = sum(
+                    item.stat().st_size
+                    for item in playlist_dir.iterdir()
+                    if item.is_file() and item.suffix.lower() not in {".part", ".ytdl"}
+                ) if playlist_dir.exists() else 0
+            else:
+                bytes_total = final_path.stat().st_size if final_path.exists() else int(job.get("bytes_downloaded") or 0)
             self.storage.complete_download_job(
                 job_id,
-                save_path=str(final_path),
+                save_path=str(save_path),
                 final_url=detail_url,
                 bytes_total=bytes_total,
                 status_code=None,

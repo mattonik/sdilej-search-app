@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 import sqlite3
 import threading
+from pathlib import Path
 
 from app.db import run_with_sqlite_retry
 
@@ -69,6 +70,37 @@ def test_claim_next_download_job_is_safe_under_contention(storage) -> None:
 
     assert len(claimed_ids) == 2
     assert len(set(claimed_ids)) == 2
+
+
+def test_playlist_job_removes_the_whole_playlist_folder(storage, tmp_path: Path) -> None:
+    playlist_dir = tmp_path / "My Playlist"
+    playlist_dir.mkdir()
+    (playlist_dir / "001 - Track.m4a").write_bytes(b"track")
+    (playlist_dir / "002 - Track.m4a").write_bytes(b"track")
+    job = storage.enqueue_download_job(
+        detail_url="https://www.youtube.com/playlist?list=abc123",
+        file_id=None,
+        title="My Playlist",
+        preferred_mode="auto",
+        output_dir=str(tmp_path),
+        priority=0,
+        source_type="youtube",
+        source_metadata={"download_playlist": True},
+        media_kind="music",
+    )
+    storage.claim_next_download_job()
+    storage.complete_download_job(
+        int(job["id"]),
+        save_path=str(playlist_dir),
+        final_url="https://www.youtube.com/playlist?list=abc123",
+        bytes_total=10,
+        status_code=None,
+    )
+
+    result = storage.delete_download_job(int(job["id"]), with_data=True)
+
+    assert result["deleted_paths"] == [str(playlist_dir)]
+    assert not playlist_dir.exists()
 
 
 def test_claim_next_tv_search_job_is_safe_under_contention(storage) -> None:

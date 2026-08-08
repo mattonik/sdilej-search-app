@@ -417,6 +417,14 @@ textarea {
   gap: 0.45rem;
 }
 
+.global-status {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
 .download-queue-section,
 .download-add-section,
 .download-settings-section {

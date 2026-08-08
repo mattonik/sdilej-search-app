@@ -70,6 +70,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const musicSearchQuery = document.getElementById("musicSearchQuery");
       const musicSearchSort = document.getElementById("musicSearchSort");
       const musicSearchMaxResults = document.getElementById("musicSearchMaxResults");
+      const musicQueueAllBtn = document.getElementById("musicQueueAllBtn");
+      const musicAlbumQueueStatus = document.getElementById("musicAlbumQueueStatus");
       const tvModePanel = document.getElementById("tvModePanel");
       const tvLookupForm = document.getElementById("tvLookupForm");
       const tvShowName = document.getElementById("tvShowName");
@@ -100,6 +102,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const youtubeCookiesText = document.getElementById("youtubeCookiesText");
       const youtubeCookiesBrowser = document.getElementById("youtubeCookiesBrowser");
       const youtubeAuthClearBtn = document.getElementById("youtubeAuthClearBtn");
+      const youtubeAuthTestUrl = document.getElementById("youtubeAuthTestUrl");
+      const youtubeAuthTestBtn = document.getElementById("youtubeAuthTestBtn");
       const libraryTvMissingForm = document.getElementById("libraryTvMissingForm");
       const libraryTvShowName = document.getElementById("libraryTvShowName");
       const libraryStatus = document.getElementById("libraryStatus");
@@ -107,6 +111,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const youtubeQuickForm = document.getElementById("youtubeQuickForm");
       const youtubeQuickDestinationPreset = document.getElementById("youtubeQuickDestinationPreset");
       const youtubeQuickUrl = document.getElementById("youtubeQuickUrl");
+      const youtubeQuickPlaylist = document.getElementById("youtubeQuickPlaylist");
       const youtubeQuickTvFields = document.getElementById("youtubeQuickTvFields");
       const youtubeQuickSeriesName = document.getElementById("youtubeQuickSeriesName");
       const youtubeQuickSeriesSuggestions = document.getElementById("youtubeQuickSeriesSuggestions");
@@ -282,9 +287,12 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           youtubeCookiesText,
           youtubeCookiesBrowser,
           youtubeAuthClearBtn,
+          youtubeAuthTestUrl,
+          youtubeAuthTestBtn,
           youtubeQuickForm,
           youtubeQuickDestinationPreset,
           youtubeQuickUrl,
+          youtubeQuickPlaylist,
           youtubeQuickTvFields,
           youtubeQuickSeriesName,
           youtubeQuickSeriesSuggestions,
@@ -393,6 +401,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           musicSearchQuery,
           musicSearchSort,
           musicSearchMaxResults,
+          musicQueueAllBtn,
+          musicAlbumQueueStatus,
           categorySelect,
         },
         api,
@@ -401,6 +411,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         bindQueueManageButtons,
         getActiveQueueState: () => activeQueueState,
         openQueueDialog: (...args) => openQueueDialog?.(...args),
+        enqueueDownload: (payload) => downloadsApi?.enqueueDownload?.(payload),
+        refreshDownloads: () => downloadsApi?.refreshDownloads?.(),
       });
 
       const {
@@ -540,7 +552,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         refreshActiveTvSearchJob({ force: true });
       }
       setInterval(() => {
-        refreshDownloads({ notifyOnFailure: true });
+        refreshDownloads({ notifyOnFailure: true, background: true });
       }, 2500);
       setInterval(() => {
         refreshActiveTvSearchJob();

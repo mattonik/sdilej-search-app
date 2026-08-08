@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,7 +19,15 @@ class YoutubeDownloader:
         self.is_canceled = is_canceled
         self.on_progress = on_progress
 
-    def download(self, url: str, *, output_template: str, auth: dict[str, Any] | None = None) -> dict[str, Any]:
+    def download(
+        self,
+        url: str,
+        *,
+        output_template: str,
+        auth: dict[str, Any] | None = None,
+        media_kind: str | None = None,
+        download_playlist: bool = False,
+    ) -> dict[str, Any]:
         try:
             import yt_dlp
         except Exception as exc:  # noqa: BLE001
@@ -36,10 +45,9 @@ class YoutubeDownloader:
             self.on_progress(payload)
 
         options = {
-            "format": "bestvideo+bestaudio/best",
-            "merge_output_format": "mp4",
+            "format": "bestaudio/best" if str(media_kind or "").lower() == "music" else "bestvideo+bestaudio/best",
             "outtmpl": output_template,
-            "noplaylist": True,
+            "noplaylist": not download_playlist,
             "quiet": True,
             "no_warnings": True,
             "progress_hooks": [progress_hook],
@@ -47,6 +55,10 @@ class YoutubeDownloader:
             "retries": 3,
             "fragment_retries": 3,
         }
+        if str(media_kind or "").lower() == "music":
+            options["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "m4a"}]
+        else:
+            options["merge_output_format"] = "mp4"
         self._apply_auth_options(options, auth or {})
 
         try:
@@ -63,11 +75,30 @@ class YoutubeDownloader:
             "filepath": str(final_path) if final_path else last_filename,
         }
 
+    def probe(self, url: str, *, auth: dict[str, Any] | None = None) -> dict[str, Any]:
+        try:
+            import yt_dlp
+        except Exception as exc:  # noqa: BLE001
+            raise YoutubeDownloadError("yt-dlp is not installed in this runtime.") from exc
+
+        options = {"quiet": True, "no_warnings": True, "noplaylist": True, "skip_download": True}
+        self._apply_auth_options(options, auth or {})
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                return ydl.extract_info(url, download=False) or {}
+        except Exception as exc:  # noqa: BLE001
+            raise YoutubeDownloadError(self._format_download_error(exc)) from exc
+
     def _apply_auth_options(self, options: dict[str, Any], auth: dict[str, Any]) -> None:
         mode = str(auth.get("mode") or "none")
         if mode == "cookies_file":
             cookies_path = str(auth.get("cookies_path") or "").strip()
             if cookies_path:
+                path = Path(cookies_path).expanduser()
+                if not path.is_file():
+                    raise YoutubeDownloadError(f"Configured YouTube cookies file was not found: {path}")
+                if not os.access(path, os.R_OK):
+                    raise YoutubeDownloadError(f"Configured YouTube cookies file is not readable: {path}")
                 options["cookiefile"] = cookies_path
         elif mode == "cookies_from_browser":
             browser = str(auth.get("cookies_from_browser") or "").strip()
@@ -95,6 +126,8 @@ class YoutubeDownloader:
                 f"{message} Configure YouTube cookies in Account > YouTube authentication "
                 "and retry the job."
             )
+        if "ffmpeg" in lower:
+            return f"{message} Install ffmpeg in the application runtime and retry the job."
         return message
 
     def _resolve_final_path(self, output_template: str, last_filename: str | None) -> Path | None:

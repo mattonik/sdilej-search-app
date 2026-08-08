@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 from typing import TYPE_CHECKING, Any
 
 
@@ -251,6 +252,13 @@ class StorageDownloadsRepository:
                 WHERE id = ?
                 """,
                 (working_path, job_id),
+            )
+
+    def update_download_title(self, job_id: int, title: str) -> None:
+        with self.storage._connect() as conn:
+            conn.execute(
+                "UPDATE download_jobs SET title = ?, updated_at = datetime('now') WHERE id = ?",
+                (title, job_id),
             )
 
     def complete_download_job(
@@ -558,6 +566,8 @@ class StorageDownloadsRepository:
 
         if with_data:
             seen: set[str] = set()
+            source_metadata = json.loads(row["source_metadata_json"] or "{}")
+            is_playlist = bool(source_metadata.get("download_playlist"))
             for candidate in (row["save_path"], row["working_path"]):
                 if not candidate:
                     continue
@@ -568,7 +578,10 @@ class StorageDownloadsRepository:
 
                 try:
                     file_path = Path(path_value)
-                    if file_path.exists():
+                    if is_playlist and file_path.is_dir():
+                        shutil.rmtree(file_path)
+                        deleted_paths.append(path_value)
+                    elif file_path.exists():
                         file_path.unlink()
                         deleted_paths.append(path_value)
                     else:

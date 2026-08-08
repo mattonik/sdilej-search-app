@@ -42,11 +42,14 @@ export const initMovieDiscovery = ({
   const movieLanguages = (best) => (Array.isArray(best?.detected_languages) ? best.detected_languages : []);
 
   const renderMovies = (items) => {
-    if (!Array.isArray(items) || !items.length) {
-      movieDiscoveryResults.innerHTML = `<div class="download-empty">No discovery movies found.</div>`;
+    const availableItems = (Array.isArray(items) ? items : []).filter(
+      (item) => item?.availability?.status === "available"
+    );
+    if (!availableItems.length) {
+      movieDiscoveryResults.innerHTML = `<div class="download-empty">No movies with a reliable sdilej match were found.</div>`;
       return;
     }
-    movieDiscoveryResults.innerHTML = items.map((item) => {
+    movieDiscoveryResults.innerHTML = availableItems.map((item) => {
       const availability = item.availability || {};
       const best = availability.best_result || null;
       const status = availability.status || "not_found";
@@ -73,6 +76,14 @@ export const initMovieDiscovery = ({
               </div>
               <button
                 type="button"
+                class="movie-discovery-search btn btn-secondary btn-sm"
+                data-search-title="${esc(movieTitle(item))}"
+                data-search-year="${esc(item.year || "")}"
+              >
+                Full search
+              </button>
+              <button
+                type="button"
                 class="movie-discovery-queue btn btn-primary btn-sm"
                 data-file-id="${esc(best.file_id || "")}"
                 data-title="${esc(best.title || "")}"
@@ -86,6 +97,19 @@ export const initMovieDiscovery = ({
         </article>
       `;
     }).join("");
+
+    movieDiscoveryResults.querySelectorAll(".movie-discovery-search").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const params = new URLSearchParams({
+          query: btn.dataset.searchTitle || "",
+          category: "video",
+        });
+        if (/^(19|20)\d{2}$/.test(btn.dataset.searchYear || "")) {
+          params.set("release_year", btn.dataset.searchYear);
+        }
+        window.location.href = `/?${params.toString()}#search`;
+      });
+    });
 
     movieDiscoveryResults.querySelectorAll(".movie-discovery-queue").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -146,8 +170,9 @@ export const initMovieDiscovery = ({
     }
     renderMovies(data.items || []);
     const items = Array.isArray(data.items) ? data.items : [];
+    const availableCount = items.filter((item) => item?.availability?.status === "available").length;
     const checkedCount = items.filter((item) => item?.availability?.status !== "error").length;
-    setStatus(`Loaded ${items.length} movies. Checked availability for ${checkedCount}.`, "ok");
+    setStatus(`Loaded ${availableCount} available movies from ${items.length}. Checked ${checkedCount}.`, "ok");
   });
 
   loadGenres();

@@ -521,6 +521,9 @@ class Storage:
     def set_download_working_path(self, job_id: int, working_path: str | None) -> None:
         self.downloads.set_download_working_path(job_id, working_path)
 
+    def update_download_title(self, job_id: int, title: str) -> None:
+        self.downloads.update_download_title(job_id, title)
+
     def complete_download_job(
         self,
         job_id: int,

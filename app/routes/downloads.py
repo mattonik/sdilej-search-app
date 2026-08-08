@@ -17,6 +17,7 @@ from ..main import (
     UpdateDownloadClassificationPayload,
     UpdatePriorityPayload,
     YoutubeAuthPayload,
+    YoutubeAuthTestPayload,
     _build_media_plan,
     _extract_file_id,
     _get_services,
@@ -24,6 +25,7 @@ from ..main import (
 )
 from ..sdilej_client import SdilejClient, SdilejClientError
 from ..kids_catalog import KidsCatalogError, VeseleRozpravkyClient
+from ..youtube_downloader import YoutubeDownloadError, YoutubeDownloader
 
 router = APIRouter()
 
@@ -278,6 +280,46 @@ def api_youtube_auth_set(request: Request, payload: YoutubeAuthPayload):
             error="Failed to save YouTube authentication settings.",
             error_code="youtube_auth_save_failed",
             hint="Retry the save or check storage/file permissions.",
+            retryable=True,
+            details=str(exc),
+        )
+
+
+@router.post("/api/youtube-auth/test")
+def api_youtube_auth_test(request: Request, payload: YoutubeAuthTestPayload):
+    try:
+        services = _get_services(request)
+        auth = services.storage.get_youtube_auth_settings()
+        if auth.get("mode") == "none":
+            return _download_error(
+                request,
+                status_code=400,
+                error="YouTube authentication is not configured.",
+                error_code="youtube_auth_not_configured",
+                hint="Save a cookies.txt file or browser cookie source first.",
+                retryable=False,
+            )
+        info = YoutubeDownloader(is_canceled=lambda: False, on_progress=lambda payload: None).probe(
+            payload.detail_url.strip(), auth=auth
+        )
+        return JSONResponse({"ok": True, "title": info.get("title"), "webpage_url": info.get("webpage_url")})
+    except YoutubeDownloadError as exc:
+        return _download_error(
+            request,
+            status_code=400,
+            error=str(exc),
+            error_code="youtube_auth_test_failed",
+            hint="Check the cookies export and that the runtime can read it.",
+            retryable=False,
+            details=str(exc),
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _download_error(
+            request,
+            status_code=500,
+            error="YouTube authentication test failed.",
+            error_code="youtube_auth_test_failed",
+            hint="Retry the test or inspect the application logs.",
             retryable=True,
             details=str(exc),
         )

@@ -40,11 +40,15 @@ def _score_candidate(result: SearchResult, *, movie: dict) -> int:
     title_key = _normalize_key(result.title)
     movie_titles = [movie.get("title"), movie.get("original_title")]
     score = 0
+    title_matches = False
     for candidate in movie_titles:
         candidate_key = _normalize_key(candidate)
         if candidate_key and candidate_key in title_key:
             score += 50
+            title_matches = True
             break
+    if not title_matches:
+        return 0
     if movie.get("year") and movie.get("year") in result.detected_years:
         score += 20
     if result.is_playable:
@@ -79,13 +83,18 @@ def _availability_for_movie(request: Request, movie: dict, *, language: str | No
         total_results += response.result_count
         for result in response.results:
             score = _score_candidate(result, movie=movie)
-            if score > best_score:
+            if score > 0 and score > best_score:
                 best_score = score
                 best_result = result
                 best_query = query
 
     if best_result is None:
-        return {"status": "not_found", "query": queries[0] if queries else "", "result_count": 0, "best_result": None}
+        return {
+            "status": "not_found",
+            "query": queries[0] if queries else "",
+            "result_count": total_results,
+            "best_result": None,
+        }
 
     status = "available" if best_score >= 55 else "weak_match"
     return {
