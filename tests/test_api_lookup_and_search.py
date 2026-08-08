@@ -603,6 +603,74 @@ def test_library_tv_show_suggestions_reads_local_tv_roots(app_factory, media_roo
     assert kids_response.json()["items"] == ["Masa a medved"]
 
 
+def test_library_tv_folder_scan_and_deep_scan_detect_episode_files(app_factory, media_root) -> None:
+    app = app_factory()
+    folder = media_root / "tv" / "Reacher" / "S01"
+    folder.mkdir(parents=True)
+    (folder / "Reacher.S01E01.1080p.mkv").write_text("video", encoding="utf-8")
+    (folder / "Reacher.S01E01.en.srt").write_text("subtitles", encoding="utf-8")
+    (folder / "Reacher.S01E02.partial.mkv").write_text("partial", encoding="utf-8")
+
+    with TestClient(app) as client:
+        folders = client.get("/api/library/tv/folders")
+        deep_scan = client.post(
+            "/api/library/tv/folders/deep-scan",
+            json={"folder_name": "Reacher"},
+        )
+        unsafe = client.post(
+            "/api/library/tv/folders/deep-scan",
+            json={"folder_name": "../tv"},
+        )
+
+    assert folders.status_code == 200
+    assert folders.json()["items"] == [{"folder_name": "Reacher", "season_count": 1}]
+    assert deep_scan.status_code == 200
+    payload = deep_scan.json()
+    assert payload["media_file_count"] == 1
+    assert payload["episodes"] == [
+        {
+            "season_number": 1,
+            "episode_number": 1,
+            "episode_code": "S01E01",
+            "files": ["S01/Reacher.S01E01.1080p.mkv"],
+        }
+    ]
+    assert unsafe.status_code == 400
+    assert unsafe.json()["error_code"] == "library_tv_folder_invalid"
+
+
+def test_library_music_folder_scan_and_deep_scan(app_factory, media_root) -> None:
+    app = app_factory()
+    album = media_root / "music" / "Daft Punk" / "Discovery"
+    album.mkdir(parents=True)
+    (album / "01 One More Time.flac").write_bytes(b"audio")
+    (album / "02 Aerodynamic.mp3").write_bytes(b"audio")
+    (album / "cover.jpg").write_bytes(b"image")
+
+    with TestClient(app) as client:
+        folders = client.get("/api/library/music/folders")
+        deep_scan = client.post(
+            "/api/library/music/folders/deep-scan",
+            json={"artist_name": "Daft Punk", "album_name": "Discovery"},
+        )
+
+    assert folders.status_code == 200
+    assert folders.json()["items"] == [
+        {
+            "artist_name": "Daft Punk",
+            "album_count": 1,
+            "direct_audio_file_count": 0,
+            "albums": [{"album_name": "Discovery", "audio_file_count": 2}],
+        }
+    ]
+    assert deep_scan.status_code == 200
+    payload = deep_scan.json()
+    assert payload["search_query"] == "Daft Punk Discovery"
+    assert payload["audio_file_count"] == 2
+    assert payload["total_size_bytes"] == 10
+    assert {item["name"] for item in payload["files"]} == {"01 One More Time.flac", "02 Aerodynamic.mp3"}
+
+
 def test_youtube_auth_saves_pasted_cookies_without_returning_secret(app_factory, tmp_path, monkeypatch) -> None:
     managed_path = tmp_path / "secrets" / "youtube-cookies.txt"
     monkeypatch.setenv("YOUTUBE_MANAGED_COOKIES_PATH", str(managed_path))
