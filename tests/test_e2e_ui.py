@@ -518,6 +518,24 @@ def test_file_search_url_overrides_stale_search_mode(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_mobile_navigation_and_search_mode_tabs_stay_compact(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.goto(base_url, wait_until="networkidle")
+
+        nav_box = page.locator(".workspace-tabs").bounding_box()
+        assert nav_box and nav_box["height"] < 70
+        assert page.locator("#fileSearchModeBtn").get_attribute("role") == "tab"
+        assert page.locator("#fileSearchModeBtn").get_attribute("aria-selected") == "true"
+
+        page.click("#tvSearchModeBtn")
+        assert page.locator("#tvSearchModeBtn").get_attribute("aria-selected") == "true"
+        assert page.locator("#tvModePanel").get_attribute("role") == "tabpanel"
+
+
+@pytest.mark.e2e
 def test_download_job_card_exposes_copy_action(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
@@ -709,6 +727,40 @@ def test_movie_discovery_opens_full_search_for_available_movie(tmp_path) -> None
         page.wait_for_selector(".movie-discovery-search")
         page.click(".movie-discovery-search")
         page.wait_for_url("**/?query=The+Matrix&category=video&release_year=1999#search")
+
+
+@pytest.mark.e2e
+def test_movie_discovery_offers_full_search_for_unavailable_movie(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.route(
+            "**/api/discovery/movie-genres**",
+            lambda route: route.fulfill(json={"configured": True, "items": []}),
+        )
+        page.route(
+            "**/api/discovery/movies**",
+            lambda route: route.fulfill(
+                json={
+                    "configured": True,
+                    "items": [
+                        {
+                            "title": "Unknown Film",
+                            "year": 2024,
+                            "availability": {"status": "not_found", "best_result": None},
+                        }
+                    ],
+                }
+            ),
+        )
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#discoverySearchModeBtn")
+        page.click('#movieDiscoveryForm button[type="submit"]')
+        page.wait_for_selector(".movie-discovery-search")
+        assert "Not found" in (page.locator(".movie-discovery-card").text_content() or "")
+        page.click(".movie-discovery-search")
+        page.wait_for_url("**/?query=Unknown+Film&category=video&release_year=2024#search")
 
 
 @pytest.mark.e2e

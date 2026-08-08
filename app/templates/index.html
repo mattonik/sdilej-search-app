@@ -13,8 +13,8 @@
         <p>Search + filter + sort proxy for <code>sdilej.cz</code>, built for self-hosting on Raspberry Pi.</p>
       </header>
 
-      <nav class="workspace-tabs">
-        <button type="button" class="workspace-tab btn btn-pill active" data-tab="search">Search</button>
+      <nav class="workspace-tabs" aria-label="Main navigation">
+        <button type="button" class="workspace-tab btn btn-pill active" data-tab="search" aria-current="page">Search</button>
         <button type="button" class="workspace-tab btn btn-pill" data-tab="downloads">Downloads</button>
         <button type="button" class="workspace-tab btn btn-pill" data-tab="library">Library</button>
         <button type="button" class="workspace-tab btn btn-pill" data-tab="account">Account</button>
@@ -34,7 +34,6 @@
             <button type="button" id="openAccountTabBtn" class="secondary-btn btn btn-secondary btn-sm">Account</button>
           </div>
         </div>
-
         <section class="download-queue-section">
           <div class="download-command-bar">
             <div>
@@ -43,7 +42,7 @@
             </div>
             <div class="download-actions">
               <button id="refreshDownloadsBtn" type="button" class="secondary-btn btn btn-secondary">Refresh queue</button>
-              <button id="clearFinishedBtn" type="button" class="secondary-btn btn btn-secondary">Clear finished</button>
+              <button id="clearFinishedBtn" type="button" class="btn btn-danger">Clear finished</button>
             </div>
           </div>
           <div id="downloadJobs" class="download-jobs"></div>
@@ -355,15 +354,15 @@
             <p id="searchModeHint" class="search-mode-hint">Search files and movies by title, language, year, and category.</p>
           </div>
           <div class="search-mode-switch" role="tablist" aria-label="Search mode">
-            <button id="fileSearchModeBtn" type="button" class="btn btn-pill active" data-search-mode="file">Movies / Files</button>
-            <button id="tvSearchModeBtn" type="button" class="btn btn-pill" data-search-mode="tv">TV Shows</button>
-            <button id="musicSearchModeBtn" type="button" class="btn btn-pill" data-search-mode="music">Music</button>
-            <button id="discoverySearchModeBtn" type="button" class="btn btn-pill" data-search-mode="discovery">Discover</button>
-            <button id="kidsSearchModeBtn" type="button" class="btn btn-pill" data-search-mode="kids">Kids</button>
+            <button id="fileSearchModeBtn" type="button" role="tab" aria-selected="true" aria-controls="fileSearchPanel" class="btn btn-pill active" data-search-mode="file">Movies / Files</button>
+            <button id="tvSearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="tvModePanel" class="btn btn-pill" data-search-mode="tv">TV Shows</button>
+            <button id="musicSearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="musicSearchPanel" class="btn btn-pill" data-search-mode="music">Music</button>
+            <button id="discoverySearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="movieDiscoveryPanel" class="btn btn-pill" data-search-mode="discovery">Discover</button>
+            <button id="kidsSearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="kidsCatalogPanel" class="btn btn-pill" data-search-mode="kids">Kids</button>
           </div>
         </div>
 
-        <div id="movieDiscoveryPanel" class="movie-discovery-panel search-mode-panel hidden">
+        <div id="movieDiscoveryPanel" role="tabpanel" class="movie-discovery-panel search-mode-panel hidden">
           <div class="search-section-intro">
             <h3>Movie Discovery</h3>
             <p>Browse top lists and check which movies look available before searching manually.</p>
@@ -400,13 +399,13 @@
               Limit
               <input id="movieDiscoveryLimit" type="number" min="1" max="20" value="12" />
             </label>
-            <button type="submit" class="btn btn-primary">Find available movies</button>
+            <button type="submit" class="btn btn-primary">Find movies</button>
           </form>
           <div id="movieDiscoveryStatus" class="download-status">Discovery idle.</div>
           <div id="movieDiscoveryResults" class="movie-discovery-results"></div>
         </div>
 
-        <div id="musicSearchPanel" class="music-search-panel search-mode-panel hidden">
+        <div id="musicSearchPanel" role="tabpanel" class="music-search-panel search-mode-panel hidden">
           <div class="search-section-intro">
             <h3>Music Search</h3>
             <p>Search audio results and route queue actions to the music destination by default.</p>
@@ -435,7 +434,7 @@
           <div id="musicAlbumQueueStatus" class="download-status" aria-live="polite" aria-atomic="true"></div>
         </div>
 
-        <div id="fileSearchPanel" class="search-mode-panel">
+        <div id="fileSearchPanel" role="tabpanel" class="search-mode-panel">
           <form method="get" action="/" class="search-form" id="fileSearchForm">
             <div class="file-search-quick">
               <label class="file-search-query">
@@ -532,7 +531,7 @@
           </form>
         </div>
 
-        <div id="tvModePanel" class="search-mode-panel tv-panel hidden">
+        <div id="tvModePanel" role="tabpanel" class="search-mode-panel tv-panel hidden">
           <div class="tv-step">
             <h3>Step 1. Choose Show</h3>
             <form id="tvLookupForm" class="tv-controls">
@@ -596,7 +595,7 @@
           <div id="tvResults" class="tv-results"></div>
         </div>
 
-        <div id="kidsCatalogPanel" class="kids-catalog-panel search-mode-panel hidden">
+        <div id="kidsCatalogPanel" role="tabpanel" class="kids-catalog-panel search-mode-panel hidden">
           <div class="search-section-intro">
             <h3>Kids Catalog</h3>
             <p>Browse the curated kids catalog and enqueue episodes directly.</p>

@@ -179,11 +179,13 @@ def test_movie_discovery_size_parser_and_candidate_scoring() -> None:
     movie = {"title": "Matrix", "original_title": "The Matrix", "year": 2020}
     strong = build_search_result(file_id=1, title="Matrix 2020 CZ 1080p", size="4.2 GB")
     weak = build_search_result(file_id=2, title="Unrelated 2020 CZ 1080p", size="4.2 GB")
+    substring_only = build_search_result(file_id=3, title="Matrixville 2020 CZ 1080p", size="4.2 GB")
 
     assert _parse_size_bytes("1.5 GB") == 1610612736
     assert _parse_size_bytes("700 MB") == 734003200
     assert _parse_size_bytes("unknown") == 0
     assert _score_candidate(strong, movie=movie) > _score_candidate(weak, movie=movie)
+    assert _score_candidate(substring_only, movie=movie) == 0
 
 
 @responses.activate
