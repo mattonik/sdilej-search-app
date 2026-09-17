@@ -331,9 +331,28 @@
         <div class="library-header">
           <div>
             <h2>Local Library</h2>
-            <p>Check a TV show against your configured local folders and find missing episodes.</p>
+            <p>Scan local TV folders, inspect their episode files, and find missing episodes.</p>
           </div>
         </div>
+
+        <section class="library-folder-tools" aria-labelledby="libraryFolderHeading">
+          <div class="library-section-heading">
+            <h3 id="libraryFolderHeading">Folders</h3>
+            <p>Start here when you do not remember the exact show name.</p>
+          </div>
+          <div class="library-folder-actions">
+            <label>
+              Library
+              <select id="libraryFolderKind">
+                <option value="tv">TV shows</option>
+                <option value="kids">Kids TV</option>
+              </select>
+            </label>
+            <button type="button" id="libraryFoldersScanBtn" class="btn btn-secondary">Scan folders</button>
+          </div>
+          <div id="libraryFolderResults" class="library-folder-results"></div>
+          <div id="libraryDeepScanResults" class="library-deep-scan-results"></div>
+        </section>
 
         <form id="libraryTvMissingForm" class="library-scan-form">
           <label>
@@ -345,6 +364,16 @@
 
         <div id="libraryStatus" class="download-status" aria-live="polite" aria-atomic="true">Library scan idle.</div>
         <div id="libraryTvMissingResults" class="library-results"></div>
+
+        <section class="library-folder-tools music-library-tools" aria-labelledby="libraryMusicHeading">
+          <div class="library-section-heading">
+            <h3 id="libraryMusicHeading">Music folders</h3>
+            <p>Inspect artists and albums, then search Sdilej using the local folder name.</p>
+          </div>
+          <button type="button" id="libraryMusicFoldersScanBtn" class="btn btn-secondary">Scan music library</button>
+          <div id="libraryMusicFolderResults" class="library-folder-results"></div>
+          <div id="libraryMusicDeepScanResults" class="library-deep-scan-results"></div>
+        </section>
       </section>
 
       <section class="panel tab-section tab-search">

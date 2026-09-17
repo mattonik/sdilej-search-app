@@ -97,6 +97,26 @@ export const api = {
       `/api/library/tv/shows?q=${encodeURIComponent(q)}&is_kids=${encodeURIComponent(isKids ? "true" : "false")}&limit=${encodeURIComponent(limit)}`
     );
   },
+  listLibraryTvFolders({ isKids = false } = {}) {
+    return jsonRequest(`/api/library/tv/folders?is_kids=${encodeURIComponent(isKids ? "true" : "false")}`);
+  },
+  deepScanLibraryTvFolder({ folderName, isKids = false }) {
+    return jsonRequest("/api/library/tv/folders/deep-scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_name: folderName, is_kids: Boolean(isKids) }),
+    });
+  },
+  listLibraryMusicFolders() {
+    return jsonRequest("/api/library/music/folders");
+  },
+  deepScanLibraryMusicFolder({ artistName, albumName = null }) {
+    return jsonRequest("/api/library/music/folders/deep-scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ artist_name: artistName, album_name: albumName || null }),
+    });
+  },
   listKidsCatalogShows() {
     return jsonRequest("/api/kids-catalog/shows");
   },

@@ -73,25 +73,29 @@ export const initMovieDiscovery = ({
                 <strong>${esc(reliableBest.title || "")}</strong>
                 <small>${esc(reliableBest.size || "n/a")} · ${esc(reliableBest.primary_year || "year n/a")} · ${esc(movieLanguages(reliableBest).join(", ") || "language n/a")}</small>
               </div>
+            ` : `<div class="movie-discovery-match muted">${esc(availabilityLabel(status))}: no reliable Sdilej result to queue.</div>`}
+            <div class="movie-discovery-actions">
               <button
                 type="button"
-                class="movie-discovery-queue btn btn-primary btn-sm"
-                data-file-id="${esc(reliableBest.file_id || "")}"
-                data-title="${esc(reliableBest.title || "")}"
-                data-detail-url="${esc(reliableBest.detail_url || "")}"
-                data-status="${esc(status)}"
+                class="movie-discovery-search btn btn-secondary btn-sm"
+                data-search-title="${esc(movieTitle(item))}"
+                data-search-year="${esc(item.year || "")}"
               >
-                Add match to queue
+                Search English 1080p
               </button>
-            ` : `<div class="movie-discovery-match muted">${esc(availabilityLabel(status))}: no reliable Sdilej result to queue.</div>`}
-            <button
-              type="button"
-              class="movie-discovery-search btn btn-secondary btn-sm"
-              data-search-title="${esc(movieTitle(item))}"
-              data-search-year="${esc(item.year || "")}"
-            >
-              Full search
-            </button>
+              ${reliableBest ? `
+                <button
+                  type="button"
+                  class="movie-discovery-queue btn btn-primary btn-sm"
+                  data-file-id="${esc(reliableBest.file_id || "")}"
+                  data-title="${esc(reliableBest.title || "")}"
+                  data-detail-url="${esc(reliableBest.detail_url || "")}"
+                  data-status="${esc(status)}"
+                >
+                  Add match to queue
+                </button>
+              ` : ""}
+            </div>
           </div>
         </article>
       `;
@@ -99,9 +103,13 @@ export const initMovieDiscovery = ({
 
     movieDiscoveryResults.querySelectorAll(".movie-discovery-search").forEach((btn) => {
       btn.addEventListener("click", () => {
+        const title = btn.dataset.searchTitle || "";
         const params = new URLSearchParams({
-          query: btn.dataset.searchTitle || "",
+          query: `${title} 1080p`.trim(),
           category: "video",
+          language: "EN",
+          language_scope: "audio",
+          sort: "size_asc",
         });
         if (/^(19|20)\d{2}$/.test(btn.dataset.searchYear || "")) {
           params.set("release_year", btn.dataset.searchYear);

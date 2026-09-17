@@ -639,6 +639,16 @@ textarea {
   font-size: 0.84rem;
 }
 
+.movie-discovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.movie-discovery-actions .btn {
+  flex: 1 1 150px;
+}
+
 .status-summary {
   display: flex;
   align-items: flex-start;
@@ -877,6 +887,142 @@ textarea {
 .library-header p {
   margin: 0.25rem 0 0;
   color: var(--muted);
+}
+
+.library-folder-tools {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 0.85rem;
+  background: #fbfdff;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.library-section-heading {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.library-section-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.library-section-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.library-folder-actions {
+  display: flex;
+  gap: 0.7rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.library-folder-actions label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.library-folder-actions select {
+  min-height: 40px;
+  min-width: 150px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+}
+
+.library-folder-results,
+.library-deep-scan-results {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.library-folder-card,
+.library-deep-scan-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: #fff;
+}
+
+.library-folder-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.library-folder-card > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.library-folder-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.library-deep-scan-card {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.library-episode-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.library-episode-codes span {
+  border: 1px solid #dbe8ef;
+  border-radius: 999px;
+  padding: 0.18rem 0.45rem;
+  background: #f8fbfd;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.library-deep-scan-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.library-music-tools {
+  margin-top: 1rem;
+}
+
+.library-music-artist > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.library-music-albums,
+.library-music-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.library-music-albums .btn {
+  font-size: 0.76rem;
+}
+
+.library-music-file-list span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .library-scan-form {
@@ -3028,6 +3174,17 @@ textarea {
     grid-template-columns: 1fr;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .library-folder-actions,
+  .library-folder-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .library-folder-actions .btn,
+  .library-folder-card .btn {
+    width: 100%;
   }
 
   .library-summary-stats,

@@ -108,6 +108,13 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const libraryTvShowName = document.getElementById("libraryTvShowName");
       const libraryStatus = document.getElementById("libraryStatus");
       const libraryTvMissingResults = document.getElementById("libraryTvMissingResults");
+      const libraryFolderKind = document.getElementById("libraryFolderKind");
+      const libraryFoldersScanBtn = document.getElementById("libraryFoldersScanBtn");
+      const libraryFolderResults = document.getElementById("libraryFolderResults");
+      const libraryDeepScanResults = document.getElementById("libraryDeepScanResults");
+      const libraryMusicFoldersScanBtn = document.getElementById("libraryMusicFoldersScanBtn");
+      const libraryMusicFolderResults = document.getElementById("libraryMusicFolderResults");
+      const libraryMusicDeepScanResults = document.getElementById("libraryMusicDeepScanResults");
       const youtubeQuickForm = document.getElementById("youtubeQuickForm");
       const youtubeQuickDestinationPreset = document.getElementById("youtubeQuickDestinationPreset");
       const youtubeQuickUrl = document.getElementById("youtubeQuickUrl");
@@ -371,6 +378,13 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           libraryTvShowName,
           libraryStatus,
           libraryTvMissingResults,
+          libraryFolderKind,
+          libraryFoldersScanBtn,
+          libraryFolderResults,
+          libraryDeepScanResults,
+          libraryMusicFoldersScanBtn,
+          libraryMusicFolderResults,
+          libraryMusicDeepScanResults,
         },
         api,
         setWorkspaceTab: (...args) => setWorkspaceTab?.(...args),

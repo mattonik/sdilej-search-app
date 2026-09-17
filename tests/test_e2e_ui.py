@@ -726,7 +726,7 @@ def test_movie_discovery_opens_full_search_for_available_movie(tmp_path) -> None
         page.click('#movieDiscoveryForm button[type="submit"]')
         page.wait_for_selector(".movie-discovery-search")
         page.click(".movie-discovery-search")
-        page.wait_for_url("**/?query=The+Matrix&category=video&release_year=1999#search")
+        page.wait_for_url("**/?query=The+Matrix+1080p&category=video&language=EN&language_scope=audio&sort=size_asc&release_year=1999#search")
 
 
 @pytest.mark.e2e
@@ -760,7 +760,7 @@ def test_movie_discovery_offers_full_search_for_unavailable_movie(tmp_path) -> N
         page.wait_for_selector(".movie-discovery-search")
         assert "Not found" in (page.locator(".movie-discovery-card").text_content() or "")
         page.click(".movie-discovery-search")
-        page.wait_for_url("**/?query=Unknown+Film&category=video&release_year=2024#search")
+        page.wait_for_url("**/?query=Unknown+Film+1080p&category=video&language=EN&language_scope=audio&sort=size_asc&release_year=2024#search")
 
 
 @pytest.mark.e2e
@@ -980,6 +980,45 @@ def test_library_missing_tv_scan_and_search_missing_flow(tmp_path) -> None:
         page.wait_for_function("document.querySelector('#tvShowName')?.value === 'Bluey'")
         page.wait_for_selector('.tv-season-select[data-season-number="1"] input.tv-episode-check[value="2"]:checked')
         assert page.locator("#tvSearchBtn").is_enabled()
+
+
+@pytest.mark.e2e
+def test_library_folder_scan_deep_scan_and_missing_search(tmp_path) -> None:
+    app = _build_tv_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="library"]')
+        page.select_option("#libraryFolderKind", "kids")
+        page.click("#libraryFoldersScanBtn")
+        page.wait_for_selector('.library-folder-card[data-folder-name="Bluey"]')
+        page.click('.library-deep-scan[data-folder-name="Bluey"]')
+        page.wait_for_selector(".library-deep-scan-card")
+        assert "S01E01" in (page.locator("#libraryDeepScanResults").text_content() or "")
+        page.click(".library-search-folder")
+        page.wait_for_selector(".library-summary-card")
+        assert "Bluey.S01E01.mkv" in (page.locator("#libraryTvMissingResults").text_content() or "")
+
+
+@pytest.mark.e2e
+def test_library_music_scan_deep_scan_and_search(tmp_path) -> None:
+    app = _build_tv_search_app(tmp_path)
+    album = tmp_path / "media" / "music" / "Daft Punk" / "Discovery"
+    album.mkdir(parents=True)
+    (album / "01 One More Time.flac").write_bytes(b"audio")
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="library"]')
+        page.click("#libraryMusicFoldersScanBtn")
+        page.wait_for_selector('.library-music-artist[data-artist-name="Daft Punk"]')
+        page.click('.library-music-album[data-album-name="Discovery"]')
+        page.wait_for_selector(".library-music-file-list")
+        assert "01 One More Time.flac" in (page.locator("#libraryMusicDeepScanResults").text_content() or "")
+        page.click(".library-search-music")
+        page.wait_for_url("**/?query=Daft+Punk+Discovery&category=audio#search")
 
 
 @pytest.mark.e2e
