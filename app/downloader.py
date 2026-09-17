@@ -545,15 +545,28 @@ class DownloadWorker:
                 value = unquote(encoded) if encoded else plain
                 if value:
                     raw_filename = self._sanitize_filename(value)
+                    raw_filename = self._restore_media_extension(raw_filename, fallback_url)
                     return self._normalize_tv_filename(raw_filename, fallback_title=fallback_title, job=job)
 
         if fallback_title:
             raw_filename = self._sanitize_filename(fallback_title)
+            raw_filename = self._restore_media_extension(raw_filename, fallback_url)
             return self._normalize_tv_filename(raw_filename, fallback_title=fallback_title, job=job)
 
         path_name = Path(urlparse(fallback_url).path).name or "download.bin"
         raw_filename = self._sanitize_filename(path_name)
         return self._normalize_tv_filename(raw_filename, fallback_title=fallback_title, job=job)
+
+    def _restore_media_extension(self, filename: str, fallback_url: str) -> str:
+        """Keep Sdilej fallback downloads from becoming extensionless or .bin files."""
+        url_suffix = Path(urlparse(fallback_url).path).suffix.lower()
+        if not re.fullmatch(r"\.[a-z0-9]{1,8}", url_suffix) or url_suffix == ".bin":
+            return filename
+
+        current_suffix = Path(filename).suffix.lower()
+        if not current_suffix or current_suffix == ".bin":
+            return f"{Path(filename).stem}{url_suffix}"
+        return filename
 
     def _resolve_youtube_filename_stem(self, job: dict) -> str:
         raw_title = str(job.get("title") or "youtube-download")
