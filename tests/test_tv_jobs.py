@@ -341,8 +341,16 @@ def test_manual_tv_episode_search_works_for_reacher(app_factory) -> None:
     payload = response.json()
     assert payload["episode"]["status"] == "done"
     assert payload["episode"]["result_count"] == 1
-    assert payload["episode"]["query_variants"] == ["Reacher S01E01"]
-    assert fake_client.calls == ["Reacher S01E01"]
+    assert payload["episode"]["query_variants"] == [
+        "Reacher S01E01",
+        "Reacher 1x01",
+        "Reacher 1x1",
+    ]
+    assert fake_client.calls == [
+        "Reacher S01E01",
+        "Reacher 1x01",
+        "Reacher 1x1",
+    ]
 
 
 def test_tv_search_job_worker_processes_and_finalizes_job(app_factory, storage) -> None:
@@ -455,7 +463,11 @@ def test_tv_search_job_marks_downloaded_episodes_complete_before_worker_runs(app
     assert job is not None
     assert job["status"] == "done"
     assert job["completed_episodes"] == 2
-    assert worker_search_factory.instances[0].calls == ["Shaun the Sheep S01E02"]
+    assert worker_search_factory.instances[0].calls == [
+        "Shaun the Sheep S01E02",
+        "Shaun the Sheep 1x02",
+        "Shaun the Sheep 1x2",
+    ]
 
 
 def test_tv_search_job_partial_progress_is_visible(app_factory, storage) -> None:
@@ -708,7 +720,7 @@ def test_sync_tv_search_prefers_exact_show_results_over_generic_blue_titles(app_
     assert response.status_code == 200
     payload = response.json()
     assert payload["search_aliases"] == ["Bluey"]
-    assert fake_client.calls == ["Bluey S01E01"]
+    assert fake_client.calls == ["Bluey S01E01", "Bluey 1x01", "Bluey 1x1"]
     results = payload["seasons"][0]["episodes"][0]["results"]
     assert [item["title"] for item in results] == [
         "Bluey S01E01 Magic Xylophone",
@@ -783,7 +795,7 @@ def test_background_tv_search_job_uses_same_tv_ranking_rules(app_factory, storag
     assert job is not None
     assert job["status"] == "done"
     assert job["search_aliases"] == ["Bluey"]
-    assert search_factory.instances[0].calls == ["Bluey S01E01"]
+    assert search_factory.instances[0].calls == ["Bluey S01E01", "Bluey 1x01", "Bluey 1x1"]
     results = job["seasons"][0]["episodes"][0]["results"]
     assert [item["title"] for item in results] == [
         "Bluey S01E01 Magic Xylophone",
@@ -837,7 +849,11 @@ def test_sync_tv_search_probes_aliases_once_and_narrows_episode_queries(app_fact
         "Ovecka Shaun",
         "Vesela farma",
         "Shaun the Sheep S01E01",
+        "Shaun the Sheep 1x01",
+        "Shaun the Sheep 1x1",
         "Vesela farma S01E01",
+        "Vesela farma 1x01",
+        "Vesela farma 1x1",
     ]
     assert payload["seasons"][0]["episodes"][0]["result_count"] == 2
 
@@ -891,10 +907,14 @@ def test_manual_tv_episode_search_can_use_all_safe_aliases(app_factory) -> None:
     assert payload["episode"]["result_count"] == 2
     assert fake_client.calls == [
         "Shaun the Sheep S01E01",
+        "Shaun the Sheep 1x01",
+        "Shaun the Sheep 1x1",
         "Ovecka Shaun S01E01",
         "Ovecka Shaun 1x01",
         "Ovecka Shaun 1x1",
         "Vesela farma S01E01",
+        "Vesela farma 1x01",
+        "Vesela farma 1x1",
     ]
 
 
