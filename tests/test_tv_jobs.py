@@ -115,11 +115,66 @@ def test_tv_lookup_returns_candidates_and_loads_the_selected_show(app_factory) -
         selected = client.post("/api/tv/lookup", json={"show_name": "The Equalizer", "show_id": reboot.id})
 
     assert first.status_code == 200
-    assert first.json()["show"]["id"] == classic.id
-    assert [item["id"] for item in first.json()["show_matches"]] == [classic.id, reboot.id]
+    assert first.json()["show"]["id"] == reboot.id
+    assert [item["id"] for item in first.json()["show_matches"]] == [reboot.id, classic.id]
     assert selected.status_code == 200
     assert selected.json()["show"]["id"] == reboot.id
     assert selected.json()["seasons"][0]["episodes"][0]["name"] == "The Reboot"
+
+
+def test_tv_lookup_uses_localized_titles_to_find_tvmaze_candidates(app_factory) -> None:
+    localized = TvShowSummary(
+        id=101,
+        name="Nemocnica: Nova smena",
+        premiered="2024-01-01",
+        language="Slovak",
+    )
+    original = TvShowSummary(
+        id=202,
+        name="Hospital Playlist",
+        premiered="2021-06-17",
+        language="Korean",
+    )
+
+    class LocalizedTvClient(FakeTvMazeClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.queries: list[str] = []
+
+        def search_shows(self, show_name: str) -> list[TvShowSummary]:
+            self.queries.append(show_name)
+            if show_name == "Nemocnica":
+                return [localized]
+            if show_name == "Hospital Playlist":
+                return [original]
+            return []
+
+        def get_episodes(self, show_id: int) -> list[TvEpisode]:
+            return [TvEpisode(id=show_id, season=1, number=1, name="Pilot", airdate="2021-06-17")]
+
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Nemocnica",
+        original_title="Hospital Playlist",
+        local_titles=["Nemocnica"],
+        aliases=["Nemocnica", "Hospital Playlist"],
+        year=2021,
+        source="czdb",
+        source_ids={"csfd": 1},
+    )
+    tv_client = LocalizedTvClient()
+    app = app_factory(
+        tv_client_instance=tv_client,
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/api/tv/lookup", json={"show_name": "Nemocnica"})
+
+    assert response.status_code == 200
+    assert tv_client.queries == ["Nemocnica", "Hospital Playlist"]
+    assert [item["id"] for item in response.json()["show_matches"]] == [original.id, localized.id]
+    assert response.json()["show"]["id"] == original.id
 
 
 def test_sync_tv_search_marks_existing_episode_as_downloaded_and_skips_episode_queries(app_factory, media_root) -> None:

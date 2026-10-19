@@ -711,11 +711,12 @@ def _build_tv_lookup_payload(
     show_id: int | None = None,
     services: ServiceContainer,
 ) -> tuple[dict, list[dict], dict, list[dict]]:
-    search_shows = getattr(services.tv_client, "search_shows", None)
-    if callable(search_shows):
-        matches = list(search_shows(show_name))
-    else:
-        matches = [services.tv_client.lookup_show(show_name)]
+    lookup_metadata = services.metadata_resolver.resolve_tv(show_name)
+    matches = _search_tv_show_matches(
+        show_name,
+        title_metadata=lookup_metadata,
+        services=services,
+    )
     if show_id is None:
         show = matches[0]
     else:
@@ -733,6 +734,97 @@ def _build_tv_lookup_payload(
         year=parse_year(show.premiered),
     )
     return show.to_dict(), seasons, title_metadata.to_dict(), [item.to_dict() for item in matches]
+
+
+def _search_tv_show_matches(
+    show_name: str,
+    *,
+    title_metadata: TitleMetadata,
+    services: ServiceContainer,
+) -> list[TvShowSummary]:
+    search_shows = getattr(services.tv_client, "search_shows", None)
+    if not callable(search_shows):
+        return [services.tv_client.lookup_show(show_name)]
+
+    queries = _tv_lookup_queries(show_name, title_metadata)
+    matches_by_id: dict[int, tuple[TvShowSummary, int, int]] = {}
+    last_error: TvMazeClientError | None = None
+    for query_index, query in enumerate(queries):
+        try:
+            found = list(search_shows(query))
+        except TvMazeClientError as exc:
+            last_error = exc
+            continue
+        for result_index, show in enumerate(found):
+            current = matches_by_id.get(show.id)
+            candidate = (show, query_index, result_index)
+            if current is None or (query_index, result_index) < (current[1], current[2]):
+                matches_by_id[show.id] = candidate
+
+    if not matches_by_id:
+        if last_error is not None:
+            raise last_error
+        raise TvMazeClientError(f"No TV show found for '{show_name}'.")
+
+    target_year = title_metadata.year
+    return [
+        item[0]
+        for item in sorted(
+            matches_by_id.values(),
+            key=lambda item: _tv_show_candidate_sort_key(
+                item[0],
+                queries=queries,
+                target_year=target_year,
+                query_index=item[1],
+                result_index=item[2],
+            ),
+            reverse=True,
+        )
+    ][:8]
+
+
+def _tv_lookup_queries(show_name: str, title_metadata: TitleMetadata) -> list[str]:
+    values = [
+        show_name,
+        title_metadata.canonical_title,
+        title_metadata.original_title,
+        *title_metadata.local_titles,
+        *title_metadata.aliases,
+    ]
+    queries: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        key = normalize_alias_key(text)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        queries.append(text)
+        if len(queries) == 6:
+            break
+    return queries or [show_name]
+
+
+def _tv_show_candidate_sort_key(
+    show: TvShowSummary,
+    *,
+    queries: list[str],
+    target_year: int | None,
+    query_index: int,
+    result_index: int,
+) -> tuple[int, int, int, int]:
+    show_key = normalize_alias_key(show.name)
+    title_score = 0
+    for query in queries:
+        query_key = normalize_alias_key(query)
+        if show_key == query_key:
+            title_score = max(title_score, 3)
+        elif show_key.startswith(f"{query_key} "):
+            title_score = max(title_score, 2)
+        elif query_key and query_key in show_key:
+            title_score = max(title_score, 1)
+    year_score = int(target_year is not None and parse_year(show.premiered) == target_year)
+    return title_score, year_score, -query_index, -result_index
 
 
 def _resolve_tv_search_alias_context(
