@@ -250,6 +250,8 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       })();
 
       let setWorkspaceTab = null;
+      let activeWorkspaceTab = initialTab;
+      let workspaceTabsReady = false;
       let tvApi = null;
 
       let downloadsApi = null;
@@ -564,11 +566,16 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         tabSections,
         initialTab,
         onTabChange: (resolved) => {
+          activeWorkspaceTab = resolved;
           window.location.hash = resolved;
           writeActiveWorkspaceTab(resolved);
+          if (workspaceTabsReady && resolved === "downloads") {
+            refreshDownloads({ notifyOnFailure: true, background: true });
+          }
         },
       });
       setWorkspaceTab = workspaceTabsApi.setActiveTab;
+      workspaceTabsReady = true;
       setSearchMode(initialMode);
       setFileResultsView(state.fileResultsView);
       setFileResultsFilter(state.fileResultsFilter);
@@ -581,14 +588,22 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       if (activeTvSearchJobId) {
         refreshActiveTvSearchJob({ force: true });
       }
+      const shouldPollDownloads = () =>
+        document.visibilityState === "visible" &&
+        (activeWorkspaceTab === "downloads" || downloadsApi?.hasActiveDownloads?.());
       setInterval(() => {
-        refreshDownloads({ notifyOnFailure: true, background: true });
+        if (shouldPollDownloads()) {
+          refreshDownloads({ notifyOnFailure: true, background: true });
+        }
       }, 2500);
       setInterval(() => {
         refreshActiveTvSearchJob();
       }, 2500);
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
+          if (shouldPollDownloads()) {
+            refreshDownloads({ notifyOnFailure: true, background: true });
+          }
           refreshActiveTvSearchJob({ force: true });
         }
       });

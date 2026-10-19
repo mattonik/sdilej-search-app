@@ -78,6 +78,7 @@ export const initDownloads = ({
   let queueRefreshWarningVisible = false;
   let nextBackgroundRefreshAt = 0;
   let lastSuccessfulRefreshAt = 0;
+  let hasActiveDownloads = false;
   let destinationPreviewSeq = 0;
   let downloadTvSuggestionsSeq = 0;
 
@@ -439,6 +440,7 @@ export const initDownloads = ({
       nextBackgroundRefreshAt = 0;
       lastSuccessfulRefreshAt = Date.now();
       const summary = data.summary || {};
+      hasActiveDownloads = Number(summary.queued || 0) + Number(summary.running || 0) > 0;
       refreshPhase = "summary";
       downloadWorkerState.textContent = data.worker_alive ? "Worker: online" : "Worker: offline";
       downloadSummary.textContent = `Queue: ${summary.queued || 0} queued, ${summary.running || 0} running, ${summary.done || 0} done, ${summary.failed || 0} failed, ${summary.canceled || 0} canceled · Updated ${formatRefreshTime(lastSuccessfulRefreshAt)}`;
@@ -982,6 +984,7 @@ export const initDownloads = ({
     refreshDownloadSettings,
     refreshAccountStatus,
     refreshYoutubeAuthStatus,
+    hasActiveDownloads: () => hasActiveDownloads,
     enqueueDownload,
     setAccountStatus,
   };

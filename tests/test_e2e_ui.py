@@ -282,7 +282,7 @@ def launch_browser():
             browser.close()
 
 
-def _build_file_search_app(tmp_path: Path):
+def _build_file_search_app(tmp_path: Path, *, with_active_download: bool = True):
     media_root = tmp_path / "media"
     os.environ["DOWNLOAD_DIR"] = str(media_root)
     (media_root / "tv" / "Reacher").mkdir(parents=True, exist_ok=True)
@@ -310,19 +310,20 @@ def _build_file_search_app(tmp_path: Path):
         classification_confidence="manual",
         notes=None,
     )
-    storage.enqueue_download_job(
-        detail_url="https://sdilej.cz/102/bluey-s01e02",
-        file_id=102,
-        title="Bluey S01E02",
-        preferred_mode="premium",
-        output_dir="/downloads",
-        priority=0,
-        media_kind="tv",
-        is_kids=True,
-        series_name="Bluey",
-        season_number=1,
-        episode_number=2,
-    )
+    if with_active_download:
+        storage.enqueue_download_job(
+            detail_url="https://sdilej.cz/102/bluey-s01e02",
+            file_id=102,
+            title="Bluey S01E02",
+            preferred_mode="premium",
+            output_dir="/downloads",
+            priority=0,
+            media_kind="tv",
+            is_kids=True,
+            series_name="Bluey",
+            season_number=1,
+            episode_number=2,
+        )
     metadata = TitleMetadata(
         kind="movie",
         canonical_title="Bluey",
@@ -934,6 +935,31 @@ def test_download_queue_refresh_error_exposes_diagnostic_details(tmp_path) -> No
         assert "phase" in status_text
         assert "backend error" in status_text
         assert page.locator("#downloadStatus .status-copy-btn").count() == 1
+
+
+@pytest.mark.e2e
+def test_queue_polling_pauses_outside_downloads_and_resumes_on_open(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path, with_active_download=False)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        refresh_requests: list[str] = []
+
+        def track_queue_refresh(request) -> None:
+            if request.method == "GET" and "/api/downloads?limit=" in request.url:
+                refresh_requests.append(request.url)
+
+        page.on("request", track_queue_refresh)
+        page.goto(base_url, wait_until="networkidle")
+        initial_count = len(refresh_requests)
+        assert initial_count >= 1
+
+        page.wait_for_timeout(2800)
+        assert len(refresh_requests) == initial_count
+
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.wait_for_timeout(2800)
+        assert len(refresh_requests) > initial_count
 
 
 @pytest.mark.e2e
