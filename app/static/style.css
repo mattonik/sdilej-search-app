@@ -1472,6 +1472,11 @@ textarea {
   flex-wrap: wrap;
 }
 
+.search-warning {
+  color: #92400e;
+  font-size: 0.9rem;
+}
+
 .file-results-filter-chips {
   display: flex;
   flex-wrap: wrap;

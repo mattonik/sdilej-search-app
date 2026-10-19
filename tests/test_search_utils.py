@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from app.models import TitleMetadata
 from app.search_utils import (
+    aggregate_query_results,
     build_episode_query_variants,
     build_tv_episode_result_scorer,
     build_tv_search_aliases,
     select_effective_tv_search_aliases,
+    search_tv_episode_results,
 )
 from tests.conftest import FakeSdilejClient, build_search_result
 
@@ -118,3 +120,53 @@ def test_select_effective_tv_search_aliases_prefers_aliases_with_probe_hits() ->
     )
 
     assert aliases == ["Shaun the Sheep", "Vesela farma"]
+
+
+def test_aggregate_query_results_respects_size_sort_after_alias_merge() -> None:
+    client = FakeSdilejClient(
+        responses_by_query={
+            "primary": [build_search_result(file_id=1, title="Primary large", size="2 GB")],
+            "alias": [build_search_result(file_id=2, title="Alias small", size="500 MB")],
+        }
+    )
+
+    result = aggregate_query_results(
+        client=client,
+        queries=["primary", "alias"],
+        category="video",
+        sort="size_asc",
+        language=None,
+        language_scope="any",
+        strict_dubbing=False,
+        release_year=None,
+        max_results_per_query=10,
+    )
+
+    assert [item["file_id"] for item in result["items"]] == [2, 1]
+
+
+def test_tv_episode_search_checks_all_episode_notations() -> None:
+    client = FakeSdilejClient(
+        responses_by_query={
+            "Reacher S01E01": [build_search_result(file_id=1, title="Reacher S01E01", size="2 GB")],
+            "Reacher 1x01": [build_search_result(file_id=2, title="Reacher 1x01", size="500 MB")],
+        }
+    )
+    scorer = build_tv_episode_result_scorer(show_aliases=["Reacher"], season=1, episode=1)
+
+    result = search_tv_episode_results(
+        client=client,
+        show_aliases=["Reacher"],
+        season=1,
+        episode=1,
+        category="video",
+        language=None,
+        language_scope="any",
+        strict_dubbing=False,
+        release_year=None,
+        max_results_per_query=10,
+        result_scorer=scorer,
+    )
+
+    assert [item["file_id"] for item in result["items"]] == [1, 2]
+    assert client.calls == ["Reacher S01E01", "Reacher 1x01", "Reacher 1x1"]

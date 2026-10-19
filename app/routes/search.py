@@ -23,6 +23,7 @@ from ..main import (
     _search_files,
 )
 from ..sdilej_client import SdilejClientError
+from ..search_utils import SearchUpstreamError
 
 router = APIRouter()
 
@@ -128,6 +129,8 @@ def api_search(
         )
         services.storage.record_search(result)
         return JSONResponse(result.to_dict())
+    except SearchUpstreamError as exc:
+        return JSONResponse(status_code=502, content={"error": str(exc), "error_code": "search_upstream_failed"})
     except SdilejClientError as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})
     except Exception as exc:  # noqa: BLE001

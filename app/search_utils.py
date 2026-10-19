@@ -12,6 +12,10 @@ MAX_EFFECTIVE_TV_SEARCH_ALIASES = 2
 TV_ALIAS_PROBE_RESULTS = 12
 
 
+class SearchUpstreamError(RuntimeError):
+    pass
+
+
 def parse_size_to_bytes(size_text: str | None) -> int:
     if not size_text:
         return 0
@@ -305,14 +309,30 @@ def aggregate_query_results(
             current_hits.add(query)
             current["query_hits"] = sorted(current_hits)
 
-    sorted_items = sorted(
-        aggregated.values(),
-        key=lambda item: (
+    if sort == "size_asc":
+        sort_key = lambda item: (
+            int(item.get("size_bytes") or 0),
+            -int(item.get("language_priority") or 0),
+            int(item.get("query_priority") or 0),
+            str(item.get("title") or "").lower(),
+        )
+    elif sort == "size_desc":
+        sort_key = lambda item: (
+            -int(item.get("size_bytes") or 0),
+            -int(item.get("language_priority") or 0),
+            int(item.get("query_priority") or 0),
+            str(item.get("title") or "").lower(),
+        )
+    else:
+        sort_key = lambda item: (
             int(item.get("query_priority") or 0),
             -int(item.get("language_priority") or 0),
             -int(item.get("size_bytes") or 0),
             str(item.get("title") or "").lower(),
-        ),
+        )
+    sorted_items = sorted(
+        aggregated.values(),
+        key=sort_key,
     )
     if max_results_total is not None:
         sorted_items = sorted_items[:max_results_total]
@@ -358,7 +378,6 @@ def search_tv_episode_results(
     first_response_meta: dict[str, Any] | None = None
 
     for alias in alias_queries:
-        alias_found_results = False
         for query in build_episode_query_variants([alias], season, episode):
             expanded_queries.append(query)
             try:
@@ -383,7 +402,6 @@ def search_tv_episode_results(
                     "search_url": search_response.search_url,
                 }
 
-            query_added_any = False
             for result in search_response.results:
                 title_match_score = result_scorer(result, query) if result_scorer is not None else 0
                 if result_scorer is not None and title_match_score is None:
@@ -416,15 +434,6 @@ def search_tv_episode_results(
                     current_hits = set(current.get("query_hits") or [])
                     current_hits.add(query)
                     current["query_hits"] = sorted(current_hits)
-                query_added_any = True
-
-            if query_added_any:
-                alias_found_results = True
-                break
-
-        if alias_found_results:
-            continue
-
     sorted_items = sorted(
         aggregated.values(),
         key=lambda item: (

@@ -696,6 +696,9 @@
               <span><strong>Sort:</strong> {{ sort }}</span>
             </div>
           </div>
+          {% if search.query_errors %}
+            <div class="search-warning" role="status">Some title variants could not be searched. Results shown may be incomplete.</div>
+          {% endif %}
           <details class="file-results-debug">
             <summary>Search details</summary>
             <div><strong>Effective query:</strong> <code>{{ search.effective_query }}</code></div>
@@ -707,6 +710,9 @@
             <div><strong>Parsed results:</strong> {{ search.result_count }} / {{ search.unfiltered_result_count }}</div>
             {% if search.expanded_queries %}
               <div><strong>Expanded queries:</strong> {{ search.expanded_queries | join(" | ") }}</div>
+            {% endif %}
+            {% if search.query_errors %}
+              <div><strong>Failed queries:</strong> {{ search.query_errors | join(" | ") }}</div>
             {% endif %}
             {% if search.title_metadata %}
               <div><strong>Resolved title:</strong> {{ search.title_metadata.canonical_title }}{% if search.title_metadata.original_title %} / {{ search.title_metadata.original_title }}{% endif %}</div>

@@ -450,6 +450,40 @@ def test_non_video_search_keeps_single_query(app_factory, sample_movie_metadata)
     assert fake_client.calls == ["podcast"]
 
 
+def test_search_returns_gateway_error_when_all_upstream_queries_fail(app_factory, sample_movie_metadata) -> None:
+    app = app_factory(
+        client_instance=FailingSearchClient(),
+        metadata_resolver_instance=StaticMetadataResolver(sample_movie_metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/search", params={"query": "Shaun the Sheep", "category": "video"})
+
+    assert response.status_code == 502
+    assert response.json()["error_code"] == "search_upstream_failed"
+
+
+def test_search_exposes_partial_alias_failures(app_factory, sample_movie_metadata) -> None:
+    class PartiallyFailingClient(FakeSdilejClient):
+        def search(self, query, **kwargs):  # noqa: ANN001
+            if query == "Ovecka Shaun":
+                raise SdilejClientError("temporary upstream failure")
+            return super().search(query, **kwargs)
+
+    app = app_factory(
+        client_instance=PartiallyFailingClient(
+            responses_by_query={"Shaun the Sheep": [build_search_result(file_id=1, title="Shaun the Sheep", size="700 MB")]}
+        ),
+        metadata_resolver_instance=StaticMetadataResolver(sample_movie_metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/search", params={"query": "Shaun the Sheep", "category": "video"})
+
+    assert response.status_code == 200
+    assert response.json()["query_errors"] == ["Ovecka Shaun: temporary upstream failure"]
+
+
 def test_movie_search_page_renders_info_buttons(app_factory, sample_movie_metadata) -> None:
     fake_client = FakeSdilejClient(
         responses_by_query={

@@ -24,6 +24,7 @@ from .media_routing import (
 from .models import Category, LanguageScope, SearchResponse, SortMode, TitleMetadata
 from .sdilej_client import BASE_URL, SdilejClient, SdilejClientError
 from .search_utils import (
+    SearchUpstreamError,
     aggregate_query_results,
     build_episode_query_variants,
     build_tv_episode_result_scorer,
@@ -693,6 +694,8 @@ def _search_files(
         max_results_per_query=max_results,
         max_results_total=max_results,
     )
+    if aggregated["expanded_queries"] and len(aggregated["query_errors"]) == len(aggregated["expanded_queries"]):
+        raise SearchUpstreamError("All Sdilej search queries failed. Try again shortly.")
     return SearchResponse(
         query=normalized_query,
         effective_query=aggregated["effective_query"] or normalized_query,
@@ -708,6 +711,7 @@ def _search_files(
         result_count=len(aggregated["items"]),
         results=[strip_internal_result_fields(item) for item in aggregated["items"]],
         expanded_queries=aggregated["expanded_queries"],
+        query_errors=aggregated["query_errors"],
         title_metadata=title_metadata,
     )
 

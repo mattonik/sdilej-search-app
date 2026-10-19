@@ -63,6 +63,7 @@ class SearchResponse:
     result_count: int
     results: list[SearchResult]
     expanded_queries: list[str] = field(default_factory=list)
+    query_errors: list[str] = field(default_factory=list)
     title_metadata: TitleMetadata | None = None
 
     def to_dict(self) -> dict:
