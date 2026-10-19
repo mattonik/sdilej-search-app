@@ -31,7 +31,13 @@ primary navigation because it is an infrequent, advanced workflow.
 
 Verification: browser E2E navigation/account coverage and mocked suite.
 
-Result: pending.
+Result: completed in `e7eec62` on 2026-10-19.
+
+Verification:
+
+- Focused browser coverage: 2 passed.
+- Mocked suite: 110 passed, 1 skipped, 3 deselected.
+- Legacy `#account` navigation resolves to Settings.
 
 ### 2. One Download Composer
 
