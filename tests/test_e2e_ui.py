@@ -527,12 +527,36 @@ def test_mobile_navigation_and_search_mode_tabs_stay_compact(tmp_path) -> None:
 
         nav_box = page.locator(".workspace-tabs").bounding_box()
         assert nav_box and nav_box["height"] < 70
+        for button_id in ["fileSearchModeBtn", "tvSearchModeBtn", "musicSearchModeBtn", "discoverySearchModeBtn", "kidsSearchModeBtn"]:
+            box = page.locator(f"#{button_id}").bounding_box()
+            assert box and box["x"] >= 0 and box["x"] + box["width"] <= 390
         assert page.locator("#fileSearchModeBtn").get_attribute("role") == "tab"
         assert page.locator("#fileSearchModeBtn").get_attribute("aria-selected") == "true"
 
         page.click("#tvSearchModeBtn")
         assert page.locator("#tvSearchModeBtn").get_attribute("aria-selected") == "true"
         assert page.locator("#tvModePanel").get_attribute("role") == "tabpanel"
+
+
+@pytest.mark.e2e
+def test_library_modes_make_tv_kids_and_music_workflows_explicit(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="library"]')
+        page.wait_for_selector("#libraryTvPanel:not(.hidden)")
+        assert page.locator("#libraryFolderKind").input_value() == "tv"
+
+        page.click("#libraryKidsModeBtn")
+        assert page.locator("#libraryKidsModeBtn").get_attribute("aria-selected") == "true"
+        assert page.locator("#libraryFolderKind").input_value() == "kids"
+        assert "Kids TV" in (page.locator("#libraryFolderHeading").text_content() or "")
+
+        page.click("#libraryMusicModeBtn")
+        page.wait_for_selector("#libraryMusicPanel:not(.hidden)")
+        assert page.locator("#libraryTvPanel").is_hidden()
 
 
 @pytest.mark.e2e

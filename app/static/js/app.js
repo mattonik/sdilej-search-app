@@ -108,6 +108,13 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const libraryTvShowName = document.getElementById("libraryTvShowName");
       const libraryStatus = document.getElementById("libraryStatus");
       const libraryTvMissingResults = document.getElementById("libraryTvMissingResults");
+      const libraryTvModeBtn = document.getElementById("libraryTvModeBtn");
+      const libraryKidsModeBtn = document.getElementById("libraryKidsModeBtn");
+      const libraryMusicModeBtn = document.getElementById("libraryMusicModeBtn");
+      const libraryTvPanel = document.getElementById("libraryTvPanel");
+      const libraryMusicPanel = document.getElementById("libraryMusicPanel");
+      const libraryFolderHeading = document.getElementById("libraryFolderHeading");
+      const libraryFolderHint = document.getElementById("libraryFolderHint");
       const libraryFolderKind = document.getElementById("libraryFolderKind");
       const libraryFoldersScanBtn = document.getElementById("libraryFoldersScanBtn");
       const libraryFolderResults = document.getElementById("libraryFolderResults");
@@ -382,6 +389,13 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           libraryTvShowName,
           libraryStatus,
           libraryTvMissingResults,
+          libraryTvModeBtn,
+          libraryKidsModeBtn,
+          libraryMusicModeBtn,
+          libraryTvPanel,
+          libraryMusicPanel,
+          libraryFolderHeading,
+          libraryFolderHint,
           libraryFolderKind,
           libraryFoldersScanBtn,
           libraryFolderResults,

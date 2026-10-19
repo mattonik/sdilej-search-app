@@ -295,19 +295,20 @@
           </div>
         </div>
 
+        <div class="library-mode-switch" role="tablist" aria-label="Library type">
+          <button id="libraryTvModeBtn" type="button" role="tab" aria-selected="true" class="btn btn-pill active" data-library-mode="tv">TV</button>
+          <button id="libraryKidsModeBtn" type="button" role="tab" aria-selected="false" class="btn btn-pill" data-library-mode="kids">Kids TV</button>
+          <button id="libraryMusicModeBtn" type="button" role="tab" aria-selected="false" class="btn btn-pill" data-library-mode="music">Music</button>
+        </div>
+
+        <div id="libraryTvPanel" class="library-mode-panel">
         <section class="library-folder-tools" aria-labelledby="libraryFolderHeading">
           <div class="library-section-heading">
             <h3 id="libraryFolderHeading">Folders</h3>
-            <p>Start here when you do not remember the exact show name.</p>
+            <p id="libraryFolderHint">Start here when you do not remember the exact show name.</p>
           </div>
           <div class="library-folder-actions">
-            <label>
-              Library
-              <select id="libraryFolderKind">
-                <option value="tv">TV shows</option>
-                <option value="kids">Kids TV</option>
-              </select>
-            </label>
+            <select id="libraryFolderKind" class="hidden" aria-hidden="true"><option value="tv" selected>TV shows</option><option value="kids">Kids TV</option></select>
             <button type="button" id="libraryFoldersScanBtn" class="btn btn-secondary">Scan folders</button>
           </div>
           <div id="libraryFolderResults" class="library-folder-results"></div>
@@ -324,8 +325,9 @@
 
         <div id="libraryStatus" class="download-status" aria-live="polite" aria-atomic="true">Library scan idle.</div>
         <div id="libraryTvMissingResults" class="library-results"></div>
+        </div>
 
-        <section class="library-folder-tools music-library-tools" aria-labelledby="libraryMusicHeading">
+        <section id="libraryMusicPanel" class="library-folder-tools music-library-tools library-mode-panel hidden" aria-labelledby="libraryMusicHeading">
           <div class="library-section-heading">
             <h3 id="libraryMusicHeading">Music folders</h3>
             <p>Inspect artists and albums, then search Sdilej using the local folder name.</p>
@@ -343,10 +345,9 @@
             <p id="searchModeHint" class="search-mode-hint">Search files and movies by title, language, year, and category.</p>
           </div>
           <div class="search-mode-switch" role="tablist" aria-label="Search mode">
-            <button id="fileSearchModeBtn" type="button" role="tab" aria-selected="true" aria-controls="fileSearchPanel" class="btn btn-pill active" data-search-mode="file">Movies / Files</button>
+            <button id="fileSearchModeBtn" type="button" role="tab" aria-selected="true" aria-controls="fileSearchPanel" class="btn btn-pill active" data-search-mode="file">Files</button>
             <button id="tvSearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="tvModePanel" class="btn btn-pill" data-search-mode="tv">TV Shows</button>
             <button id="musicSearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="musicSearchPanel" class="btn btn-pill" data-search-mode="music">Music</button>
-            <button id="discoverySearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="movieDiscoveryPanel" class="btn btn-pill" data-search-mode="discovery">Discover</button>
             <button id="kidsSearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="kidsCatalogPanel" class="btn btn-pill" data-search-mode="kids">Kids</button>
           </div>
         </div>
@@ -424,6 +425,10 @@
         </div>
 
         <div id="fileSearchPanel" role="tabpanel" class="search-mode-panel">
+          <div class="file-search-discovery">
+            <span>Not sure what to watch?</span>
+            <button id="discoverySearchModeBtn" type="button" class="btn btn-secondary btn-sm" data-search-mode="discovery">Browse film lists</button>
+          </div>
           <form method="get" action="/" class="search-form" id="fileSearchForm">
             <div class="file-search-quick">
               <label class="file-search-query">

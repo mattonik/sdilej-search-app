@@ -938,6 +938,20 @@ textarea {
   color: var(--muted);
 }
 
+.library-mode-switch {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #f4f7fa;
+}
+
+.library-mode-switch .btn {
+  flex: 1;
+}
+
 .library-folder-tools {
   margin-top: 1rem;
   border: 1px solid var(--border);
@@ -1338,6 +1352,16 @@ textarea {
 .search-mode-switch button.active {
   background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
   color: #fff;
+}
+
+.file-search-discovery {
+  margin: 0 0 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .search-mode-panel {
@@ -3184,23 +3208,25 @@ textarea {
   }
 
   .search-mode-switch {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.4rem;
-    overflow-x: auto;
-    justify-content: flex-start;
-    padding-bottom: 0.2rem;
-    scrollbar-width: none;
+    padding: 0.3rem;
     width: 100%;
   }
 
-  .search-mode-switch::-webkit-scrollbar {
-    display: none;
-  }
-
   .search-mode-switch button {
-    flex: 0 0 auto;
     padding-inline: 0.45rem;
     font-size: 0.8rem;
+  }
+
+  .search-mode-switch button:last-child {
+    grid-column: auto;
+  }
+
+  .file-search-discovery {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .file-results-toolbar-head,
