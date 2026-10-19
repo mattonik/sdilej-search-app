@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from ..diagnostics import error_response
-from ..main import (
+from ..api_models import (
     AccountPayload,
     ClearDownloadsPayload,
     DownloadSettingsPayload,
@@ -19,11 +19,13 @@ from ..main import (
     UpdatePriorityPayload,
     YoutubeAuthPayload,
     YoutubeAuthTestPayload,
+)
+from ..main import (
     _build_media_plan,
     _extract_file_id,
-    _get_services,
     _normalize_detail_url,
 )
+from ..services import get_services as _get_services
 from ..sdilej_client import SdilejClient, SdilejClientError
 from ..kids_catalog import KidsCatalogError, VeseleRozpravkyClient
 from ..youtube_downloader import YoutubeDownloadError, YoutubeDownloader, validate_youtube_cookies

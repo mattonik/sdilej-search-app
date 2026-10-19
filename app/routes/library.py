@@ -11,11 +11,11 @@ from pydantic import BaseModel, Field
 from ..diagnostics import error_response
 from ..main import (
     _build_tv_lookup_payload,
-    _get_services,
     _list_downloaded_tv_episode_files,
     _resolve_library_root,
     _resolve_tv_show_local_context,
 )
+from ..services import get_services as _get_services
 from ..tvmaze_client import TvMazeClientError
 
 router = APIRouter()

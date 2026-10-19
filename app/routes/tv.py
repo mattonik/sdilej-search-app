@@ -4,14 +4,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from ..diagnostics import error_response
+from ..api_models import TvEpisodeSearchPayload, TvLookupPayload, TvSeasonSearchPayload
 from ..main import (
-    TvEpisodeSearchPayload,
-    TvLookupPayload,
-    TvSeasonSearchPayload,
     _annotate_downloaded_tv_search_items,
     _build_tv_lookup_payload,
     _coerce_title_metadata_payload,
-    _get_services,
     _resolve_tv_search_alias_context,
     _resolve_tv_search_alias_sets,
     _resolve_tv_show_local_context,
@@ -19,6 +16,7 @@ from ..main import (
     _search_single_tv_episode,
     _selected_tv_search_items,
 )
+from ..services import get_services as _get_services
 from ..sdilej_client import SdilejClientError
 from ..tvmaze_client import TvMazeClientError
 

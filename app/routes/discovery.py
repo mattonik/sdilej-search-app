@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from ..diagnostics import error_response
-from ..main import _get_services
+from ..services import get_services as _get_services
 from ..models import SearchResult
 from ..sdilej_client import SdilejClientError
 from ..tmdb_client import DiscoveryMode, TmdbClient, TmdbClientError
