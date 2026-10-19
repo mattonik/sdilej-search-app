@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import re
 import threading
 import time
@@ -15,6 +16,7 @@ DEFAULT_DOWNLOAD_DIR = "./downloads"
 DOWNLOAD_TIMEOUT_SECONDS = 120
 DOWNLOAD_CHUNK_SIZE = 1024 * 256
 MAX_WORKER_THREADS = 8
+logger = logging.getLogger(__name__)
 
 _FILENAME_RE = re.compile(r"filename\*=UTF-8''([^;]+)|filename=\"?([^\";]+)\"?")
 _CONTENT_RANGE_TOTAL_RE = re.compile(r"^bytes\s+\d+-\d+/(\d+)$", re.IGNORECASE)
@@ -87,12 +89,23 @@ class DownloadWorker:
                 self._stop_event.wait(self.poll_seconds)
                 continue
 
-            job = self.storage.claim_next_download_job()
-            if not job:
-                self._stop_event.wait(self.poll_seconds)
-                continue
-
-            self._process_job(job)
+            job = None
+            try:
+                job = self.storage.claim_next_download_job()
+                if job:
+                    self._process_job(job)
+                    continue
+            except Exception:
+                logger.exception("Download worker failed while processing job %s", job.get("id") if job else None)
+                if job:
+                    try:
+                        self.storage.fail_download_job(
+                            int(job["id"]), error="Download worker failed unexpectedly; retry the job.",
+                            final_url=None, status_code=None,
+                        )
+                    except Exception:
+                        logger.exception("Could not record download worker failure")
+            self._stop_event.wait(self.poll_seconds)
 
     def _process_job(self, job: dict) -> None:
         job_id = int(job["id"])
@@ -122,20 +135,12 @@ class DownloadWorker:
         client = SdilejClient(timeout_seconds=45)
         login_message = None
 
-        if credentials:
-            login_ok, login_msg = client.login(credentials[0], credentials[1])
-            login_message = login_msg
-            if not login_ok:
-                if preferred_mode == "premium":
-                    self.storage.fail_download_job(
-                        job_id,
-                        error=f"Premium login failed: {login_msg}",
-                        final_url=None,
-                        status_code=None,
-                    )
-                    return
-
         try:
+            if credentials:
+                login_ok, login_msg = client.login(credentials[0], credentials[1])
+                login_message = login_msg
+                if not login_ok and preferred_mode == "premium":
+                    raise SdilejClientError(f"Premium login failed: {login_msg}")
             probe = client.probe_detail(detail_url=detail_url, run_preflight=False)
             target_url = self._pick_download_url(preferred_mode, probe.download_fast_url, probe.download_slow_url)
             if not target_url:
@@ -151,6 +156,7 @@ class DownloadWorker:
             )
             status_code = response.status_code
             final_url = response.url
+            response.raise_for_status()
 
             if self._is_html_response(response):
                 response.close()
@@ -176,6 +182,7 @@ class DownloadWorker:
                     )
                     status_code = response.status_code
                     final_url = response.url
+                    response.raise_for_status()
 
             if self._is_html_response(response):
                 response.close()
@@ -235,6 +242,7 @@ class DownloadWorker:
                     )
                     status_code = response.status_code
                     final_url = response.url
+                    response.raise_for_status()
 
                     if self._is_html_response(response):
                         response.close()
@@ -268,6 +276,7 @@ class DownloadWorker:
                     )
                     status_code = response.status_code
                     final_url = response.url
+                    response.raise_for_status()
                     if self._is_html_response(response):
                         response.close()
                         raise SdilejClientError("Restart download request returned HTML instead of file data.")
@@ -286,7 +295,7 @@ class DownloadWorker:
 
                     if not chunk:
                         continue
-                    self._throttle(len(chunk))
+                    self._throttle(len(chunk), job_id=job_id)
                     handle.write(chunk)
                     bytes_downloaded += len(chunk)
 
@@ -343,6 +352,10 @@ class DownloadWorker:
                 final_url=locals().get("final_url"),
                 status_code=locals().get("status_code"),
             )
+        finally:
+            if "response" in locals():
+                response.close()
+            client.session.close()
 
     def _process_youtube_job(self, job: dict) -> None:
         job_id = int(job["id"])
@@ -474,15 +487,15 @@ class DownloadWorker:
     def _current_bandwidth_limit_bps(self) -> int:
         return int(self.bandwidth_limit_kbps * 1024)
 
-    def _throttle(self, byte_count: int) -> None:
-        if byte_count <= 0:
-            return
-        limit_bps = self._current_bandwidth_limit_bps()
-        if limit_bps <= 0:
-            return
-
-        while not self._stop_event.is_set():
+    def _throttle(self, byte_count: int, *, job_id: int | None = None) -> None:
+        remaining = float(byte_count)
+        while remaining > 0:
+            if self._stop_event.is_set() or (job_id is not None and self.storage.is_job_canceled(job_id)):
+                raise DownloadCanceledError("Job canceled. Partial file kept for resume.")
             with self._throttle_lock:
+                limit_bps = self._current_bandwidth_limit_bps()
+                if limit_bps <= 0:
+                    return
                 now = time.monotonic()
                 elapsed = max(0.0, now - self._throttle_last_refill)
                 if elapsed > 0:
@@ -490,14 +503,12 @@ class DownloadWorker:
                     self._throttle_tokens = min(burst_cap, self._throttle_tokens + elapsed * limit_bps)
                     self._throttle_last_refill = now
 
-                if self._throttle_tokens >= byte_count:
-                    self._throttle_tokens -= byte_count
+                consumed = min(self._throttle_tokens, remaining)
+                self._throttle_tokens -= consumed
+                remaining -= consumed
+                if remaining <= 0:
                     return
-
-                deficit = byte_count - self._throttle_tokens
-
-            sleep_seconds = max(deficit / limit_bps, 0.002)
-            time.sleep(min(sleep_seconds, 0.2))
+            self._stop_event.wait(min(max(remaining / limit_bps, 0.002), 0.2))
 
     def _is_html_response(self, response) -> bool:
         content_type = (response.headers.get("Content-Type") or "").lower()
