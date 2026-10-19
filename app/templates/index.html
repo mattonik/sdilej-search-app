@@ -46,96 +46,29 @@
 
         <section class="download-add-section">
           <div class="download-section-heading">
-            <h3>Add download</h3>
-            <p>Paste a direct sdilej link, YouTube URL, or route the item manually when auto detection is not enough.</p>
+            <h3>New download</h3>
+            <p>Paste a Sdilej or YouTube link, choose its library destination, and add it to the queue.</p>
           </div>
-
-          <form id="youtubeQuickForm" class="youtube-quick-form" aria-label="YouTube quick download">
-            <div class="youtube-quick-copy">
-              <strong>YouTube quick download</strong>
-              <span>Paste a video link and choose the target library route directly.</span>
-            </div>
-            <label>
-              Destination
-              <select id="youtubeQuickDestinationPreset">
-                <option value="auto" selected>Auto route</option>
-                <option value="movies">Movies</option>
-                <option value="tv">TV Show</option>
-                <option value="kids_movies">Kids Movies</option>
-                <option value="kids_tv">Kids TV</option>
-                <option value="music">Music</option>
-                <option value="unsorted">Unsorted</option>
-              </select>
-            </label>
-            <label>
-              YouTube URL
-              <input
-                id="youtubeQuickUrl"
-                type="url"
-                placeholder="https://www.youtube.com/watch?v=..."
-                autocomplete="off"
-              />
-            </label>
-            <label class="checkbox-field youtube-playlist-field">
-              Download full playlist
-              <span><input id="youtubeQuickPlaylist" type="checkbox" /> include every video in this playlist</span>
-            </label>
-            <div id="youtubeQuickTvFields" class="youtube-quick-tv-fields hidden">
-              <label>
-                TV show
-                <input
-                  id="youtubeQuickSeriesName"
-                  type="text"
-                  placeholder="Pick existing or type a new show"
-                  autocomplete="off"
-                  list="youtubeQuickSeriesSuggestions"
-                  disabled
-                />
-                <datalist id="youtubeQuickSeriesSuggestions"></datalist>
-              </label>
-              <label>
-                Season
-                <input
-                  id="youtubeQuickSeasonNumber"
-                  type="number"
-                  min="1"
-                  step="1"
-                  placeholder="1"
-                  inputmode="numeric"
-                  disabled
-                />
-              </label>
-            </div>
-            <button type="submit" id="youtubeQuickSubmit" class="btn btn-primary">Download YouTube</button>
-          </form>
 
           <form id="downloadForm" class="download-form">
             <label>
               Source
               <select id="downloadSourceType">
-                <option value="sdilej" selected>Sdilej</option>
+                <option value="auto" selected>Auto detect from link</option>
+                <option value="sdilej">Sdilej</option>
                 <option value="youtube">YouTube</option>
               </select>
             </label>
 
             <label>
-              Detail URL
+              Link
               <input
                 id="downloadDetailUrl"
-                type="text"
-                placeholder="https://sdilej.cz/123456/file-name.mkv"
+                type="url"
+                placeholder="https://sdilej.cz/... or https://youtube.com/..."
                 autocomplete="off"
                 required
               />
-            </label>
-
-            <label id="downloadModeLabel">
-              Mode
-              <select id="downloadMode">
-                <option value="premium" selected>Premium</option>
-                <option value="auto">Auto</option>
-                <option value="free">Free</option>
-              </select>
             </label>
 
             <label>
@@ -151,11 +84,41 @@
               </select>
             </label>
 
+            <div id="downloadTvFields" class="download-tv-fields hidden">
+              <label>
+                TV show
+                <input id="downloadSeriesName" type="text" placeholder="Pick existing or type a new show" autocomplete="off" list="downloadSeriesSuggestions" />
+                <datalist id="downloadSeriesSuggestions"></datalist>
+              </label>
+              <label>
+                Season
+                <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" inputmode="numeric" />
+              </label>
+            </div>
+
+            <label id="downloadPlaylistLabel" class="checkbox-field hidden">
+              Download full playlist
+              <span><input id="downloadPlaylist" type="checkbox" /> include every video in this playlist</span>
+            </label>
+
+            <div id="downloadYoutubeAccessHint" class="youtube-access-hint hidden">
+              <span>Private or age-restricted videos may require YouTube cookies.</span>
+              <button type="button" id="openYoutubeSettingsBtn" class="btn btn-secondary btn-sm">Configure YouTube access</button>
+            </div>
+
             <div id="downloadDestinationPreview" class="destination-preview">Destination will be detected after you paste a URL.</div>
 
             <details class="destination-advanced">
-              <summary>Advanced destination</summary>
+              <summary>Advanced options</summary>
               <div class="destination-advanced-grid">
+                <label id="downloadModeLabel">
+                  Mode
+                  <select id="downloadMode">
+                    <option value="premium" selected>Premium</option>
+                    <option value="auto">Auto</option>
+                    <option value="free">Free</option>
+                  </select>
+                </label>
                 <label>
                   Type
                   <select id="downloadMediaKind">
@@ -175,30 +138,20 @@
                   </select>
                 </label>
 
-                <label>
-                  Series (for TV)
-                  <input id="downloadSeriesName" type="text" placeholder="e.g. Bluey" autocomplete="off" />
+                <label id="downloadChunkCountLabel">
+                  Chunk count
+                  <input id="downloadChunkCount" type="number" min="1" max="8" value="1" />
                 </label>
 
                 <label>
-                  Season (for TV)
-                  <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" />
+                  Priority
+                  <input id="downloadPriority" type="number" min="-100" max="100" value="0" />
                 </label>
               </div>
             </details>
 
-            <label id="downloadChunkCountLabel">
-              Chunk count
-              <input id="downloadChunkCount" type="number" min="1" max="8" value="1" />
-            </label>
-
-            <label>
-              Priority
-              <input id="downloadPriority" type="number" min="-100" max="100" value="0" />
-            </label>
-
             <div class="download-actions">
-              <button type="submit" class="btn btn-primary">Enqueue download</button>
+              <button type="submit" class="btn btn-primary">Add to queue</button>
             </div>
           </form>
         </section>

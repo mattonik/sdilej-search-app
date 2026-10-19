@@ -342,6 +342,31 @@ textarea {
   font-size: 0.88rem;
 }
 
+.download-tv-fields {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.35fr);
+  gap: 0.8rem;
+  padding: 0.7rem;
+  border: 1px solid #99f6e4;
+  border-radius: 12px;
+  background: #f0fdfa;
+}
+
+.youtube-access-hint {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a5f;
+  font-size: 0.88rem;
+}
+
 .destination-preview[data-mode="ok"] {
   border-color: #99f6e4;
   color: #0f766e;
@@ -3133,6 +3158,15 @@ textarea {
 
   .youtube-quick-tv-fields {
     grid-template-columns: 1fr;
+  }
+
+  .download-tv-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .youtube-access-hint {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .download-actions {

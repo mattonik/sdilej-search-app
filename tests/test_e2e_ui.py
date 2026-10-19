@@ -764,17 +764,21 @@ def test_movie_discovery_offers_full_search_for_unavailable_movie(tmp_path) -> N
 
 
 @pytest.mark.e2e
-def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
+def test_unified_download_composer_enqueues_youtube_link(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
     with run_test_server(app) as base_url, launch_browser() as browser:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="downloads"]')
-        page.fill("#youtubeQuickUrl", "https://www.youtube.com/watch?v=abc123XYZ")
+        page.fill("#downloadDetailUrl", "https://www.youtube.com/watch?v=abc123XYZ")
+        page.wait_for_selector("#downloadPlaylistLabel:not(.hidden)")
         with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith("/api/downloads")) as response_info:
-            page.click("#youtubeQuickSubmit")
+            page.click('#downloadForm button[type="submit"]')
         assert response_info.value.status == 200
+        payload = json.loads(response_info.value.request.post_data or "{}")
+        assert payload["source_type"] == "youtube"
+        assert payload["source_metadata"]["download_playlist"] is False
         page.wait_for_function("document.querySelector('#downloadJobs')?.textContent.includes('YouTube video')")
 
         job_text = page.locator("#downloadJobs").text_content() or ""
@@ -783,24 +787,24 @@ def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
 
 
 @pytest.mark.e2e
-def test_youtube_quick_download_tv_destination_uses_local_show_picker(tmp_path) -> None:
+def test_unified_download_composer_tv_destination_uses_local_show_picker(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
     with run_test_server(app) as base_url, launch_browser() as browser:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="downloads"]')
-        page.select_option("#youtubeQuickDestinationPreset", "tv")
-        page.wait_for_selector("#youtubeQuickTvFields:not(.hidden)")
-        page.locator("#youtubeQuickSeriesName").focus()
+        page.select_option("#downloadDestinationPreset", "tv")
+        page.wait_for_selector("#downloadTvFields:not(.hidden)")
+        page.locator("#downloadSeriesName").focus()
         page.wait_for_function(
-            "() => Array.from(document.querySelectorAll('#youtubeQuickSeriesSuggestions option')).some((option) => option.value === 'Reacher')"
+            "() => Array.from(document.querySelectorAll('#downloadSeriesSuggestions option')).some((option) => option.value === 'Reacher')"
         )
-        page.fill("#youtubeQuickSeriesName", "Reacher")
-        page.fill("#youtubeQuickSeasonNumber", "1")
-        page.fill("#youtubeQuickUrl", "https://www.youtube.com/watch?v=tv123XYZ")
+        page.fill("#downloadSeriesName", "Reacher")
+        page.fill("#downloadSeasonNumber", "1")
+        page.fill("#downloadDetailUrl", "https://www.youtube.com/watch?v=tv123XYZ")
         with page.expect_response(lambda response: response.request.method == 'POST' and response.url.endswith('/api/downloads')) as response_info:
-            page.click("#youtubeQuickSubmit")
+            page.click('#downloadForm button[type="submit"]')
         assert response_info.value.status == 200
         payload = json.loads(response_info.value.request.post_data or "{}")
         assert payload["destination_preset"] == "tv"
@@ -808,6 +812,21 @@ def test_youtube_quick_download_tv_destination_uses_local_show_picker(tmp_path) 
         assert payload["is_kids"] is False
         assert payload["series_name"] == "Reacher"
         assert payload["season_number"] == 1
+
+
+@pytest.mark.e2e
+def test_unified_download_composer_opens_youtube_settings(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.fill("#downloadDetailUrl", "https://www.youtube.com/watch?v=settings123")
+        page.wait_for_selector("#downloadYoutubeAccessHint:not(.hidden)")
+        page.click("#openYoutubeSettingsBtn")
+        page.wait_for_selector('.workspace-tab.active[data-tab="settings"]')
+        assert page.locator("#youtubeAuthDetails").get_attribute("open") is not None
 
 
 @pytest.mark.e2e

@@ -115,15 +115,6 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const libraryMusicFoldersScanBtn = document.getElementById("libraryMusicFoldersScanBtn");
       const libraryMusicFolderResults = document.getElementById("libraryMusicFolderResults");
       const libraryMusicDeepScanResults = document.getElementById("libraryMusicDeepScanResults");
-      const youtubeQuickForm = document.getElementById("youtubeQuickForm");
-      const youtubeQuickDestinationPreset = document.getElementById("youtubeQuickDestinationPreset");
-      const youtubeQuickUrl = document.getElementById("youtubeQuickUrl");
-      const youtubeQuickPlaylist = document.getElementById("youtubeQuickPlaylist");
-      const youtubeQuickTvFields = document.getElementById("youtubeQuickTvFields");
-      const youtubeQuickSeriesName = document.getElementById("youtubeQuickSeriesName");
-      const youtubeQuickSeriesSuggestions = document.getElementById("youtubeQuickSeriesSuggestions");
-      const youtubeQuickSeasonNumber = document.getElementById("youtubeQuickSeasonNumber");
-      const youtubeQuickSubmit = document.getElementById("youtubeQuickSubmit");
       const downloadForm = document.getElementById("downloadForm");
       const downloadSourceType = document.getElementById("downloadSourceType");
       const downloadDetailUrl = document.getElementById("downloadDetailUrl");
@@ -133,8 +124,14 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const downloadDestinationPreview = document.getElementById("downloadDestinationPreview");
       const downloadMediaKind = document.getElementById("downloadMediaKind");
       const downloadKidsTag = document.getElementById("downloadKidsTag");
+      const downloadTvFields = document.getElementById("downloadTvFields");
       const downloadSeriesName = document.getElementById("downloadSeriesName");
+      const downloadSeriesSuggestions = document.getElementById("downloadSeriesSuggestions");
       const downloadSeasonNumber = document.getElementById("downloadSeasonNumber");
+      const downloadPlaylistLabel = document.getElementById("downloadPlaylistLabel");
+      const downloadPlaylist = document.getElementById("downloadPlaylist");
+      const downloadYoutubeAccessHint = document.getElementById("downloadYoutubeAccessHint");
+      const openYoutubeSettingsBtn = document.getElementById("openYoutubeSettingsBtn");
       const downloadChunkCountLabel = document.getElementById("downloadChunkCountLabel");
       const downloadChunkCount = document.getElementById("downloadChunkCount");
       const downloadPriority = document.getElementById("downloadPriority");
@@ -297,15 +294,6 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           youtubeAuthClearBtn,
           youtubeAuthTestUrl,
           youtubeAuthTestBtn,
-          youtubeQuickForm,
-          youtubeQuickDestinationPreset,
-          youtubeQuickUrl,
-          youtubeQuickPlaylist,
-          youtubeQuickTvFields,
-          youtubeQuickSeriesName,
-          youtubeQuickSeriesSuggestions,
-          youtubeQuickSeasonNumber,
-          youtubeQuickSubmit,
           downloadForm,
           downloadSourceType,
           downloadDetailUrl,
@@ -315,8 +303,14 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           downloadDestinationPreview,
           downloadMediaKind,
           downloadKidsTag,
+          downloadTvFields,
           downloadSeriesName,
+          downloadSeriesSuggestions,
           downloadSeasonNumber,
+          downloadPlaylistLabel,
+          downloadPlaylist,
+          downloadYoutubeAccessHint,
+          openYoutubeSettingsBtn,
           downloadChunkCountLabel,
           downloadChunkCount,
           downloadPriority,
@@ -336,6 +330,14 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         setDownloadStatus,
         focusDownloadJob,
         openQueueDialog: (...args) => openQueueDialog?.(...args),
+        openYoutubeSettings: () => {
+          const details = document.getElementById("youtubeAuthDetails");
+          if (details) details.open = true;
+          setWorkspaceTab?.("settings");
+          window.requestAnimationFrame(() => {
+            details?.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        },
       });
 
       const {
