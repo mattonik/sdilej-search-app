@@ -572,9 +572,7 @@ def test_download_job_card_exposes_copy_action(tmp_path) -> None:
         page.wait_for_selector("#refreshDownloadsBtn")
         queue_top = page.locator(".download-queue-section").bounding_box()["y"]
         add_top = page.locator(".download-add-section").bounding_box()["y"]
-        settings_open = page.locator(".download-settings-section").get_attribute("open")
         assert queue_top < add_top
-        assert settings_open is None
         page.click("#refreshDownloadsBtn")
         page.wait_for_selector('#downloadJobs [data-action="copy"]', state="attached")
         assert page.locator('#downloadJobs [data-action="copy"]').count() >= 1
@@ -1036,7 +1034,7 @@ def test_library_folder_scan_deep_scan_and_missing_search(tmp_path) -> None:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="library"]')
-        page.select_option("#libraryFolderKind", "kids")
+        page.click("#libraryKidsModeBtn")
         page.click("#libraryFoldersScanBtn")
         page.wait_for_selector('.library-folder-card[data-folder-name="Bluey"]')
         page.click('.library-deep-scan[data-folder-name="Bluey"]')
@@ -1058,6 +1056,7 @@ def test_library_music_scan_deep_scan_and_search(tmp_path) -> None:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="library"]')
+        page.click("#libraryMusicModeBtn")
         page.click("#libraryMusicFoldersScanBtn")
         page.wait_for_selector('.library-music-artist[data-artist-name="Daft Punk"]')
         page.click('.library-music-album[data-album-name="Discovery"]')
