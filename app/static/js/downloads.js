@@ -59,7 +59,7 @@ export const initDownloads = ({
     clearFinishedBtn,
     downloadSummary,
     downloadWorkerState,
-    openAccountTabBtn,
+    downloadNavBadge,
   } = elements;
 
   const setAccountStatus = (value, mode = "neutral") => {
@@ -89,6 +89,14 @@ export const initDownloads = ({
   };
 
   const formatRefreshTime = (timestamp) => timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "n/a";
+
+  const updateDownloadNavBadge = (summary = {}) => {
+    if (!downloadNavBadge) return;
+    const active = Number(summary.queued || 0) + Number(summary.running || 0);
+    downloadNavBadge.textContent = active > 0 ? String(active) : "";
+    downloadNavBadge.classList.toggle("hidden", active === 0);
+    downloadNavBadge.setAttribute("aria-label", active > 0 ? `${active} active downloads` : "");
+  };
 
   const copyTextToClipboard = async (text) => {
     const value = String(text || "").trim();
@@ -465,6 +473,7 @@ export const initDownloads = ({
       refreshPhase = "summary";
       downloadWorkerState.textContent = data.worker_alive ? "Worker: online" : "Worker: offline";
       downloadSummary.textContent = `Queue: ${summary.queued || 0} queued, ${summary.running || 0} running, ${summary.done || 0} done, ${summary.failed || 0} failed, ${summary.canceled || 0} canceled · Updated ${formatRefreshTime(lastSuccessfulRefreshAt)}`;
+      updateDownloadNavBadge(summary);
       if (hadQueueRefreshWarning) {
         queueRefreshWarningVisible = false;
         setDownloadStatus("Queue recovered. Latest refresh succeeded.", "ok");

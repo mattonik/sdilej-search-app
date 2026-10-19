@@ -148,7 +148,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const clearFinishedBtn = document.getElementById("clearFinishedBtn");
       const downloadSummary = document.getElementById("downloadSummary");
       const downloadWorkerState = document.getElementById("downloadWorkerState");
-      const openAccountTabBtn = document.getElementById("openAccountTabBtn");
+      const downloadNavBadge = document.getElementById("downloadNavBadge");
       const kidsCatalogLoadBtn = document.getElementById("kidsCatalogLoadBtn");
       const kidsCatalogFilter = document.getElementById("kidsCatalogFilter");
       const kidsCatalogStatus = document.getElementById("kidsCatalogStatus");
@@ -237,9 +237,11 @@ import { initMovieDiscovery } from "./movie-discovery.js";
 
       const initialTab = (() => {
         const hash = (window.location.hash || "").replace("#", "").trim();
-        if (hash === "search" || hash === "downloads" || hash === "library" || hash === "account") return hash;
+        if (hash === "search" || hash === "downloads" || hash === "library" || hash === "settings") return hash;
+        if (hash === "account") return "settings";
         const saved = readActiveWorkspaceTab();
-        if (saved === "search" || saved === "downloads" || saved === "library" || saved === "account") return saved;
+        if (saved === "search" || saved === "downloads" || saved === "library" || saved === "settings") return saved;
+        if (saved === "account") return "settings";
         return "search";
       })();
 
@@ -327,7 +329,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           clearFinishedBtn,
           downloadSummary,
           downloadWorkerState,
-          openAccountTabBtn,
+          downloadNavBadge,
         },
         api,
         setActiveQueueStateFromJobs,
@@ -551,7 +553,6 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         },
       });
       setWorkspaceTab = workspaceTabsApi.setActiveTab;
-      openAccountTabBtn?.addEventListener("click", () => setWorkspaceTab?.("account"));
       setSearchMode(initialMode);
       setFileResultsView(state.fileResultsView);
       setFileResultsFilter(state.fileResultsFilter);

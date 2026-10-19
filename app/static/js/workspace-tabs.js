@@ -1,7 +1,7 @@
 export const initWorkspaceTabs = ({ workspaceTabs, tabSections, initialTab, onTabChange }) => {
   const setActiveTab = (tabName) => {
     const resolved =
-      tabName === "downloads" ? "downloads" : tabName === "library" ? "library" : tabName === "account" ? "account" : "search";
+      tabName === "downloads" ? "downloads" : tabName === "library" ? "library" : tabName === "settings" || tabName === "account" ? "settings" : "search";
     workspaceTabs.forEach((tab) => {
       tab.classList.toggle("active", tab.dataset.tab === resolved);
       if (tab.dataset.tab) {
@@ -12,12 +12,12 @@ export const initWorkspaceTabs = ({ workspaceTabs, tabSections, initialTab, onTa
       const showSearch = section.classList.contains("tab-search");
       const showDownloads = section.classList.contains("tab-downloads");
       const showLibrary = section.classList.contains("tab-library");
-      const showAccount = section.classList.contains("tab-account");
+      const showSettings = section.classList.contains("tab-settings");
       const visible =
         (resolved === "search" && showSearch) ||
         (resolved === "downloads" && showDownloads) ||
         (resolved === "library" && showLibrary) ||
-        (resolved === "account" && showAccount);
+        (resolved === "settings" && showSettings);
       section.style.display = visible ? "" : "none";
     });
     if (typeof onTabChange === "function") {

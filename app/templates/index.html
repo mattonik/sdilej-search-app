@@ -15,13 +15,12 @@
 
       <nav class="workspace-tabs" aria-label="Main navigation">
         <button type="button" class="workspace-tab btn btn-pill active" data-tab="search" aria-current="page">Search</button>
-        <button type="button" class="workspace-tab btn btn-pill" data-tab="downloads">Downloads</button>
+        <button type="button" class="workspace-tab btn btn-pill" data-tab="downloads">Downloads <span id="downloadNavBadge" class="nav-badge hidden" aria-label=""></span></button>
         <button type="button" class="workspace-tab btn btn-pill" data-tab="library">Library</button>
-        <button type="button" class="workspace-tab btn btn-pill" data-tab="account">Account</button>
-        <a href="/saved" class="workspace-tab-link btn btn-pill">Saved Picks</a>
+        <button type="button" class="workspace-tab btn btn-pill" data-tab="settings">Settings</button>
       </nav>
 
-      <div id="downloadStatus" class="download-status global-status" aria-live="polite" aria-atomic="true">Queue idle.</div>
+      <div id="downloadStatus" class="download-status global-status" data-mode="neutral" aria-live="polite" aria-atomic="true">Queue idle.</div>
 
       <section class="panel downloader-panel tab-section tab-downloads">
         <div class="downloader-header">
@@ -29,9 +28,6 @@
           <div class="downloader-meta">
             <span id="downloadWorkerState">Worker: checking...</span>
             <span id="downloadSummary">Queue: checking...</span>
-          </div>
-          <div class="downloader-actions">
-            <button type="button" id="openAccountTabBtn" class="secondary-btn btn btn-secondary btn-sm">Account</button>
           </div>
         </div>
         <section class="download-queue-section">
@@ -207,33 +203,13 @@
           </form>
         </section>
 
-        <details class="download-settings-section">
-          <summary>Download settings</summary>
-          <form id="downloadSettingsForm" class="download-form settings-form">
-            <label>
-              Max concurrent jobs
-              <input id="settingsMaxConcurrent" type="number" min="1" max="8" value="1" />
-            </label>
-            <label>
-              Default chunk count
-              <input id="settingsDefaultChunks" type="number" min="1" max="8" value="1" />
-            </label>
-            <label>
-              Bandwidth limit (KB/s)
-              <input id="settingsBandwidth" type="number" min="0" max="2000000" value="0" />
-            </label>
-            <div class="download-actions">
-              <button type="submit" class="btn btn-primary">Save download settings</button>
-            </div>
-          </form>
-        </details>
       </section>
 
-      <section class="panel account-panel tab-section tab-account">
+      <section class="panel account-panel tab-section tab-settings">
         <details id="accountDetails" class="account-details">
           <summary class="account-summary">
             <div class="account-summary-copy">
-              <h2>Account Credentials</h2>
+              <h2>Sdilej Access</h2>
               <div id="accountStatus" class="account-status">Checking account status...</div>
             </div>
             <span class="account-summary-action btn btn-secondary btn-sm">Manage</span>
@@ -268,7 +244,7 @@
         <details id="youtubeAuthDetails" class="account-details youtube-auth-details">
           <summary class="account-summary">
             <div class="account-summary-copy">
-              <h2>YouTube Authentication</h2>
+              <h2>YouTube Access</h2>
               <div id="youtubeAuthStatus" class="account-status">Checking YouTube auth...</div>
             </div>
             <span class="account-summary-action btn btn-secondary btn-sm">Manage</span>
@@ -325,6 +301,37 @@
             </div>
           </form>
         </details>
+
+        <details class="account-details settings-download-defaults">
+          <summary class="account-summary">
+            <div class="account-summary-copy">
+              <h2>Download Defaults</h2>
+              <div class="account-status">Concurrency, chunks, and bandwidth.</div>
+            </div>
+            <span class="account-summary-action btn btn-secondary btn-sm">Manage</span>
+          </summary>
+          <form id="downloadSettingsForm" class="account-form settings-form">
+            <label>
+              Max concurrent jobs
+              <input id="settingsMaxConcurrent" type="number" min="1" max="8" value="1" />
+            </label>
+            <label>
+              Default chunk count
+              <input id="settingsDefaultChunks" type="number" min="1" max="8" value="1" />
+            </label>
+            <label>
+              Bandwidth limit (KB/s)
+              <input id="settingsBandwidth" type="number" min="0" max="2000000" value="0" />
+            </label>
+            <div class="account-actions">
+              <button type="submit" class="btn btn-primary">Save download defaults</button>
+            </div>
+          </form>
+        </details>
+
+        <div class="settings-utilities">
+          <a href="/saved" class="btn btn-secondary btn-sm">Saved picks (advanced)</a>
+        </div>
       </section>
 
       <section class="panel library-panel tab-section tab-library">

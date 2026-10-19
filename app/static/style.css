@@ -94,6 +94,20 @@ textarea {
   border-color: var(--accent-dark);
 }
 
+.nav-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 0.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .account-panel h2 {
   margin: 0;
   font-size: 1.1rem;
@@ -423,6 +437,16 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.82);
+}
+
+.global-status[data-mode="neutral"] {
+  display: none;
+}
+
+.settings-utilities {
+  margin-top: 0.8rem;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .download-queue-section,

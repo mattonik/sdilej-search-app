@@ -896,7 +896,7 @@ def test_download_queue_refresh_error_exposes_diagnostic_details(tmp_path) -> No
 
 
 @pytest.mark.e2e
-def test_account_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch) -> None:
+def test_settings_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("YOUTUBE_MANAGED_COOKIES_PATH", str(tmp_path / "secrets" / "youtube-cookies.txt"))
     app = _build_file_search_app(tmp_path)
 
@@ -905,11 +905,10 @@ def test_account_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch)
         page.goto(base_url, wait_until="networkidle")
 
         page.click('.workspace-tab[data-tab="downloads"]')
-        page.wait_for_selector("#openAccountTabBtn")
         assert page.locator("#accountForm").is_hidden()
 
-        page.click("#openAccountTabBtn")
-        page.wait_for_selector('.workspace-tab.active[data-tab="account"]')
+        page.click('.workspace-tab[data-tab="settings"]')
+        page.wait_for_selector('.workspace-tab.active[data-tab="settings"]')
         page.wait_for_selector("#accountStatus")
         assert "Free" in page.locator("#accountStatus").text_content()
         assert page.locator("#accountDetails").get_attribute("open") is None
@@ -931,6 +930,10 @@ def test_account_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch)
         page.wait_for_function("() => document.querySelector('#youtubeAuthStatus')?.textContent?.includes('Cookies saved')")
         auth_text = page.locator("#youtubeAuthDetails").text_content() or ""
         assert "secret-value" not in auth_text
+        assert page.locator('a[href="/saved"]').count() == 1
+
+        page.goto(f"{base_url}/#account", wait_until="networkidle")
+        page.wait_for_selector('.workspace-tab.active[data-tab="settings"]')
 
 
 @pytest.mark.e2e
