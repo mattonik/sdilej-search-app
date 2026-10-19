@@ -741,12 +741,12 @@ def test_youtube_auth_defaults_managed_cookies_next_to_app_db(app_factory, tmp_p
     with TestClient(app) as client:
         response = client.post(
             "/api/youtube-auth",
-            json={"mode": "cookies_file", "cookies_text": "cookie-data"},
+            json={"mode": "cookies_file", "cookies_text": "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\tfixture"},
         )
 
     assert response.status_code == 200
     managed_path = tmp_path / "config" / "secrets" / "youtube-cookies.txt"
-    assert managed_path.read_text(encoding="utf-8") == "cookie-data"
+    assert "SID\tfixture" in managed_path.read_text(encoding="utf-8")
     assert response.json()["cookies_path"] == str(managed_path.resolve())
 
 
@@ -769,7 +769,7 @@ def test_youtube_auth_clear_deletes_managed_cookies(app_factory, tmp_path, monke
     app = app_factory()
 
     with TestClient(app) as client:
-        client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_text": "cookie-data"})
+        client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_text": "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\tfixture"})
         response = client.delete("/api/youtube-auth")
         status_response = client.get("/api/youtube-auth")
 
@@ -777,6 +777,20 @@ def test_youtube_auth_clear_deletes_managed_cookies(app_factory, tmp_path, monke
     assert response.json()["cleared"] is True
     assert not managed_path.exists()
     assert status_response.json()["configured"] is False
+
+
+def test_invalid_cookie_replacement_preserves_previous_export(app_factory, tmp_path, monkeypatch):
+    path = tmp_path / "cookies.txt"
+    monkeypatch.setenv("YOUTUBE_MANAGED_COOKIES_PATH", str(path))
+    valid = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\tfixture"
+    with TestClient(app_factory()) as client:
+        assert client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_text": valid}).status_code == 200
+        for invalid in ("bad export", valid.replace("2000000000", "1000000000"), valid.replace("youtube.com", "example.com")):
+            response = client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_text": invalid})
+            assert response.status_code == 400
+            assert path.read_text() == valid
+        response = client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_path": str(path)})
+        assert response.json()["managed_cookies"] is True
 
 
 @responses.activate

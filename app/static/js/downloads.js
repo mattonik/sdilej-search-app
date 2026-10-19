@@ -644,7 +644,7 @@ export const initDownloads = ({
       if (youtubeCookiesText) youtubeCookiesText.value = "";
       updateYoutubeAuthModeFields();
       if (data.configured && data.mode === "cookies_file") {
-        setYoutubeAuthStatus(`Cookies file configured${data.managed_cookies ? " (managed)" : ""}`, "ok");
+        setYoutubeAuthStatus(`Cookies saved${data.managed_cookies ? " (managed)" : ""}. Use Test access to verify the video.`, "neutral");
       } else if (data.configured && data.mode === "cookies_from_browser") {
         setYoutubeAuthStatus(`Browser cookies configured: ${data.cookies_from_browser} (runtime access required)`, "warning");
       } else {
