@@ -69,7 +69,15 @@ Verification:
 Verification: mobile browser E2E for navigation, search modes, and library
 folder scans.
 
-Result: pending.
+Result: completed in `ac93d6c` and `6932ec6` on 2026-10-19.
+
+Verification:
+
+- Focused mobile and Library browser coverage: 5 passed.
+- Full browser suite: 29 passed.
+- Mocked suite: 110 passed, 1 skipped, 3 deselected.
+- The former horizontal mobile search strip is now a visible grid, and TV,
+  Kids TV, and Music library scans are reachable through explicit modes.
 
 ## Non-Goals
 
