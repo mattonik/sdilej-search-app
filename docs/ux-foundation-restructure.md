@@ -50,7 +50,14 @@ Verification:
 Verification: browser E2E for Sdilej, YouTube, playlists, TV destinations,
 and duplicate queue behavior.
 
-Result: pending.
+Result: completed in `003fb21` on 2026-10-19.
+
+Verification:
+
+- Focused browser coverage: 3 passed.
+- Mocked suite: 110 passed, 1 skipped, 3 deselected.
+- The shared composer retains YouTube playlist metadata, local TV suggestions,
+  destination routing, duplicate handling, and immediate queue titles.
 
 ### 3. Search And Library Scan Flow
 
