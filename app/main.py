@@ -595,19 +595,12 @@ def _resolve_tv_show_summary(
     services: ServiceContainer,
 ) -> TvShowSummary:
     try:
-        show = services.tv_client.lookup_show(show_name)
-        if show_id is not None and int(show.id) != int(show_id):
-            return TvShowSummary(
-                id=int(show_id),
-                name=show.name or show_name,
-                premiered=show.premiered,
-                language=show.language,
-                image_url=show.image_url,
-                type=show.type,
-                genres=list(show.genres),
-                summary=show.summary,
-            )
-        return show
+        if show_id is not None:
+            try:
+                return services.tv_client.lookup_show(show_name, show_id=show_id)
+            except TypeError:
+                pass
+        return services.tv_client.lookup_show(show_name)
     except Exception:
         return TvShowSummary(
             id=int(show_id or 0),
@@ -715,9 +708,20 @@ def _build_downloaded_tv_episode_payload(
 def _build_tv_lookup_payload(
     show_name: str,
     *,
+    show_id: int | None = None,
     services: ServiceContainer,
-) -> tuple[dict, list[dict], dict]:
-    show = services.tv_client.lookup_show(show_name)
+) -> tuple[dict, list[dict], dict, list[dict]]:
+    search_shows = getattr(services.tv_client, "search_shows", None)
+    if callable(search_shows):
+        matches = list(search_shows(show_name))
+    else:
+        matches = [services.tv_client.lookup_show(show_name)]
+    if show_id is None:
+        show = matches[0]
+    else:
+        show = next((item for item in matches if int(item.id) == int(show_id)), None)
+        if show is None:
+            raise TvMazeClientError("Selected TV show is no longer available for this query.")
     episodes = services.tv_client.get_episodes(show.id)
     seasons = _serialize_tv_seasons(episodes)
     if not seasons:
@@ -728,7 +732,7 @@ def _build_tv_lookup_payload(
         show=show,
         year=parse_year(show.premiered),
     )
-    return show.to_dict(), seasons, title_metadata.to_dict()
+    return show.to_dict(), seasons, title_metadata.to_dict(), [item.to_dict() for item in matches]
 
 
 def _resolve_tv_search_alias_context(

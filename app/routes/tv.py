@@ -47,7 +47,11 @@ def _tv_error(
 @router.post("/api/tv/lookup")
 def api_tv_lookup(request: Request, payload: TvLookupPayload):
     try:
-        show, seasons, title_metadata = _build_tv_lookup_payload(payload.show_name, services=_get_services(request))
+        show, seasons, title_metadata, show_matches = _build_tv_lookup_payload(
+            payload.show_name,
+            show_id=payload.show_id,
+            services=_get_services(request),
+        )
         aliases, search_aliases = _resolve_tv_search_alias_context(
             show_name=str(show.get("name") or payload.show_name),
             title_metadata=title_metadata,
@@ -55,6 +59,7 @@ def api_tv_lookup(request: Request, payload: TvLookupPayload):
         return JSONResponse(
             {
                 "show": show,
+                "show_matches": show_matches,
                 "title_metadata": title_metadata,
                 "aliases": aliases,
                 "all_search_aliases": search_aliases,

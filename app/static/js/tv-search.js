@@ -57,6 +57,7 @@ export const initTvSearch = ({
     fileResultsBlocks,
     tvActiveFilters,
     tvShowSummaryCard,
+    tvShowMatches,
     tvLookupInfo,
     tvSeasonPicker,
     tvLookupForm,
@@ -170,6 +171,30 @@ export const initTvSearch = ({
         `;
       };
 
+      const renderTvShowMatches = (matches, selectedShowId) => {
+        const candidates = Array.isArray(matches) ? matches.filter((item) => item?.id && item?.name) : [];
+        if (!tvShowMatches || candidates.length < 2) {
+          tvShowMatches?.classList.add("hidden");
+          if (tvShowMatches) tvShowMatches.innerHTML = "";
+          return;
+        }
+        tvShowMatches.classList.remove("hidden");
+        tvShowMatches.innerHTML = `
+          <strong>Similar shows found</strong>
+          <span>Choose the version you mean before searching episodes.</span>
+          <div class="tv-show-match-list">
+            ${candidates.map((show) => {
+              const year = String(show.premiered || "").slice(0, 4);
+              const details = [year, show.type || "", show.language || ""].filter(Boolean).join(" · ");
+              const selected = Number(show.id) === Number(selectedShowId);
+              return `<button type="button" class="tv-show-match-btn${selected ? " selected" : ""}" data-show-id="${esc(show.id)}" aria-pressed="${selected ? "true" : "false"}">
+                <strong>${esc(show.name)}</strong>${details ? `<span>${esc(details)}</span>` : ""}
+              </button>`;
+            }).join("")}
+          </div>
+        `;
+      };
+
       const syncFileFiltersToTvEditor = () => {
         if (tvFilterCategory) tvFilterCategory.value = categorySelect.value || "video";
         if (tvFilterLanguage) tvFilterLanguage.value = languageInput.value || "";
@@ -276,7 +301,7 @@ export const initTvSearch = ({
         state.tvEpisodeResultsSortMode = tvEpisodeResultsSortMode;
       };
 
-      const runTvLookup = async () => {
+      const runTvLookup = async (showId = null) => {
         const showName = tvShowName.value.trim();
         if (!showName) {
           setTvStatus({
@@ -289,6 +314,7 @@ export const initTvSearch = ({
         setActiveTvSearchJobId(null);
         setTvStatus("Loading show metadata and seasons...", "neutral");
         tvLookupInfo.textContent = "";
+        renderTvShowMatches([], null);
         tvSeasonPicker.innerHTML = "";
         tvResults.innerHTML = "";
         renderTvShowSummary(null);
@@ -305,7 +331,7 @@ export const initTvSearch = ({
         state.tvLookupState = tvLookupState;
         updateTvSearchButtonState();
         try {
-          const { ok, data } = await api.tvLookup({ show_name: showName });
+          const { ok, data } = await api.tvLookup({ show_name: showName, show_id: showId || null });
           if (!ok) {
             setTvStatus(buildStatusErrorState(data, "TV lookup failed.", {
               hint: "Check the show name or try an alternate title.",
@@ -318,6 +344,7 @@ export const initTvSearch = ({
           };
           state.tvLookupState = tvLookupState;
           const show = data.show || {};
+          renderTvShowMatches(data.show_matches, show.id);
           tvLookupInfo.innerHTML = `
             <strong>${esc(show.name || showName)}</strong>
             <span> (${esc(data.season_count || 0)} seasons, ${esc(data.episode_count || 0)} episodes, ${esc(formatTvAliasSummary(data.aliases || [], data.search_aliases || []))}, source: ${esc(show.source || "tvmaze")})</span>
@@ -344,6 +371,13 @@ export const initTvSearch = ({
       tvLookupForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         await runTvLookup();
+      });
+
+      tvShowMatches?.addEventListener("click", async (event) => {
+        const button = event.target instanceof Element ? event.target.closest(".tv-show-match-btn") : null;
+        const showId = Number(button?.dataset.showId || 0);
+        if (!button || !Number.isFinite(showId) || showId < 1 || showId === Number(tvLookupState?.show?.id)) return;
+        await runTvLookup(showId);
       });
 
       tvSearchBtn.addEventListener("click", async () => {

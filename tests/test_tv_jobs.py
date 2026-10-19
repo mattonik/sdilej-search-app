@@ -71,6 +71,57 @@ def test_tv_lookup_error_returns_diagnostic_payload_and_request_id(app_factory) 
     assert payload["hint"]
 
 
+def test_tv_lookup_returns_candidates_and_loads_the_selected_show(app_factory) -> None:
+    classic = TvShowSummary(
+        id=101,
+        name="The Equalizer",
+        premiered="1985-09-18",
+        language="English",
+        type="Scripted",
+    )
+    reboot = TvShowSummary(
+        id=202,
+        name="The Equalizer",
+        premiered="2021-02-07",
+        language="English",
+        type="Scripted",
+    )
+
+    class AmbiguousTvClient(FakeTvMazeClient):
+        def search_shows(self, show_name: str) -> list[TvShowSummary]:
+            return [classic, reboot]
+
+        def get_episodes(self, show_id: int) -> list[TvEpisode]:
+            episode_name = "Classic pilot" if show_id == classic.id else "The Reboot"
+            return [TvEpisode(id=show_id, season=1, number=1, name=episode_name, airdate="2021-02-07")]
+
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="The Equalizer",
+        original_title="The Equalizer",
+        local_titles=[],
+        aliases=["The Equalizer"],
+        year=2021,
+        source="test",
+        source_ids={},
+    )
+    app = app_factory(
+        tv_client_instance=AmbiguousTvClient(),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        first = client.post("/api/tv/lookup", json={"show_name": "The Equalizer"})
+        selected = client.post("/api/tv/lookup", json={"show_name": "The Equalizer", "show_id": reboot.id})
+
+    assert first.status_code == 200
+    assert first.json()["show"]["id"] == classic.id
+    assert [item["id"] for item in first.json()["show_matches"]] == [classic.id, reboot.id]
+    assert selected.status_code == 200
+    assert selected.json()["show"]["id"] == reboot.id
+    assert selected.json()["seasons"][0]["episodes"][0]["name"] == "The Reboot"
+
+
 def test_sync_tv_search_marks_existing_episode_as_downloaded_and_skips_episode_queries(app_factory, media_root) -> None:
     season_dir = media_root / "tv" / "Vesela farma" / "S01"
     season_dir.mkdir(parents=True)

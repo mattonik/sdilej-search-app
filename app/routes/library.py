@@ -317,7 +317,7 @@ def api_library_music_folder_deep_scan(request: Request, payload: MusicFolderDee
 def api_library_tv_missing(request: Request, payload: TvMissingPayload):
     try:
         services = _get_services(request)
-        show, seasons, title_metadata = _build_tv_lookup_payload(payload.show_name, services=services)
+        show, seasons, title_metadata, _show_matches = _build_tv_lookup_payload(payload.show_name, services=services)
         local_context = _resolve_tv_show_local_context(
             str(show.get("name") or payload.show_name),
             title_metadata=title_metadata,

@@ -1279,6 +1279,50 @@ def test_reacher_tv_episode_search_runs_without_extra_selection(tmp_path) -> Non
 
 
 @pytest.mark.e2e
+def test_tv_lookup_allows_selecting_a_similar_show(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+    shows = [
+        {"id": 101, "name": "The Equalizer", "premiered": "1985-09-18", "language": "English", "type": "Scripted"},
+        {"id": 202, "name": "The Equalizer", "premiered": "2021-02-07", "language": "English", "type": "Scripted"},
+    ]
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        lookup_ids: list[int | None] = []
+
+        def fulfill_tv_lookup(route) -> None:
+            payload = json.loads(route.request.post_data or "{}")
+            selected_id = int(payload.get("show_id") or 101)
+            lookup_ids.append(payload.get("show_id"))
+            show = next(item for item in shows if item["id"] == selected_id)
+            route.fulfill(
+                status=200,
+                json={
+                    "show": show,
+                    "show_matches": shows,
+                    "aliases": [show["name"]],
+                    "all_search_aliases": [show["name"]],
+                    "search_aliases": [show["name"]],
+                    "seasons": [{"season_number": 1, "episode_count": 1, "episodes": [{"number": 1, "name": "Pilot", "episode_code": "S01E01"}]}],
+                    "season_count": 1,
+                    "episode_count": 1,
+                },
+            )
+
+        page.route("**/api/tv/lookup", fulfill_tv_lookup)
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "The Equalizer")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowMatches:not(.hidden) .tv-show-match-btn")
+        assert page.locator("#tvShowMatches .tv-show-match-btn").count() == 2
+
+        page.locator('#tvShowMatches .tv-show-match-btn[data-show-id="202"]').click()
+        page.wait_for_function("() => document.querySelector('#tvShowSummaryCard')?.textContent?.includes('2021')")
+        assert lookup_ids == [None, 202]
+
+
+@pytest.mark.e2e
 def test_tv_polling_preserves_open_season_and_selected_filter(tmp_path) -> None:
     app, storage, _ = _build_tv_polling_app(tmp_path, downloaded_episode_codes=("S01E01",))
 

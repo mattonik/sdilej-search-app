@@ -111,6 +111,7 @@ class UpdateDownloadClassificationPayload(BaseModel):
 
 class TvLookupPayload(BaseModel):
     show_name: str = Field(min_length=1, max_length=200)
+    show_id: int | None = Field(default=None, ge=1)
 
 
 class MovieLookupPayload(BaseModel):

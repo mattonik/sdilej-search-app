@@ -78,6 +78,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const tvLookupBtn = document.getElementById("tvLookupBtn");
       const tvStatus = document.getElementById("tvStatus");
       const tvShowSummaryCard = document.getElementById("tvShowSummaryCard");
+      const tvShowMatches = document.getElementById("tvShowMatches");
       const tvLookupInfo = document.getElementById("tvLookupInfo");
       const tvSeasonPicker = document.getElementById("tvSeasonPicker");
       const tvActiveFilters = document.getElementById("tvActiveFilters");
@@ -480,6 +481,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           fileResultsBlocks,
           tvActiveFilters,
           tvShowSummaryCard,
+          tvShowMatches,
           tvLookupInfo,
           tvSeasonPicker,
           tvLookupForm,

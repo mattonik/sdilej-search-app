@@ -2267,6 +2267,43 @@ textarea {
   line-height: 1.45;
 }
 
+.tv-show-matches {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.tv-show-match-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.tv-show-match-btn {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 150px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tv-show-match-btn span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.tv-show-match-btn.selected {
+  border-color: var(--accent);
+  background: #e7f8f5;
+}
+
 .tv-lookup-info {
   color: var(--muted);
   font-size: 0.9rem;
