@@ -38,6 +38,7 @@ export const initTvSearch = ({
     sortSelect,
     languageInput,
     languageScopeSelect,
+    audioPreferenceSelect,
     strictDubbingInput,
     releaseYearInput,
     maxResultsInput,
@@ -57,6 +58,7 @@ export const initTvSearch = ({
     fileResultsBlocks,
     tvActiveFilters,
     tvShowSummaryCard,
+    tvShowMatches,
     tvLookupInfo,
     tvSeasonPicker,
     tvLookupForm,
@@ -66,6 +68,7 @@ export const initTvSearch = ({
     tvFilterCategory,
     tvFilterLanguage,
     tvFilterLanguageScope,
+    tvFilterAudioPreference,
     tvFilterStrictDubbing,
     tvFilterMaxResults,
     downloadStatus,
@@ -102,17 +105,19 @@ export const initTvSearch = ({
   });
 
       const renderTvActiveFilters = () => {
-        const languageValue = languageInput.value.trim();
-        const languageScope = languageScopeSelect.value || "any";
-        const strict = Boolean(strictDubbingInput.checked);
-        const category = categorySelect.value || "video";
-        const maxPerVariantRaw = Number(maxResultsInput.value || 120);
+        const languageValue = tvFilterLanguage.value.trim();
+        const languageScope = tvFilterLanguageScope.value || "any";
+        const audioPreference = tvFilterAudioPreference?.selectedOptions?.[0]?.textContent?.trim() || "No preference";
+        const strict = Boolean(tvFilterStrictDubbing.checked);
+        const category = tvFilterCategory.value || "video";
+        const maxPerVariantRaw = Number(tvFilterMaxResults.value || 120);
         const maxPerVariant = Number.isFinite(maxPerVariantRaw) && maxPerVariantRaw > 0 ? Math.min(500, maxPerVariantRaw) : 120;
         const languageText = languageValue ? `${languageValue} (${languageScope}${strict ? ", strict" : ""})` : "none";
         tvActiveFilters.innerHTML = `
           <strong>Active filters:</strong>
           Category <code>${esc(category)}</code> |
           Language <code>${esc(languageText)}</code> |
+          Audio <code>${esc(audioPreference)}</code> |
           Max results/episode query <code>${esc(maxPerVariant)}</code>
         `;
       };
@@ -170,10 +175,35 @@ export const initTvSearch = ({
         `;
       };
 
+      const renderTvShowMatches = (matches, selectedShowId) => {
+        const candidates = Array.isArray(matches) ? matches.filter((item) => item?.id && item?.name) : [];
+        if (!tvShowMatches || candidates.length < 2) {
+          tvShowMatches?.classList.add("hidden");
+          if (tvShowMatches) tvShowMatches.innerHTML = "";
+          return;
+        }
+        tvShowMatches.classList.remove("hidden");
+        tvShowMatches.innerHTML = `
+          <strong>Similar shows found</strong>
+          <span>Choose the version you mean before searching episodes.</span>
+          <div class="tv-show-match-list">
+            ${candidates.map((show) => {
+              const year = String(show.premiered || "").slice(0, 4);
+              const details = [year, show.type || "", show.language || ""].filter(Boolean).join(" · ");
+              const selected = Number(show.id) === Number(selectedShowId);
+              return `<button type="button" class="tv-show-match-btn${selected ? " selected" : ""}" data-show-id="${esc(show.id)}" aria-pressed="${selected ? "true" : "false"}">
+                <strong>${esc(show.name)}</strong>${details ? `<span>${esc(details)}</span>` : ""}
+              </button>`;
+            }).join("")}
+          </div>
+        `;
+      };
+
       const syncFileFiltersToTvEditor = () => {
         if (tvFilterCategory) tvFilterCategory.value = categorySelect.value || "video";
         if (tvFilterLanguage) tvFilterLanguage.value = languageInput.value || "";
         if (tvFilterLanguageScope) tvFilterLanguageScope.value = languageScopeSelect.value || "any";
+        if (tvFilterAudioPreference) tvFilterAudioPreference.value = audioPreferenceSelect?.value || "any";
         if (tvFilterStrictDubbing) tvFilterStrictDubbing.checked = Boolean(strictDubbingInput.checked);
         if (tvFilterMaxResults) tvFilterMaxResults.value = maxResultsInput.value || "120";
       };
@@ -182,8 +212,19 @@ export const initTvSearch = ({
         if (tvFilterCategory) categorySelect.value = tvFilterCategory.value || "video";
         if (tvFilterLanguage) languageInput.value = tvFilterLanguage.value || "";
         if (tvFilterLanguageScope) languageScopeSelect.value = tvFilterLanguageScope.value || "any";
+        if (tvFilterAudioPreference && audioPreferenceSelect) audioPreferenceSelect.value = tvFilterAudioPreference.value || "any";
         if (tvFilterStrictDubbing) strictDubbingInput.checked = Boolean(tvFilterStrictDubbing.checked);
         if (tvFilterMaxResults) maxResultsInput.value = tvFilterMaxResults.value || "120";
+      };
+
+      const hydrateTvFiltersFromJob = (payload) => {
+        if (tvFilterCategory) tvFilterCategory.value = payload.category || "video";
+        if (tvFilterLanguage) tvFilterLanguage.value = payload.language || "";
+        if (tvFilterLanguageScope) tvFilterLanguageScope.value = payload.language_scope || "any";
+        if (tvFilterAudioPreference) tvFilterAudioPreference.value = payload.audio_preference || "any";
+        if (tvFilterStrictDubbing) tvFilterStrictDubbing.checked = Boolean(payload.strict_dubbing);
+        if (tvFilterMaxResults) tvFilterMaxResults.value = String(payload.max_results_per_variant || 120);
+        renderTvActiveFilters();
       };
 
       const updateTvSearchButtonState = () => {
@@ -276,7 +317,7 @@ export const initTvSearch = ({
         state.tvEpisodeResultsSortMode = tvEpisodeResultsSortMode;
       };
 
-      const runTvLookup = async () => {
+      const runTvLookup = async (showId = null) => {
         const showName = tvShowName.value.trim();
         if (!showName) {
           setTvStatus({
@@ -289,6 +330,7 @@ export const initTvSearch = ({
         setActiveTvSearchJobId(null);
         setTvStatus("Loading show metadata and seasons...", "neutral");
         tvLookupInfo.textContent = "";
+        renderTvShowMatches([], null);
         tvSeasonPicker.innerHTML = "";
         tvResults.innerHTML = "";
         renderTvShowSummary(null);
@@ -305,7 +347,7 @@ export const initTvSearch = ({
         state.tvLookupState = tvLookupState;
         updateTvSearchButtonState();
         try {
-          const { ok, data } = await api.tvLookup({ show_name: showName });
+          const { ok, data } = await api.tvLookup({ show_name: showName, show_id: showId || null });
           if (!ok) {
             setTvStatus(buildStatusErrorState(data, "TV lookup failed.", {
               hint: "Check the show name or try an alternate title.",
@@ -318,6 +360,7 @@ export const initTvSearch = ({
           };
           state.tvLookupState = tvLookupState;
           const show = data.show || {};
+          renderTvShowMatches(data.show_matches, show.id);
           tvLookupInfo.innerHTML = `
             <strong>${esc(show.name || showName)}</strong>
             <span> (${esc(data.season_count || 0)} seasons, ${esc(data.episode_count || 0)} episodes, ${esc(formatTvAliasSummary(data.aliases || [], data.search_aliases || []))}, source: ${esc(show.source || "tvmaze")})</span>
@@ -344,6 +387,13 @@ export const initTvSearch = ({
       tvLookupForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         await runTvLookup();
+      });
+
+      tvShowMatches?.addEventListener("click", async (event) => {
+        const button = event.target instanceof Element ? event.target.closest(".tv-show-match-btn") : null;
+        const showId = Number(button?.dataset.showId || 0);
+        if (!button || !Number.isFinite(showId) || showId < 1 || showId === Number(tvLookupState?.show?.id)) return;
+        await runTvLookup(showId);
       });
 
       tvSearchBtn.addEventListener("click", async () => {
@@ -385,7 +435,7 @@ export const initTvSearch = ({
         tvEpisodeSearchesInFlight = new Set();
         state.tvEpisodeSearchesInFlight = tvEpisodeSearchesInFlight;
         resetTvEpisodeResultsSortMode();
-        const maxPerVariantRaw = Number(maxResultsInput.value || 120);
+        const maxPerVariantRaw = Number(tvFilterMaxResults.value || 120);
         const maxPerVariant = Number.isFinite(maxPerVariantRaw) && maxPerVariantRaw > 0 ? Math.min(500, maxPerVariantRaw) : 120;
         try {
           const { ok, data } = await api.createTvSearchJob({
@@ -395,10 +445,11 @@ export const initTvSearch = ({
               episodes_by_season: episodesBySeason,
               aliases: tvLookupState.aliases || [],
               title_metadata: tvLookupState.title_metadata || null,
-              category: categorySelect.value || "video",
-              language: languageInput.value.trim() || null,
-              language_scope: languageScopeSelect.value || "any",
-              strict_dubbing: Boolean(strictDubbingInput.checked),
+              category: tvFilterCategory.value || "video",
+              language: tvFilterLanguage.value.trim() || null,
+              language_scope: tvFilterLanguageScope.value || "any",
+              strict_dubbing: Boolean(tvFilterStrictDubbing.checked),
+              audio_preference: tvFilterAudioPreference?.value || "any",
               max_results_per_variant: maxPerVariant,
           });
           if (!ok) {
@@ -497,6 +548,8 @@ export const initTvSearch = ({
             }));
             return;
           }
+
+          if (!tvResultsState) hydrateTvFiltersFromJob(data);
 
           tvLookupState = {
             show: data.show || tvLookupState?.show || null,
@@ -738,15 +791,16 @@ export const initTvSearch = ({
                 airdate: btn.dataset.airdate || null,
                 aliases: tvLookupState?.aliases || [],
                 title_metadata: tvLookupState?.title_metadata || null,
-                category: tvResultsState?.category || categorySelect.value || "video",
-                language: tvResultsState?.language || (languageInput.value.trim() || null),
-                language_scope: tvResultsState?.language_scope || languageScopeSelect.value || "any",
+                category: tvResultsState?.category || tvFilterCategory.value || "video",
+                language: tvResultsState?.language || (tvFilterLanguage.value.trim() || null),
+                language_scope: tvResultsState?.language_scope || tvFilterLanguageScope.value || "any",
                 strict_dubbing:
                   typeof tvResultsState?.strict_dubbing === "boolean"
                     ? Boolean(tvResultsState.strict_dubbing)
-                    : Boolean(strictDubbingInput.checked),
+                    : Boolean(tvFilterStrictDubbing.checked),
+                audio_preference: tvResultsState?.audio_preference || tvFilterAudioPreference?.value || "any",
                 max_results_per_variant:
-                  Number(tvResultsState?.max_results_per_variant || maxResultsInput.value || 120) || 120,
+                  Number(tvResultsState?.max_results_per_variant || tvFilterMaxResults.value || 120) || 120,
                 alias_mode: "optimized",
                 force_search: true,
             });
@@ -1072,15 +1126,16 @@ export const initTvSearch = ({
                   airdate: btn.dataset.airdate || null,
                   aliases: tvLookupState?.aliases || [],
                   title_metadata: tvLookupState?.title_metadata || null,
-                  category: tvResultsState?.category || categorySelect.value || "video",
-                  language: tvResultsState?.language || (languageInput.value.trim() || null),
-                  language_scope: tvResultsState?.language_scope || languageScopeSelect.value || "any",
+                  category: tvResultsState?.category || tvFilterCategory.value || "video",
+                  language: tvResultsState?.language || (tvFilterLanguage.value.trim() || null),
+                  language_scope: tvResultsState?.language_scope || tvFilterLanguageScope.value || "any",
                   strict_dubbing:
                     typeof tvResultsState?.strict_dubbing === "boolean"
                       ? Boolean(tvResultsState.strict_dubbing)
-                      : Boolean(strictDubbingInput.checked),
+                      : Boolean(tvFilterStrictDubbing.checked),
+                  audio_preference: tvResultsState?.audio_preference || tvFilterAudioPreference?.value || "any",
                   max_results_per_variant:
-                    Number(tvResultsState?.max_results_per_variant || maxResultsInput.value || 120) || 120,
+                    Number(tvResultsState?.max_results_per_variant || tvFilterMaxResults.value || 120) || 120,
                   alias_mode: forceSearch ? "optimized" : "all",
                   force_search: forceSearch,
               });

@@ -12,6 +12,13 @@ export const initLibraryManagement = ({
     libraryTvShowName,
     libraryStatus,
     libraryTvMissingResults,
+    libraryTvModeBtn,
+    libraryKidsModeBtn,
+    libraryMusicModeBtn,
+    libraryTvPanel,
+    libraryMusicPanel,
+    libraryFolderHeading,
+    libraryFolderHint,
     libraryFolderKind,
     libraryFoldersScanBtn,
     libraryFolderResults,
@@ -30,6 +37,27 @@ export const initLibraryManagement = ({
   let scanInFlight = false;
 
   const submitButton = libraryTvMissingForm.querySelector('button[type="submit"]');
+
+  const setLibraryMode = (mode) => {
+    const nextMode = ["tv", "kids", "music"].includes(mode) ? mode : "tv";
+    const isMusic = nextMode === "music";
+    const isKids = nextMode === "kids";
+    libraryTvPanel?.classList.toggle("hidden", isMusic);
+    libraryMusicPanel?.classList.toggle("hidden", !isMusic);
+    if (libraryFolderKind) libraryFolderKind.value = isKids ? "kids" : "tv";
+    if (libraryFolderHeading) libraryFolderHeading.textContent = isKids ? "Kids TV folders" : "TV folders";
+    if (libraryFolderHint) {
+      libraryFolderHint.textContent = isKids
+        ? "Browse local kids series, inspect episode files, and find gaps."
+        : "Browse local series, inspect episode files, and find gaps.";
+    }
+    [libraryTvModeBtn, libraryKidsModeBtn, libraryMusicModeBtn].forEach((button) => {
+      if (!button) return;
+      const active = button.dataset.libraryMode === nextMode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  };
 
   const selectedFolderIsKids = () => libraryFolderKind?.value === "kids";
 
@@ -313,6 +341,10 @@ export const initLibraryManagement = ({
 
   libraryFoldersScanBtn?.addEventListener("click", scanFolders);
   libraryMusicFoldersScanBtn?.addEventListener("click", scanMusicFolders);
+  libraryTvModeBtn?.addEventListener("click", () => setLibraryMode("tv"));
+  libraryKidsModeBtn?.addEventListener("click", () => setLibraryMode("kids"));
+  libraryMusicModeBtn?.addEventListener("click", () => setLibraryMode("music"));
+  setLibraryMode("tv");
   libraryTvMissingForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     await scanMissingShow(libraryTvShowName?.value.trim() || "");

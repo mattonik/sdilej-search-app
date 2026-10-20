@@ -21,6 +21,7 @@ class StorageTvJobsRepository:
         language: str | None,
         language_scope: str,
         strict_dubbing: bool,
+        audio_preference: str = "any",
         max_results_per_variant: int,
         episodes: list[dict[str, Any]],
         priority: int = 0,
@@ -56,9 +57,10 @@ class StorageTvJobsRepository:
                         language,
                         language_scope,
                         strict_dubbing,
+                        audio_preference,
                         max_results_per_variant,
                         total_episodes
-                    ) VALUES ('queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES ('queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         priority,
@@ -74,6 +76,7 @@ class StorageTvJobsRepository:
                         language,
                         language_scope,
                         1 if strict_dubbing else 0,
+                        audio_preference,
                         max_results_per_variant,
                         len(episodes),
                     ),

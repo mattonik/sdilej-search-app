@@ -3,26 +3,27 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
+from ..api_models import MovieInfoLinkPayload, MovieLookupPayload, SaveCandidatePayload
+from ..models import AudioPreference
 from ..main import (
+    AUDIO_PREFERENCE_OPTIONS,
     CATEGORY_OPTIONS,
+    DEFAULT_AUDIO_PREFERENCE,
     DEFAULT_CATEGORY,
     DEFAULT_LANGUAGE_SCOPE,
     DEFAULT_SORT,
     LANGUAGE_SCOPE_OPTIONS,
-    ServiceContainer,
     SORT_OPTIONS,
-    MovieInfoLinkPayload,
-    MovieLookupPayload,
-    SaveCandidatePayload,
     _build_media_plan,
     _extract_file_id,
-    _get_services,
     _normalize_detail_url,
     _parse_optional_year,
     _resolve_movie_info_link,
     _search_files,
 )
+from ..services import ServiceContainer, get_services as _get_services
 from ..sdilej_client import SdilejClientError
+from ..search_utils import SearchUpstreamError
 
 router = APIRouter()
 
@@ -36,6 +37,7 @@ def index(
     language: str = Query(default="", max_length=32),
     language_scope: str = Query(default=DEFAULT_LANGUAGE_SCOPE),
     strict_dubbing: bool = Query(default=False),
+    audio_preference: AudioPreference = Query(default=DEFAULT_AUDIO_PREFERENCE),
     release_year: str = Query(default="", max_length=8),
     max_results: int = Query(default=120, ge=1, le=500),
 ):
@@ -53,6 +55,7 @@ def index(
                 language=language,
                 language_scope=language_scope,
                 strict_dubbing=strict_dubbing,
+                audio_preference=audio_preference,
                 release_year=parsed_release_year,
                 max_results=max_results,
                 services=services,
@@ -73,6 +76,7 @@ def index(
             "language": language,
             "language_scope": language_scope,
             "strict_dubbing": strict_dubbing,
+            "audio_preference": audio_preference,
             "release_year": release_year,
             "max_results": max_results,
             "error": error,
@@ -80,6 +84,7 @@ def index(
             "category_options": CATEGORY_OPTIONS,
             "sort_options": SORT_OPTIONS,
             "language_scope_options": LANGUAGE_SCOPE_OPTIONS,
+            "audio_preference_options": AUDIO_PREFERENCE_OPTIONS,
         },
     )
 
@@ -109,6 +114,7 @@ def api_search(
     language: str = Query(default="", max_length=32),
     language_scope: str = Query(default=DEFAULT_LANGUAGE_SCOPE),
     strict_dubbing: bool = Query(default=False),
+    audio_preference: AudioPreference = Query(default=DEFAULT_AUDIO_PREFERENCE),
     release_year: str = Query(default="", max_length=8),
     max_results: int = Query(default=120, ge=1, le=500),
 ):
@@ -122,12 +128,15 @@ def api_search(
             language=language,
             language_scope=language_scope,
             strict_dubbing=strict_dubbing,
+            audio_preference=audio_preference,
             release_year=parsed_release_year,
             max_results=max_results,
             services=services,
         )
         services.storage.record_search(result)
         return JSONResponse(result.to_dict())
+    except SearchUpstreamError as exc:
+        return JSONResponse(status_code=502, content={"error": str(exc), "error_code": "search_upstream_failed"})
     except SdilejClientError as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})
     except Exception as exc:  # noqa: BLE001

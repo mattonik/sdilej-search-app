@@ -10,6 +10,7 @@ export const initDownloads = ({
   setDownloadStatus,
   focusDownloadJob,
   openQueueDialog,
+  openYoutubeSettings,
 }) => {
   const {
     accountStatus,
@@ -27,15 +28,6 @@ export const initDownloads = ({
     youtubeAuthClearBtn,
     youtubeAuthTestUrl,
     youtubeAuthTestBtn,
-    youtubeQuickForm,
-    youtubeQuickDestinationPreset,
-    youtubeQuickUrl,
-    youtubeQuickPlaylist,
-    youtubeQuickTvFields,
-    youtubeQuickSeriesName,
-    youtubeQuickSeriesSuggestions,
-    youtubeQuickSeasonNumber,
-    youtubeQuickSubmit,
     downloadForm,
     downloadSourceType,
     downloadDetailUrl,
@@ -45,8 +37,14 @@ export const initDownloads = ({
     downloadDestinationPreview,
     downloadMediaKind,
     downloadKidsTag,
+    downloadTvFields,
     downloadSeriesName,
+    downloadSeriesSuggestions,
     downloadSeasonNumber,
+    downloadPlaylistLabel,
+    downloadPlaylist,
+    downloadYoutubeAccessHint,
+    openYoutubeSettingsBtn,
     downloadChunkCountLabel,
     downloadChunkCount,
     downloadPriority,
@@ -59,7 +57,7 @@ export const initDownloads = ({
     clearFinishedBtn,
     downloadSummary,
     downloadWorkerState,
-    openAccountTabBtn,
+    downloadNavBadge,
   } = elements;
 
   const setAccountStatus = (value, mode = "neutral") => {
@@ -80,8 +78,9 @@ export const initDownloads = ({
   let queueRefreshWarningVisible = false;
   let nextBackgroundRefreshAt = 0;
   let lastSuccessfulRefreshAt = 0;
+  let hasActiveDownloads = false;
   let destinationPreviewSeq = 0;
-  let youtubeQuickTvSuggestionsSeq = 0;
+  let downloadTvSuggestionsSeq = 0;
 
   const isYoutubeLikeUrl = (value) => {
     const text = String(value || "").trim().toLowerCase();
@@ -89,6 +88,14 @@ export const initDownloads = ({
   };
 
   const formatRefreshTime = (timestamp) => timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "n/a";
+
+  const updateDownloadNavBadge = (summary = {}) => {
+    if (!downloadNavBadge) return;
+    const active = Number(summary.queued || 0) + Number(summary.running || 0);
+    downloadNavBadge.textContent = active > 0 ? String(active) : "";
+    downloadNavBadge.classList.toggle("hidden", active === 0);
+    downloadNavBadge.setAttribute("aria-label", active > 0 ? `${active} active downloads` : "");
+  };
 
   const copyTextToClipboard = async (text) => {
     const value = String(text || "").trim();
@@ -120,66 +127,31 @@ export const initDownloads = ({
     return null;
   };
 
-  const resolveYoutubeQuickPresetPlan = () => {
-    const preset = youtubeQuickDestinationPreset?.value || "auto";
-    if (preset === "movies") return { destination_preset: preset, media_kind: "movie", is_kids: false, needsTvFields: false };
-    if (preset === "kids_movies") return { destination_preset: preset, media_kind: "movie", is_kids: true, needsTvFields: false };
-    if (preset === "tv") return { destination_preset: preset, media_kind: "tv", is_kids: false, needsTvFields: true };
-    if (preset === "kids_tv") return { destination_preset: preset, media_kind: "tv", is_kids: true, needsTvFields: true };
-    if (preset === "music") return { destination_preset: preset, media_kind: "music", is_kids: false, needsTvFields: false };
-    if (preset === "unsorted") return { destination_preset: preset, media_kind: null, is_kids: null, needsTvFields: false };
-    return { destination_preset: "auto", media_kind: null, is_kids: null, needsTvFields: false };
-  };
-
-  const renderYoutubeQuickSeriesSuggestions = (items = []) => {
-    if (!youtubeQuickSeriesSuggestions) return;
-    youtubeQuickSeriesSuggestions.innerHTML = (Array.isArray(items) ? items : [])
+  const renderDownloadSeriesSuggestions = (items = []) => {
+    if (!downloadSeriesSuggestions) return;
+    downloadSeriesSuggestions.innerHTML = (Array.isArray(items) ? items : [])
       .map((item) => `<option value="${esc(item)}"></option>`)
       .join("");
   };
 
-  const refreshYoutubeQuickSeriesSuggestions = async () => {
+  const refreshDownloadSeriesSuggestions = async () => {
     if (!api.listLocalTvShows) return;
-    const plan = resolveYoutubeQuickPresetPlan();
-    if (!plan.needsTvFields) {
-      renderYoutubeQuickSeriesSuggestions([]);
+    if (downloadMediaKind?.value !== "tv") {
+      renderDownloadSeriesSuggestions([]);
       return;
     }
-    const seq = ++youtubeQuickTvSuggestionsSeq;
+    const seq = ++downloadTvSuggestionsSeq;
     const { ok, data } = await api.listLocalTvShows({
-      q: youtubeQuickSeriesName?.value.trim() || "",
-      isKids: Boolean(plan.is_kids),
+      q: downloadSeriesName?.value.trim() || "",
+      isKids: downloadKidsTag?.value === "yes",
       limit: 20,
     });
-    if (seq !== youtubeQuickTvSuggestionsSeq) return;
+    if (seq !== downloadTvSuggestionsSeq) return;
     if (!ok) {
-      renderYoutubeQuickSeriesSuggestions([]);
+      renderDownloadSeriesSuggestions([]);
       return;
     }
-    renderYoutubeQuickSeriesSuggestions(data.items || []);
-  };
-
-  const updateYoutubeQuickPresetFields = async () => {
-    const plan = resolveYoutubeQuickPresetPlan();
-    const showTvFields = Boolean(plan.needsTvFields);
-    youtubeQuickTvFields?.classList.toggle("hidden", !showTvFields);
-    if (youtubeQuickSeriesName) {
-      youtubeQuickSeriesName.disabled = !showTvFields;
-      if (!showTvFields) {
-        youtubeQuickSeriesName.value = "";
-      }
-    }
-    if (youtubeQuickSeasonNumber) {
-      youtubeQuickSeasonNumber.disabled = !showTvFields;
-      if (!showTvFields) {
-        youtubeQuickSeasonNumber.value = "";
-      }
-    }
-    if (!showTvFields) {
-      renderYoutubeQuickSeriesSuggestions([]);
-      return;
-    }
-    await refreshYoutubeQuickSeriesSuggestions();
+    renderDownloadSeriesSuggestions(data.items || []);
   };
 
   const buildMediaRoutingPayload = () => {
@@ -222,8 +194,14 @@ export const initDownloads = ({
       downloadSeasonNumber.value = "";
     }
     const isTv = downloadMediaKind.value === "tv";
+    downloadTvFields?.classList.toggle("hidden", !isTv);
     downloadSeriesName.disabled = !isTv;
     downloadSeasonNumber.disabled = !isTv;
+    if (isTv) {
+      refreshDownloadSeriesSuggestions();
+    } else {
+      renderDownloadSeriesSuggestions([]);
+    }
   };
 
   const updateDownloadDestinationPreview = async () => {
@@ -462,9 +440,11 @@ export const initDownloads = ({
       nextBackgroundRefreshAt = 0;
       lastSuccessfulRefreshAt = Date.now();
       const summary = data.summary || {};
+      hasActiveDownloads = Number(summary.queued || 0) + Number(summary.running || 0) > 0;
       refreshPhase = "summary";
       downloadWorkerState.textContent = data.worker_alive ? "Worker: online" : "Worker: offline";
       downloadSummary.textContent = `Queue: ${summary.queued || 0} queued, ${summary.running || 0} running, ${summary.done || 0} done, ${summary.failed || 0} failed, ${summary.canceled || 0} canceled · Updated ${formatRefreshTime(lastSuccessfulRefreshAt)}`;
+      updateDownloadNavBadge(summary);
       if (hadQueueRefreshWarning) {
         queueRefreshWarningVisible = false;
         setDownloadStatus("Queue recovered. Latest refresh succeeded.", "ok");
@@ -535,8 +515,14 @@ export const initDownloads = ({
     }
   };
 
+  const resolveDownloadSourceType = () => {
+    const selected = downloadSourceType?.value || "auto";
+    if (selected !== "auto") return selected;
+    return isYoutubeLikeUrl(downloadDetailUrl?.value) ? "youtube" : "sdilej";
+  };
+
   const updateDownloadSourceMode = () => {
-    const sourceType = downloadSourceType?.value || "sdilej";
+    const sourceType = resolveDownloadSourceType();
     const isYoutube = sourceType === "youtube";
     if (downloadModeLabel) {
       downloadModeLabel.classList.toggle("hidden", isYoutube);
@@ -550,10 +536,13 @@ export const initDownloads = ({
     if (downloadChunkCount) {
       downloadChunkCount.disabled = isYoutube;
     }
+    downloadPlaylistLabel?.classList.toggle("hidden", !isYoutube);
+    if (downloadPlaylist) downloadPlaylist.disabled = !isYoutube;
+    downloadYoutubeAccessHint?.classList.toggle("hidden", !isYoutube);
     if (downloadDetailUrl) {
       downloadDetailUrl.placeholder = isYoutube
         ? "https://www.youtube.com/watch?v=... or VeseleRozpravky episode URL"
-        : "https://sdilej.cz/123456/file-name.mkv";
+        : "https://sdilej.cz/... or https://youtube.com/...";
     }
   };
 
@@ -644,7 +633,7 @@ export const initDownloads = ({
       if (youtubeCookiesText) youtubeCookiesText.value = "";
       updateYoutubeAuthModeFields();
       if (data.configured && data.mode === "cookies_file") {
-        setYoutubeAuthStatus(`Cookies file configured${data.managed_cookies ? " (managed)" : ""}`, "ok");
+        setYoutubeAuthStatus(`Cookies saved${data.managed_cookies ? " (managed)" : ""}. Use Test access to verify the video.`, "neutral");
       } else if (data.configured && data.mode === "cookies_from_browser") {
         setYoutubeAuthStatus(`Browser cookies configured: ${data.cookies_from_browser} (runtime access required)`, "warning");
       } else {
@@ -663,77 +652,33 @@ export const initDownloads = ({
         message: "Detail URL is required.",
         mode: "error",
         details: {
-          hint: "Paste a valid sdilej.cz detail URL before enqueueing.",
+          hint: "Paste a valid Sdilej or YouTube link before adding it to the queue.",
         },
       });
       return;
     }
 
-    const payload = {
-      detail_url: detailUrl,
-      source_type: downloadSourceType?.value || "sdilej",
-      preferred_mode: downloadSourceType?.value === "youtube" ? "auto" : (downloadMode.value || "premium"),
-      chunk_count: Number(downloadChunkCount.value || 1),
-      priority: Number(downloadPriority.value || 0),
-      ...buildMediaRoutingPayload(),
-    };
-
-    const result = await enqueueDownload(payload);
-    if (result.ok) {
-      downloadDetailUrl.value = "";
-    } else if (result.duplicateJob && result.duplicateIsActive) {
-      await refreshDownloads();
-      focusDownloadJob(result.duplicateJob.id);
-    }
-  });
-
-  youtubeQuickForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const detailUrl = youtubeQuickUrl?.value.trim() || "";
-    const quickPlan = resolveYoutubeQuickPresetPlan();
-    if (!detailUrl) {
-      setDownloadStatus({
-        message: "YouTube URL is required.",
-        mode: "error",
-        details: {
-          hint: "Paste a YouTube video URL before enqueueing.",
-        },
-      });
-      return;
-    }
-    if (!isYoutubeLikeUrl(detailUrl)) {
-      setDownloadStatus({
-        message: "This does not look like a YouTube URL.",
-        mode: "warning",
-        details: {
-          hint: "Use the full download form below for non-YouTube URLs.",
-        },
-      });
-      return;
-    }
-    const seriesName = youtubeQuickSeriesName?.value.trim() || "";
-    const seasonNumber = Number(youtubeQuickSeasonNumber?.value || 0);
-    if (quickPlan.needsTvFields && !seriesName) {
+    const sourceType = resolveDownloadSourceType();
+    const routing = buildMediaRoutingPayload();
+    const isTv = routing.media_kind === "tv";
+    const seasonNumber = Number(downloadSeasonNumber.value || 0);
+    if (isTv && !routing.series_name) {
       setDownloadStatus({
         message: "TV show is required for this destination.",
         mode: "error",
-        details: {
-          hint: "Pick an existing local show or type a new one before enqueueing.",
-        },
+        details: { hint: "Pick an existing local show or type a new show name before adding this download." },
       });
       return;
     }
-    if (quickPlan.needsTvFields && (!Number.isFinite(seasonNumber) || seasonNumber < 1)) {
+    if (isTv && (!Number.isFinite(seasonNumber) || seasonNumber < 1)) {
       setDownloadStatus({
         message: "Season number is required for this destination.",
         mode: "error",
-        details: {
-          hint: "Enter a season number greater than 0 before enqueueing.",
-        },
+        details: { hint: "Enter a season number greater than 0 before adding this download." },
       });
       return;
     }
-    if (youtubeQuickPlaylist?.checked && quickPlan.needsTvFields) {
+    if (sourceType === "youtube" && downloadPlaylist?.checked && isTv) {
       setDownloadStatus({
         message: "Full playlists cannot use TV episode routing.",
         mode: "warning",
@@ -742,50 +687,39 @@ export const initDownloads = ({
       return;
     }
 
-    if (youtubeQuickSubmit) {
-      youtubeQuickSubmit.disabled = true;
+    const payload = {
+      detail_url: detailUrl,
+      ...(sourceType === "youtube" ? { title: "YouTube video" } : {}),
+      source_type: sourceType,
+      preferred_mode: sourceType === "youtube" ? "auto" : (downloadMode.value || "premium"),
+      chunk_count: Number(downloadChunkCount.value || 1),
+      priority: Number(downloadPriority.value || 0),
+      ...routing,
+    };
+    if (sourceType === "youtube") {
+      payload.source_metadata = {
+        provider: "youtube_direct",
+        prefer_metadata_title: true,
+        download_playlist: Boolean(downloadPlaylist?.checked),
+      };
     }
-    try {
-      const result = await enqueueDownload({
-        detail_url: detailUrl,
-        title: "YouTube video",
-        source_type: "youtube",
-        source_metadata: {
-          provider: "youtube_direct",
-          prefer_metadata_title: true,
-          download_playlist: Boolean(youtubeQuickPlaylist?.checked),
-        },
-        preferred_mode: "auto",
-        destination_preset: quickPlan.destination_preset,
-        media_kind: quickPlan.media_kind,
-        is_kids: quickPlan.is_kids,
-        series_name: quickPlan.needsTvFields ? seriesName : null,
-        season_number: quickPlan.needsTvFields ? seasonNumber : null,
-        chunk_count: 1,
-        priority: 0,
-      });
-      if (result.ok && youtubeQuickUrl) {
-        youtubeQuickUrl.value = "";
-        if (youtubeQuickPlaylist) youtubeQuickPlaylist.checked = false;
-        if (youtubeQuickSeriesName) youtubeQuickSeriesName.value = "";
-        if (youtubeQuickSeasonNumber) youtubeQuickSeasonNumber.value = "";
-      } else if (result.duplicateJob && result.duplicateIsActive) {
-        await refreshDownloads();
-        focusDownloadJob(result.duplicateJob.id);
+
+    const result = await enqueueDownload(payload);
+    if (result.ok) {
+      downloadDetailUrl.value = "";
+      if (downloadPlaylist) downloadPlaylist.checked = false;
+      if (isTv) {
+        downloadSeriesName.value = "";
+        downloadSeasonNumber.value = "";
       }
-    } finally {
-      if (youtubeQuickSubmit) {
-        youtubeQuickSubmit.disabled = false;
-      }
+    } else if (result.duplicateJob && result.duplicateIsActive) {
+      await refreshDownloads();
+      focusDownloadJob(result.duplicateJob.id);
     }
   });
 
   downloadDetailUrl?.addEventListener("input", () => {
-    if (!downloadSourceType || !isYoutubeLikeUrl(downloadDetailUrl.value)) return;
-    if (downloadSourceType.value !== "youtube") {
-      downloadSourceType.value = "youtube";
-      updateDownloadSourceMode();
-    }
+    updateDownloadSourceMode();
   });
 
   downloadDestinationPreset?.addEventListener("change", async () => {
@@ -806,21 +740,14 @@ export const initDownloads = ({
       window.setTimeout(updateDownloadDestinationPreview, 0);
     });
   });
-  youtubeQuickDestinationPreset?.addEventListener("change", () => {
-    updateYoutubeQuickPresetFields();
-  });
-  youtubeQuickSeriesName?.addEventListener("focus", () => {
-    refreshYoutubeQuickSeriesSuggestions();
-  });
-  youtubeQuickSeriesName?.addEventListener("input", () => {
-    refreshYoutubeQuickSeriesSuggestions();
-  });
+  downloadSeriesName?.addEventListener("focus", refreshDownloadSeriesSuggestions);
+  downloadSeriesName?.addEventListener("input", refreshDownloadSeriesSuggestions);
 
   downloadSourceType?.addEventListener("change", updateDownloadSourceMode);
+  openYoutubeSettingsBtn?.addEventListener("click", () => openYoutubeSettings?.());
   updateDownloadSourceMode();
   applyDestinationPresetToDownloadFields();
   updateDownloadDestinationPreview();
-  updateYoutubeQuickPresetFields();
 
   refreshDownloadsBtn.addEventListener("click", async () => {
     setDownloadStatus("Refreshing queue...", "neutral");
@@ -1057,6 +984,7 @@ export const initDownloads = ({
     refreshDownloadSettings,
     refreshAccountStatus,
     refreshYoutubeAuthStatus,
+    hasActiveDownloads: () => hasActiveDownloads,
     enqueueDownload,
     setAccountStatus,
   };

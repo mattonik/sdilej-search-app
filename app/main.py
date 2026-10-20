@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
 import os
 import re
 from pathlib import Path
@@ -11,9 +10,9 @@ from urllib.parse import urljoin, urlparse
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
 
 from .downloader import DownloadWorker
+from .api_models import DestinationPreset, MovieInfoLinkPayload, TvEpisodeSearchPayload, TvSeasonSearchPayload
 from .diagnostics import REQUEST_ID_HEADER, new_request_id
 from .media_routing import (
     MediaClassification,
@@ -21,9 +20,10 @@ from .media_routing import (
     requires_classification_confirmation,
     resolve_destination_subpath,
 )
-from .models import Category, LanguageScope, SearchResponse, SortMode, TitleMetadata
+from .models import AudioPreference, Category, LanguageScope, SearchResponse, SortMode, TitleMetadata
 from .sdilej_client import BASE_URL, SdilejClient, SdilejClientError
 from .search_utils import (
+    SearchUpstreamError,
     aggregate_query_results,
     build_episode_query_variants,
     build_tv_episode_result_scorer,
@@ -33,6 +33,7 @@ from .search_utils import (
     strip_internal_result_fields,
 )
 from .storage import Storage
+from .services import ServiceContainer
 from .title_metadata import TitleMetadataResolver, normalize_alias_key, parse_year
 from .tv_search_worker import TvSearchWorker
 from .tvmaze_client import TvEpisode, TvMazeClient, TvMazeClientError, TvShowSummary
@@ -119,6 +120,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 DEFAULT_CATEGORY: Category = "all"
 DEFAULT_SORT: SortMode = "relevance"
 DEFAULT_LANGUAGE_SCOPE: LanguageScope = "any"
+DEFAULT_AUDIO_PREFERENCE: AudioPreference = "any"
 
 CATEGORY_OPTIONS: list[tuple[str, Category]] = [
     ("All", "all"),
@@ -142,169 +144,11 @@ LANGUAGE_SCOPE_OPTIONS: list[tuple[str, LanguageScope]] = [
     ("Subtitles only", "subtitles"),
 ]
 
-
-class SaveCandidatePayload(BaseModel):
-    file_id: int | None = None
-    title: str | None = None
-    detail_url: str
-    download_url: str | None = None
-    size: str | None = None
-    duration: str | None = None
-    extension: str | None = None
-    primary_year: int | None = Field(default=None, ge=1900, le=2099)
-    detected_languages: list[str] = Field(default_factory=list)
-    has_dub_hint: bool = False
-    has_subtitle_hint: bool = False
-    media_kind: Literal["movie", "tv", "music", "unknown"] | None = None
-    is_kids: bool | None = None
-    series_name: str | None = None
-    season_number: int | None = Field(default=None, ge=1, le=99)
-    episode_number: int | None = Field(default=None, ge=1, le=999)
-    notes: str | None = None
-
-
-class AccountPayload(BaseModel):
-    login: str
-    password: str
-    verify: bool = True
-
-
-class YoutubeAuthPayload(BaseModel):
-    mode: Literal["none", "cookies_file", "cookies_from_browser"] = "none"
-    cookies_path: str | None = Field(default=None, max_length=1000)
-    cookies_text: str | None = Field(default=None, max_length=2_000_000)
-    cookies_from_browser: str | None = Field(default=None, max_length=200)
-
-
-class YoutubeAuthTestPayload(BaseModel):
-    detail_url: str = Field(min_length=1, max_length=500)
-
-
-DestinationPreset = Literal["auto", "movies", "tv", "kids_movies", "kids_tv", "music", "unsorted"]
-
-
-class EnqueueDownloadPayload(BaseModel):
-    detail_url: str
-    file_id: int | None = None
-    title: str | None = None
-    source_type: Literal["sdilej", "youtube"] = "sdilej"
-    source_metadata: dict | None = None
-    preferred_mode: Literal["auto", "premium", "free"] = "auto"
-    priority: int = Field(default=0, ge=-100, le=100)
-    chunk_count: int | None = Field(default=None, ge=1, le=8)
-    destination_preset: DestinationPreset = "auto"
-    media_kind: Literal["movie", "tv", "music"] | None = None
-    is_kids: bool | None = None
-    series_name: str | None = None
-    season_number: int | None = Field(default=None, ge=1, le=99)
-    episode_number: int | None = Field(default=None, ge=1, le=999)
-    source_saved_file_id: int | None = Field(default=None, ge=1)
-    delete_saved_on_complete: bool = False
-
-
-class UpdatePriorityPayload(BaseModel):
-    priority: int = Field(default=0, ge=-1000, le=1000)
-
-
-class ClearDownloadsPayload(BaseModel):
-    statuses: list[Literal["done", "failed", "canceled"]] = Field(default_factory=lambda: ["done", "failed", "canceled"])
-
-
-class DownloadSettingsPayload(BaseModel):
-    max_concurrent_jobs: int = Field(default=1, ge=1, le=8)
-    default_chunk_count: int = Field(default=1, ge=1, le=8)
-    bandwidth_limit_kbps: int = Field(default=0, ge=0, le=2_000_000)
-
-
-class LibraryPathsPayload(BaseModel):
-    movies_dir: str = Field(default="/movies", min_length=1, max_length=200)
-    tv_dir: str = Field(default="/tv", min_length=1, max_length=200)
-    kids_movies_dir: str = Field(default="/kids/movies", min_length=1, max_length=200)
-    kids_tv_dir: str = Field(default="/kids/tv", min_length=1, max_length=200)
-    music_dir: str = Field(default="/music", min_length=1, max_length=200)
-    unsorted_dir: str = Field(default="/unsorted", min_length=1, max_length=200)
-    confirm_on_uncertain: bool = True
-
-
-class MediaClassificationPayload(BaseModel):
-    title: str = Field(min_length=1, max_length=500)
-    destination_preset: DestinationPreset = "auto"
-    media_kind: Literal["movie", "tv", "music"] | None = None
-    is_kids: bool | None = None
-    series_name: str | None = None
-    season_number: int | None = Field(default=None, ge=1, le=99)
-    episode_number: int | None = Field(default=None, ge=1, le=999)
-
-
-class UpdateDownloadClassificationPayload(BaseModel):
-    destination_preset: DestinationPreset = "auto"
-    media_kind: Literal["movie", "tv", "music"] | None = None
-    is_kids: bool | None = None
-    series_name: str | None = None
-    season_number: int | None = Field(default=None, ge=1, le=99)
-    episode_number: int | None = Field(default=None, ge=1, le=999)
-
-
-class TvLookupPayload(BaseModel):
-    show_name: str = Field(min_length=1, max_length=200)
-
-
-class MovieLookupPayload(BaseModel):
-    title: str = Field(min_length=1, max_length=200)
-    year: int | None = Field(default=None, ge=1900, le=2099)
-
-
-class MovieInfoLinkPayload(BaseModel):
-    title: str = Field(min_length=1, max_length=500)
-    primary_year: int | None = Field(default=None, ge=1900, le=2099)
-    search_query: str | None = Field(default=None, max_length=200)
-    search_title: str | None = Field(default=None, max_length=200)
-
-
-class TvSeasonSearchPayload(BaseModel):
-    show_id: int = Field(ge=1)
-    show_name: str = Field(min_length=1, max_length=200)
-    seasons: list[int] = Field(default_factory=list)
-    episodes_by_season: dict[str, list[int]] = Field(default_factory=dict)
-    aliases: list[str] = Field(default_factory=list)
-    title_metadata: dict | None = None
-    category: Category = "video"
-    language: str | None = Field(default=None, max_length=32)
-    language_scope: LanguageScope = "any"
-    strict_dubbing: bool = False
-    max_results_per_variant: int = Field(default=120, ge=1, le=500)
-
-
-class TvEpisodeSearchPayload(BaseModel):
-    show_id: int = Field(ge=1)
-    show_name: str = Field(min_length=1, max_length=200)
-    season_number: int = Field(ge=1, le=99)
-    episode_number: int = Field(ge=1, le=999)
-    episode_name: str | None = Field(default=None, max_length=200)
-    airdate: str | None = Field(default=None, max_length=32)
-    aliases: list[str] = Field(default_factory=list)
-    title_metadata: dict | None = None
-    category: Category = "video"
-    language: str | None = Field(default=None, max_length=32)
-    language_scope: LanguageScope = "any"
-    strict_dubbing: bool = False
-    max_results_per_variant: int = Field(default=120, ge=1, le=500)
-    alias_mode: Literal["optimized", "all"] = "all"
-    force_search: bool = False
-
-
-@dataclass
-class ServiceContainer:
-    client: SdilejClient
-    tv_client: TvMazeClient
-    storage: Storage
-    worker: DownloadWorker
-    metadata_resolver: TitleMetadataResolver
-    tv_search_worker: TvSearchWorker
-
-
-def _get_services(request: Request) -> ServiceContainer:
-    return request.app.state.services
+AUDIO_PREFERENCE_OPTIONS: list[tuple[str, AudioPreference]] = [
+    ("No preference", "any"),
+    ("Original / English", "original_or_english"),
+    ("SK/CZ dubbed", "local_dub"),
+]
 
 
 def create_app(
@@ -663,6 +507,7 @@ def _search_files(
     language: str,
     language_scope: LanguageScope,
     strict_dubbing: bool,
+    audio_preference: AudioPreference,
     release_year: int | None,
     max_results: int,
     services: ServiceContainer,
@@ -676,6 +521,7 @@ def _search_files(
             language=language,
             language_scope=language_scope,
             strict_dubbing=strict_dubbing,
+            audio_preference=audio_preference,
             release_year=release_year,
             max_results=max_results,
         )
@@ -689,10 +535,13 @@ def _search_files(
         language=language,
         language_scope=language_scope,
         strict_dubbing=strict_dubbing,
+        audio_preference=audio_preference,
         release_year=release_year,
         max_results_per_query=max_results,
         max_results_total=max_results,
     )
+    if aggregated["expanded_queries"] and len(aggregated["query_errors"]) == len(aggregated["expanded_queries"]):
+        raise SearchUpstreamError("All Sdilej search queries failed. Try again shortly.")
     return SearchResponse(
         query=normalized_query,
         effective_query=aggregated["effective_query"] or normalized_query,
@@ -702,12 +551,14 @@ def _search_files(
         language=services.client.normalize_language(language),
         language_scope=language_scope,
         strict_dubbing=strict_dubbing,
+        audio_preference=audio_preference,
         release_year=release_year,
         search_url=aggregated["search_url"],
         unfiltered_result_count=aggregated["unfiltered_result_count"],
         result_count=len(aggregated["items"]),
         results=[strip_internal_result_fields(item) for item in aggregated["items"]],
         expanded_queries=aggregated["expanded_queries"],
+        query_errors=aggregated["query_errors"],
         title_metadata=title_metadata,
     )
 
@@ -755,19 +606,12 @@ def _resolve_tv_show_summary(
     services: ServiceContainer,
 ) -> TvShowSummary:
     try:
-        show = services.tv_client.lookup_show(show_name)
-        if show_id is not None and int(show.id) != int(show_id):
-            return TvShowSummary(
-                id=int(show_id),
-                name=show.name or show_name,
-                premiered=show.premiered,
-                language=show.language,
-                image_url=show.image_url,
-                type=show.type,
-                genres=list(show.genres),
-                summary=show.summary,
-            )
-        return show
+        if show_id is not None:
+            try:
+                return services.tv_client.lookup_show(show_name, show_id=show_id)
+            except TypeError:
+                pass
+        return services.tv_client.lookup_show(show_name)
     except Exception:
         return TvShowSummary(
             id=int(show_id or 0),
@@ -875,9 +719,21 @@ def _build_downloaded_tv_episode_payload(
 def _build_tv_lookup_payload(
     show_name: str,
     *,
+    show_id: int | None = None,
     services: ServiceContainer,
-) -> tuple[dict, list[dict], dict]:
-    show = services.tv_client.lookup_show(show_name)
+) -> tuple[dict, list[dict], dict, list[dict]]:
+    lookup_metadata = services.metadata_resolver.resolve_tv(show_name)
+    matches = _search_tv_show_matches(
+        show_name,
+        title_metadata=lookup_metadata,
+        services=services,
+    )
+    if show_id is None:
+        show = matches[0]
+    else:
+        show = next((item for item in matches if int(item.id) == int(show_id)), None)
+        if show is None:
+            raise TvMazeClientError("Selected TV show is no longer available for this query.")
     episodes = services.tv_client.get_episodes(show.id)
     seasons = _serialize_tv_seasons(episodes)
     if not seasons:
@@ -888,7 +744,98 @@ def _build_tv_lookup_payload(
         show=show,
         year=parse_year(show.premiered),
     )
-    return show.to_dict(), seasons, title_metadata.to_dict()
+    return show.to_dict(), seasons, title_metadata.to_dict(), [item.to_dict() for item in matches]
+
+
+def _search_tv_show_matches(
+    show_name: str,
+    *,
+    title_metadata: TitleMetadata,
+    services: ServiceContainer,
+) -> list[TvShowSummary]:
+    search_shows = getattr(services.tv_client, "search_shows", None)
+    if not callable(search_shows):
+        return [services.tv_client.lookup_show(show_name)]
+
+    queries = _tv_lookup_queries(show_name, title_metadata)
+    matches_by_id: dict[int, tuple[TvShowSummary, int, int]] = {}
+    last_error: TvMazeClientError | None = None
+    for query_index, query in enumerate(queries):
+        try:
+            found = list(search_shows(query))
+        except TvMazeClientError as exc:
+            last_error = exc
+            continue
+        for result_index, show in enumerate(found):
+            current = matches_by_id.get(show.id)
+            candidate = (show, query_index, result_index)
+            if current is None or (query_index, result_index) < (current[1], current[2]):
+                matches_by_id[show.id] = candidate
+
+    if not matches_by_id:
+        if last_error is not None:
+            raise last_error
+        raise TvMazeClientError(f"No TV show found for '{show_name}'.")
+
+    target_year = title_metadata.year
+    return [
+        item[0]
+        for item in sorted(
+            matches_by_id.values(),
+            key=lambda item: _tv_show_candidate_sort_key(
+                item[0],
+                queries=queries,
+                target_year=target_year,
+                query_index=item[1],
+                result_index=item[2],
+            ),
+            reverse=True,
+        )
+    ][:8]
+
+
+def _tv_lookup_queries(show_name: str, title_metadata: TitleMetadata) -> list[str]:
+    values = [
+        show_name,
+        title_metadata.canonical_title,
+        title_metadata.original_title,
+        *title_metadata.local_titles,
+        *title_metadata.aliases,
+    ]
+    queries: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        key = normalize_alias_key(text)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        queries.append(text)
+        if len(queries) == 6:
+            break
+    return queries or [show_name]
+
+
+def _tv_show_candidate_sort_key(
+    show: TvShowSummary,
+    *,
+    queries: list[str],
+    target_year: int | None,
+    query_index: int,
+    result_index: int,
+) -> tuple[int, int, int, int]:
+    show_key = normalize_alias_key(show.name)
+    title_score = 0
+    for query in queries:
+        query_key = normalize_alias_key(query)
+        if show_key == query_key:
+            title_score = max(title_score, 3)
+        elif show_key.startswith(f"{query_key} "):
+            title_score = max(title_score, 2)
+        elif query_key and query_key in show_key:
+            title_score = max(title_score, 1)
+    year_score = int(target_year is not None and parse_year(show.premiered) == target_year)
+    return title_score, year_score, -query_index, -result_index
 
 
 def _resolve_tv_search_alias_context(
@@ -946,6 +893,7 @@ def _search_single_tv_episode(
     language: str | None,
     language_scope: LanguageScope,
     strict_dubbing: bool,
+    audio_preference: AudioPreference,
     max_results_per_variant: int,
     alias_mode: Literal["optimized", "all"] = "optimized",
     force_search: bool = False,
@@ -985,6 +933,7 @@ def _search_single_tv_episode(
         language=language,
         language_scope=language_scope,
         strict_dubbing=strict_dubbing,
+        audio_preference=audio_preference,
         release_year=None,
         max_results_per_query=max_results_per_variant,
         result_scorer=result_scorer,

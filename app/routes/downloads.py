@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from ..diagnostics import error_response
-from ..main import (
+from ..api_models import (
     AccountPayload,
     ClearDownloadsPayload,
     DownloadSettingsPayload,
@@ -18,14 +19,16 @@ from ..main import (
     UpdatePriorityPayload,
     YoutubeAuthPayload,
     YoutubeAuthTestPayload,
+)
+from ..main import (
     _build_media_plan,
     _extract_file_id,
-    _get_services,
     _normalize_detail_url,
 )
+from ..services import get_services as _get_services
 from ..sdilej_client import SdilejClient, SdilejClientError
 from ..kids_catalog import KidsCatalogError, VeseleRozpravkyClient
-from ..youtube_downloader import YoutubeDownloadError, YoutubeDownloader
+from ..youtube_downloader import YoutubeDownloadError, YoutubeDownloader, validate_youtube_cookies
 
 router = APIRouter()
 
@@ -48,11 +51,16 @@ def _write_managed_youtube_cookies(cookies_text: str) -> Path:
         target.parent.chmod(0o700)
     except OSError:
         pass
-    target.write_text(cookies_text, encoding="utf-8")
-    try:
-        target.chmod(0o600)
-    except OSError:
-        pass
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=target.parent, delete=False) as handle:
+        temporary = Path(handle.name)
+        try:
+            handle.write(cookies_text)
+            handle.flush()
+            os.fsync(handle.fileno())
+            validate_youtube_cookies(temporary)
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
     return target
 
 
@@ -243,6 +251,12 @@ def api_youtube_auth_set(request: Request, payload: YoutubeAuthPayload):
                     retryable=False,
                     details=str(candidate),
                 )
+            validate_youtube_cookies(candidate)
+            previous = services.storage.get_youtube_auth_settings()
+            managed_cookies = managed_cookies or (
+                previous.get("managed_cookies", False)
+                and previous.get("cookies_path") == str(candidate.resolve())
+            )
             settings = services.storage.set_youtube_auth_settings(
                 mode="cookies_file",
                 cookies_path=str(candidate.resolve()),
@@ -271,6 +285,12 @@ def api_youtube_auth_set(request: Request, payload: YoutubeAuthPayload):
             status_code=400,
             error="Unsupported YouTube authentication mode.",
             error_code="youtube_auth_invalid_mode",
+            retryable=False,
+        )
+    except YoutubeDownloadError as exc:
+        return _download_error(
+            request, status_code=400, error=str(exc), error_code="youtube_auth_invalid_cookies",
+            hint="Export fresh YouTube cookies in Netscape format. The previous export is preserved.",
             retryable=False,
         )
     except Exception as exc:  # noqa: BLE001

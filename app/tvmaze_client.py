@@ -60,7 +60,7 @@ class TvMazeClient:
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "sdilej-search-app/1.0"})
 
-    def lookup_show(self, show_name: str) -> TvShowSummary:
+    def search_shows(self, show_name: str, limit: int = 8) -> list[TvShowSummary]:
         query = show_name.strip()
         if not query:
             raise TvMazeClientError("show_name is required.")
@@ -75,12 +75,27 @@ class TvMazeClient:
         if not isinstance(items, list) or not items:
             raise TvMazeClientError(f"No TV show found for '{query}'.")
 
-        picked = self._pick_best_match(query, items)
-        show = picked.get("show") or {}
+        ranked = sorted(items, key=lambda item: self._match_sort_key(query, item), reverse=True)
+        matches = [self._show_summary(item.get("show") or {}) for item in ranked]
+        matches = [show for show in matches if show is not None]
+        if not matches:
+            raise TvMazeClientError("TV metadata response is incomplete.")
+        return matches[: max(1, min(limit, 20))]
+
+    def lookup_show(self, show_name: str, show_id: int | None = None) -> TvShowSummary:
+        matches = self.search_shows(show_name)
+        if show_id is None:
+            return matches[0]
+        for show in matches:
+            if show.id == int(show_id):
+                return show
+        raise TvMazeClientError("Selected TV show is no longer available for this query.")
+
+    def _show_summary(self, show: dict) -> TvShowSummary | None:
         show_id = show.get("id")
         name = (show.get("name") or "").strip()
         if not show_id or not name:
-            raise TvMazeClientError("TV metadata response is incomplete.")
+            return None
 
         return TvShowSummary(
             id=int(show_id),
@@ -158,19 +173,15 @@ class TvMazeClient:
             aliases.append(name)
         return aliases
 
-    def _pick_best_match(self, query: str, items: list[dict]) -> dict:
+    def _match_sort_key(self, query: str, item: dict) -> tuple[int, float, str]:
         query_norm = query.strip().lower()
-
-        def sort_key(item: dict) -> tuple[int, float, str]:
-            show = item.get("show") or {}
-            name = str(show.get("name") or "").strip()
-            name_norm = name.lower()
-            exact = 1 if name_norm == query_norm else 0
-            starts = 1 if name_norm.startswith(query_norm) else 0
-            score = float(item.get("score") or 0.0)
-            return (exact + starts, score, name_norm)
-
-        return max(items, key=sort_key)
+        show = item.get("show") or {}
+        name = str(show.get("name") or "").strip()
+        name_norm = name.lower()
+        exact = 1 if name_norm == query_norm else 0
+        starts = 1 if name_norm.startswith(query_norm) else 0
+        score = float(item.get("score") or 0.0)
+        return (exact + starts, score, name_norm)
 
     def _extract_image_url(self, raw_image: object) -> str | None:
         if not isinstance(raw_image, dict):

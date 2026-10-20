@@ -10,6 +10,7 @@ class StorageSchemaRepository:
 
     def apply_schema(self, conn: sqlite3.Connection) -> None:
         self._ensure_column(conn, table="search_history", column="strict_dubbing", definition="INTEGER NOT NULL DEFAULT 0")
+        self._ensure_column(conn, table="search_history", column="audio_preference", definition="TEXT NOT NULL DEFAULT 'any'")
         self._ensure_column(conn, table="saved_candidates", column="updated_at", definition="TEXT NOT NULL DEFAULT (datetime('now'))")
         self._ensure_column(conn, table="saved_candidates", column="media_kind", definition="TEXT")
         self._ensure_column(conn, table="saved_candidates", column="is_kids", definition="INTEGER NOT NULL DEFAULT 0")
@@ -31,6 +32,7 @@ class StorageSchemaRepository:
         self._ensure_column(conn, table="download_jobs", column="delete_saved_on_complete", definition="INTEGER NOT NULL DEFAULT 0")
         self._ensure_column(conn, table="download_jobs", column="delete_partial_on_cancel", definition="INTEGER NOT NULL DEFAULT 0")
         self._ensure_column(conn, table="tv_search_jobs", column="search_aliases_json", definition="TEXT NOT NULL DEFAULT '[]'")
+        self._ensure_column(conn, table="tv_search_jobs", column="audio_preference", definition="TEXT NOT NULL DEFAULT 'any'")
         self._ensure_column(conn, table="tv_search_job_episodes", column="downloaded_files_json", definition="TEXT NOT NULL DEFAULT '[]'")
 
         self._ensure_index(conn, name="idx_download_jobs_status_priority_id", table="download_jobs", columns="status, priority DESC, id ASC")

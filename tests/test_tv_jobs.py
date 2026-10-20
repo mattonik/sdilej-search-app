@@ -71,6 +71,112 @@ def test_tv_lookup_error_returns_diagnostic_payload_and_request_id(app_factory) 
     assert payload["hint"]
 
 
+def test_tv_lookup_returns_candidates_and_loads_the_selected_show(app_factory) -> None:
+    classic = TvShowSummary(
+        id=101,
+        name="The Equalizer",
+        premiered="1985-09-18",
+        language="English",
+        type="Scripted",
+    )
+    reboot = TvShowSummary(
+        id=202,
+        name="The Equalizer",
+        premiered="2021-02-07",
+        language="English",
+        type="Scripted",
+    )
+
+    class AmbiguousTvClient(FakeTvMazeClient):
+        def search_shows(self, show_name: str) -> list[TvShowSummary]:
+            return [classic, reboot]
+
+        def get_episodes(self, show_id: int) -> list[TvEpisode]:
+            episode_name = "Classic pilot" if show_id == classic.id else "The Reboot"
+            return [TvEpisode(id=show_id, season=1, number=1, name=episode_name, airdate="2021-02-07")]
+
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="The Equalizer",
+        original_title="The Equalizer",
+        local_titles=[],
+        aliases=["The Equalizer"],
+        year=2021,
+        source="test",
+        source_ids={},
+    )
+    app = app_factory(
+        tv_client_instance=AmbiguousTvClient(),
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        first = client.post("/api/tv/lookup", json={"show_name": "The Equalizer"})
+        selected = client.post("/api/tv/lookup", json={"show_name": "The Equalizer", "show_id": reboot.id})
+
+    assert first.status_code == 200
+    assert first.json()["show"]["id"] == reboot.id
+    assert [item["id"] for item in first.json()["show_matches"]] == [reboot.id, classic.id]
+    assert selected.status_code == 200
+    assert selected.json()["show"]["id"] == reboot.id
+    assert selected.json()["seasons"][0]["episodes"][0]["name"] == "The Reboot"
+
+
+def test_tv_lookup_uses_localized_titles_to_find_tvmaze_candidates(app_factory) -> None:
+    localized = TvShowSummary(
+        id=101,
+        name="Nemocnica: Nova smena",
+        premiered="2024-01-01",
+        language="Slovak",
+    )
+    original = TvShowSummary(
+        id=202,
+        name="Hospital Playlist",
+        premiered="2021-06-17",
+        language="Korean",
+    )
+
+    class LocalizedTvClient(FakeTvMazeClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.queries: list[str] = []
+
+        def search_shows(self, show_name: str) -> list[TvShowSummary]:
+            self.queries.append(show_name)
+            if show_name == "Nemocnica":
+                return [localized]
+            if show_name == "Hospital Playlist":
+                return [original]
+            return []
+
+        def get_episodes(self, show_id: int) -> list[TvEpisode]:
+            return [TvEpisode(id=show_id, season=1, number=1, name="Pilot", airdate="2021-06-17")]
+
+    metadata = TitleMetadata(
+        kind="tv",
+        canonical_title="Nemocnica",
+        original_title="Hospital Playlist",
+        local_titles=["Nemocnica"],
+        aliases=["Nemocnica", "Hospital Playlist"],
+        year=2021,
+        source="czdb",
+        source_ids={"csfd": 1},
+    )
+    tv_client = LocalizedTvClient()
+    app = app_factory(
+        tv_client_instance=tv_client,
+        metadata_resolver_instance=StaticMetadataResolver(metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/api/tv/lookup", json={"show_name": "Nemocnica"})
+
+    assert response.status_code == 200
+    assert tv_client.queries == ["Nemocnica", "Hospital Playlist"]
+    assert [item["id"] for item in response.json()["show_matches"]] == [original.id, localized.id]
+    assert response.json()["show"]["id"] == original.id
+
+
 def test_sync_tv_search_marks_existing_episode_as_downloaded_and_skips_episode_queries(app_factory, media_root) -> None:
     season_dir = media_root / "tv" / "Vesela farma" / "S01"
     season_dir.mkdir(parents=True)
@@ -152,6 +258,7 @@ def test_sync_tv_search_ignores_support_files_when_detecting_downloaded_episodes
                 "episodes_by_season": {"1": [1]},
                 "aliases": ["Shaun the Sheep"],
                 "title_metadata": metadata.to_dict(),
+                "audio_preference": "original_or_english",
             },
         )
 
@@ -341,8 +448,16 @@ def test_manual_tv_episode_search_works_for_reacher(app_factory) -> None:
     payload = response.json()
     assert payload["episode"]["status"] == "done"
     assert payload["episode"]["result_count"] == 1
-    assert payload["episode"]["query_variants"] == ["Reacher S01E01"]
-    assert fake_client.calls == ["Reacher S01E01"]
+    assert payload["episode"]["query_variants"] == [
+        "Reacher S01E01",
+        "Reacher 1x01",
+        "Reacher 1x1",
+    ]
+    assert fake_client.calls == [
+        "Reacher S01E01",
+        "Reacher 1x01",
+        "Reacher 1x1",
+    ]
 
 
 def test_tv_search_job_worker_processes_and_finalizes_job(app_factory, storage) -> None:
@@ -377,6 +492,7 @@ def test_tv_search_job_worker_processes_and_finalizes_job(app_factory, storage) 
                 "episodes_by_season": {"1": [1, 2]},
                 "aliases": ["Shaun the Sheep"],
                 "title_metadata": metadata.to_dict(),
+                "audio_preference": "original_or_english",
             },
         )
         assert created.status_code == 200
@@ -392,6 +508,7 @@ def test_tv_search_job_worker_processes_and_finalizes_job(app_factory, storage) 
     assert job is not None
     assert job["status"] == "done"
     assert job["search_aliases"] == ["Shaun the Sheep", "Vesela farma"]
+    assert job["audio_preference"] == "original_or_english"
     assert job["completed_episodes"] == 2
     assert job["result_count"] == 2
     assert all(episode["status"] == "done" for season in job["seasons"] for episode in season["episodes"])
@@ -455,7 +572,11 @@ def test_tv_search_job_marks_downloaded_episodes_complete_before_worker_runs(app
     assert job is not None
     assert job["status"] == "done"
     assert job["completed_episodes"] == 2
-    assert worker_search_factory.instances[0].calls == ["Shaun the Sheep S01E02"]
+    assert worker_search_factory.instances[0].calls == [
+        "Shaun the Sheep S01E02",
+        "Shaun the Sheep 1x02",
+        "Shaun the Sheep 1x2",
+    ]
 
 
 def test_tv_search_job_partial_progress_is_visible(app_factory, storage) -> None:
@@ -708,7 +829,7 @@ def test_sync_tv_search_prefers_exact_show_results_over_generic_blue_titles(app_
     assert response.status_code == 200
     payload = response.json()
     assert payload["search_aliases"] == ["Bluey"]
-    assert fake_client.calls == ["Bluey S01E01"]
+    assert fake_client.calls == ["Bluey S01E01", "Bluey 1x01", "Bluey 1x1"]
     results = payload["seasons"][0]["episodes"][0]["results"]
     assert [item["title"] for item in results] == [
         "Bluey S01E01 Magic Xylophone",
@@ -783,7 +904,7 @@ def test_background_tv_search_job_uses_same_tv_ranking_rules(app_factory, storag
     assert job is not None
     assert job["status"] == "done"
     assert job["search_aliases"] == ["Bluey"]
-    assert search_factory.instances[0].calls == ["Bluey S01E01"]
+    assert search_factory.instances[0].calls == ["Bluey S01E01", "Bluey 1x01", "Bluey 1x1"]
     results = job["seasons"][0]["episodes"][0]["results"]
     assert [item["title"] for item in results] == [
         "Bluey S01E01 Magic Xylophone",
@@ -837,7 +958,11 @@ def test_sync_tv_search_probes_aliases_once_and_narrows_episode_queries(app_fact
         "Ovecka Shaun",
         "Vesela farma",
         "Shaun the Sheep S01E01",
+        "Shaun the Sheep 1x01",
+        "Shaun the Sheep 1x1",
         "Vesela farma S01E01",
+        "Vesela farma 1x01",
+        "Vesela farma 1x1",
     ]
     assert payload["seasons"][0]["episodes"][0]["result_count"] == 2
 
@@ -891,10 +1016,14 @@ def test_manual_tv_episode_search_can_use_all_safe_aliases(app_factory) -> None:
     assert payload["episode"]["result_count"] == 2
     assert fake_client.calls == [
         "Shaun the Sheep S01E01",
+        "Shaun the Sheep 1x01",
+        "Shaun the Sheep 1x1",
         "Ovecka Shaun S01E01",
         "Ovecka Shaun 1x01",
         "Ovecka Shaun 1x1",
         "Vesela farma S01E01",
+        "Vesela farma 1x01",
+        "Vesela farma 1x1",
     ]
 
 

@@ -432,6 +432,33 @@ def test_video_search_expands_aliases_and_merges_query_hits(app_factory, sample_
     assert sorted(merged["query_hits"]) == ["Shaun the Sheep", "Vesela farma"]
 
 
+def test_video_search_prefers_english_results_without_filtering_dubbed_versions(app_factory, sample_movie_metadata) -> None:
+    fake_client = FakeSdilejClient(
+        responses_by_query={
+            "Shaun the Sheep": [
+                build_search_result(file_id=1, title="Shaun the Sheep CZ dabing", detected_languages=["CZ"]),
+                build_search_result(file_id=2, title="Shaun the Sheep EN 1080p", detected_languages=["EN"]),
+            ],
+        }
+    )
+    app = app_factory(client_instance=fake_client, metadata_resolver_instance=StaticMetadataResolver(sample_movie_metadata))
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/search",
+            params={
+                "query": "Shaun the Sheep",
+                "category": "video",
+                "audio_preference": "original_or_english",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["audio_preference"] == "original_or_english"
+    assert [item["file_id"] for item in payload["results"]] == [2, 1]
+
+
 def test_non_video_search_keeps_single_query(app_factory, sample_movie_metadata) -> None:
     fake_client = FakeSdilejClient(
         responses_by_query={
@@ -448,6 +475,40 @@ def test_non_video_search_keeps_single_query(app_factory, sample_movie_metadata)
     payload = response.json()
     assert payload["expanded_queries"] == []
     assert fake_client.calls == ["podcast"]
+
+
+def test_search_returns_gateway_error_when_all_upstream_queries_fail(app_factory, sample_movie_metadata) -> None:
+    app = app_factory(
+        client_instance=FailingSearchClient(),
+        metadata_resolver_instance=StaticMetadataResolver(sample_movie_metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/search", params={"query": "Shaun the Sheep", "category": "video"})
+
+    assert response.status_code == 502
+    assert response.json()["error_code"] == "search_upstream_failed"
+
+
+def test_search_exposes_partial_alias_failures(app_factory, sample_movie_metadata) -> None:
+    class PartiallyFailingClient(FakeSdilejClient):
+        def search(self, query, **kwargs):  # noqa: ANN001
+            if query == "Ovecka Shaun":
+                raise SdilejClientError("temporary upstream failure")
+            return super().search(query, **kwargs)
+
+    app = app_factory(
+        client_instance=PartiallyFailingClient(
+            responses_by_query={"Shaun the Sheep": [build_search_result(file_id=1, title="Shaun the Sheep", size="700 MB")]}
+        ),
+        metadata_resolver_instance=StaticMetadataResolver(sample_movie_metadata),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/search", params={"query": "Shaun the Sheep", "category": "video"})
+
+    assert response.status_code == 200
+    assert response.json()["query_errors"] == ["Ovecka Shaun: temporary upstream failure"]
 
 
 def test_movie_search_page_renders_info_buttons(app_factory, sample_movie_metadata) -> None:
@@ -741,12 +802,12 @@ def test_youtube_auth_defaults_managed_cookies_next_to_app_db(app_factory, tmp_p
     with TestClient(app) as client:
         response = client.post(
             "/api/youtube-auth",
-            json={"mode": "cookies_file", "cookies_text": "cookie-data"},
+            json={"mode": "cookies_file", "cookies_text": "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\tfixture"},
         )
 
     assert response.status_code == 200
     managed_path = tmp_path / "config" / "secrets" / "youtube-cookies.txt"
-    assert managed_path.read_text(encoding="utf-8") == "cookie-data"
+    assert "SID\tfixture" in managed_path.read_text(encoding="utf-8")
     assert response.json()["cookies_path"] == str(managed_path.resolve())
 
 
@@ -769,7 +830,7 @@ def test_youtube_auth_clear_deletes_managed_cookies(app_factory, tmp_path, monke
     app = app_factory()
 
     with TestClient(app) as client:
-        client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_text": "cookie-data"})
+        client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_text": "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\tfixture"})
         response = client.delete("/api/youtube-auth")
         status_response = client.get("/api/youtube-auth")
 
@@ -777,6 +838,20 @@ def test_youtube_auth_clear_deletes_managed_cookies(app_factory, tmp_path, monke
     assert response.json()["cleared"] is True
     assert not managed_path.exists()
     assert status_response.json()["configured"] is False
+
+
+def test_invalid_cookie_replacement_preserves_previous_export(app_factory, tmp_path, monkeypatch):
+    path = tmp_path / "cookies.txt"
+    monkeypatch.setenv("YOUTUBE_MANAGED_COOKIES_PATH", str(path))
+    valid = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\tfixture"
+    with TestClient(app_factory()) as client:
+        assert client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_text": valid}).status_code == 200
+        for invalid in ("bad export", valid.replace("2000000000", "1000000000"), valid.replace("youtube.com", "example.com")):
+            response = client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_text": invalid})
+            assert response.status_code == 400
+            assert path.read_text() == valid
+        response = client.post("/api/youtube-auth", json={"mode": "cookies_file", "cookies_path": str(path)})
+        assert response.json()["managed_cookies"] is True
 
 
 @responses.activate

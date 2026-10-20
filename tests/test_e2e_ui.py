@@ -113,6 +113,7 @@ class FakeSdilejClient:
         language: str | None = None,
         language_scope: str = "any",
         strict_dubbing: bool = False,
+        audio_preference: str = "any",
         release_year: int | None = None,
     ) -> SearchResponse:
         results = list(self.responses_by_query.get(query, []))[:max_results]
@@ -282,7 +283,7 @@ def launch_browser():
             browser.close()
 
 
-def _build_file_search_app(tmp_path: Path):
+def _build_file_search_app(tmp_path: Path, *, with_active_download: bool = True):
     media_root = tmp_path / "media"
     os.environ["DOWNLOAD_DIR"] = str(media_root)
     (media_root / "tv" / "Reacher").mkdir(parents=True, exist_ok=True)
@@ -310,19 +311,20 @@ def _build_file_search_app(tmp_path: Path):
         classification_confidence="manual",
         notes=None,
     )
-    storage.enqueue_download_job(
-        detail_url="https://sdilej.cz/102/bluey-s01e02",
-        file_id=102,
-        title="Bluey S01E02",
-        preferred_mode="premium",
-        output_dir="/downloads",
-        priority=0,
-        media_kind="tv",
-        is_kids=True,
-        series_name="Bluey",
-        season_number=1,
-        episode_number=2,
-    )
+    if with_active_download:
+        storage.enqueue_download_job(
+            detail_url="https://sdilej.cz/102/bluey-s01e02",
+            file_id=102,
+            title="Bluey S01E02",
+            preferred_mode="premium",
+            output_dir="/downloads",
+            priority=0,
+            media_kind="tv",
+            is_kids=True,
+            series_name="Bluey",
+            season_number=1,
+            episode_number=2,
+        )
     metadata = TitleMetadata(
         kind="movie",
         canonical_title="Bluey",
@@ -527,12 +529,36 @@ def test_mobile_navigation_and_search_mode_tabs_stay_compact(tmp_path) -> None:
 
         nav_box = page.locator(".workspace-tabs").bounding_box()
         assert nav_box and nav_box["height"] < 70
+        for button_id in ["fileSearchModeBtn", "tvSearchModeBtn", "musicSearchModeBtn", "discoverySearchModeBtn", "kidsSearchModeBtn"]:
+            box = page.locator(f"#{button_id}").bounding_box()
+            assert box and box["x"] >= 0 and box["x"] + box["width"] <= 390
         assert page.locator("#fileSearchModeBtn").get_attribute("role") == "tab"
         assert page.locator("#fileSearchModeBtn").get_attribute("aria-selected") == "true"
 
         page.click("#tvSearchModeBtn")
         assert page.locator("#tvSearchModeBtn").get_attribute("aria-selected") == "true"
         assert page.locator("#tvModePanel").get_attribute("role") == "tabpanel"
+
+
+@pytest.mark.e2e
+def test_library_modes_make_tv_kids_and_music_workflows_explicit(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="library"]')
+        page.wait_for_selector("#libraryTvPanel:not(.hidden)")
+        assert page.locator("#libraryFolderKind").input_value() == "tv"
+
+        page.click("#libraryKidsModeBtn")
+        assert page.locator("#libraryKidsModeBtn").get_attribute("aria-selected") == "true"
+        assert page.locator("#libraryFolderKind").input_value() == "kids"
+        assert "Kids TV" in (page.locator("#libraryFolderHeading").text_content() or "")
+
+        page.click("#libraryMusicModeBtn")
+        page.wait_for_selector("#libraryMusicPanel:not(.hidden)")
+        assert page.locator("#libraryTvPanel").is_hidden()
 
 
 @pytest.mark.e2e
@@ -548,9 +574,7 @@ def test_download_job_card_exposes_copy_action(tmp_path) -> None:
         page.wait_for_selector("#refreshDownloadsBtn")
         queue_top = page.locator(".download-queue-section").bounding_box()["y"]
         add_top = page.locator(".download-add-section").bounding_box()["y"]
-        settings_open = page.locator(".download-settings-section").get_attribute("open")
         assert queue_top < add_top
-        assert settings_open is None
         page.click("#refreshDownloadsBtn")
         page.wait_for_selector('#downloadJobs [data-action="copy"]', state="attached")
         assert page.locator('#downloadJobs [data-action="copy"]').count() >= 1
@@ -764,17 +788,21 @@ def test_movie_discovery_offers_full_search_for_unavailable_movie(tmp_path) -> N
 
 
 @pytest.mark.e2e
-def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
+def test_unified_download_composer_enqueues_youtube_link(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
     with run_test_server(app) as base_url, launch_browser() as browser:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="downloads"]')
-        page.fill("#youtubeQuickUrl", "https://www.youtube.com/watch?v=abc123XYZ")
+        page.fill("#downloadDetailUrl", "https://www.youtube.com/watch?v=abc123XYZ")
+        page.wait_for_selector("#downloadPlaylistLabel:not(.hidden)")
         with page.expect_response(lambda response: response.request.method == "POST" and response.url.endswith("/api/downloads")) as response_info:
-            page.click("#youtubeQuickSubmit")
+            page.click('#downloadForm button[type="submit"]')
         assert response_info.value.status == 200
+        payload = json.loads(response_info.value.request.post_data or "{}")
+        assert payload["source_type"] == "youtube"
+        assert payload["source_metadata"]["download_playlist"] is False
         page.wait_for_function("document.querySelector('#downloadJobs')?.textContent.includes('YouTube video')")
 
         job_text = page.locator("#downloadJobs").text_content() or ""
@@ -783,24 +811,24 @@ def test_youtube_quick_download_enqueues_direct_link(tmp_path) -> None:
 
 
 @pytest.mark.e2e
-def test_youtube_quick_download_tv_destination_uses_local_show_picker(tmp_path) -> None:
+def test_unified_download_composer_tv_destination_uses_local_show_picker(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 
     with run_test_server(app) as base_url, launch_browser() as browser:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="downloads"]')
-        page.select_option("#youtubeQuickDestinationPreset", "tv")
-        page.wait_for_selector("#youtubeQuickTvFields:not(.hidden)")
-        page.locator("#youtubeQuickSeriesName").focus()
+        page.select_option("#downloadDestinationPreset", "tv")
+        page.wait_for_selector("#downloadTvFields:not(.hidden)")
+        page.locator("#downloadSeriesName").focus()
         page.wait_for_function(
-            "() => Array.from(document.querySelectorAll('#youtubeQuickSeriesSuggestions option')).some((option) => option.value === 'Reacher')"
+            "() => Array.from(document.querySelectorAll('#downloadSeriesSuggestions option')).some((option) => option.value === 'Reacher')"
         )
-        page.fill("#youtubeQuickSeriesName", "Reacher")
-        page.fill("#youtubeQuickSeasonNumber", "1")
-        page.fill("#youtubeQuickUrl", "https://www.youtube.com/watch?v=tv123XYZ")
+        page.fill("#downloadSeriesName", "Reacher")
+        page.fill("#downloadSeasonNumber", "1")
+        page.fill("#downloadDetailUrl", "https://www.youtube.com/watch?v=tv123XYZ")
         with page.expect_response(lambda response: response.request.method == 'POST' and response.url.endswith('/api/downloads')) as response_info:
-            page.click("#youtubeQuickSubmit")
+            page.click('#downloadForm button[type="submit"]')
         assert response_info.value.status == 200
         payload = json.loads(response_info.value.request.post_data or "{}")
         assert payload["destination_preset"] == "tv"
@@ -808,6 +836,21 @@ def test_youtube_quick_download_tv_destination_uses_local_show_picker(tmp_path) 
         assert payload["is_kids"] is False
         assert payload["series_name"] == "Reacher"
         assert payload["season_number"] == 1
+
+
+@pytest.mark.e2e
+def test_unified_download_composer_opens_youtube_settings(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.goto(base_url, wait_until="networkidle")
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.fill("#downloadDetailUrl", "https://www.youtube.com/watch?v=settings123")
+        page.wait_for_selector("#downloadYoutubeAccessHint:not(.hidden)")
+        page.click("#openYoutubeSettingsBtn")
+        page.wait_for_selector('.workspace-tab.active[data-tab="settings"]')
+        assert page.locator("#youtubeAuthDetails").get_attribute("open") is not None
 
 
 @pytest.mark.e2e
@@ -896,7 +939,32 @@ def test_download_queue_refresh_error_exposes_diagnostic_details(tmp_path) -> No
 
 
 @pytest.mark.e2e
-def test_account_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch) -> None:
+def test_queue_polling_pauses_outside_downloads_and_resumes_on_open(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path, with_active_download=False)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        refresh_requests: list[str] = []
+
+        def track_queue_refresh(request) -> None:
+            if request.method == "GET" and "/api/downloads?limit=" in request.url:
+                refresh_requests.append(request.url)
+
+        page.on("request", track_queue_refresh)
+        page.goto(base_url, wait_until="networkidle")
+        initial_count = len(refresh_requests)
+        assert initial_count >= 1
+
+        page.wait_for_timeout(2800)
+        assert len(refresh_requests) == initial_count
+
+        page.click('.workspace-tab[data-tab="downloads"]')
+        page.wait_for_timeout(2800)
+        assert len(refresh_requests) > initial_count
+
+
+@pytest.mark.e2e
+def test_settings_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("YOUTUBE_MANAGED_COOKIES_PATH", str(tmp_path / "secrets" / "youtube-cookies.txt"))
     app = _build_file_search_app(tmp_path)
 
@@ -905,11 +973,10 @@ def test_account_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch)
         page.goto(base_url, wait_until="networkidle")
 
         page.click('.workspace-tab[data-tab="downloads"]')
-        page.wait_for_selector("#openAccountTabBtn")
         assert page.locator("#accountForm").is_hidden()
 
-        page.click("#openAccountTabBtn")
-        page.wait_for_selector('.workspace-tab.active[data-tab="account"]')
+        page.click('.workspace-tab[data-tab="settings"]')
+        page.wait_for_selector('.workspace-tab.active[data-tab="settings"]')
         page.wait_for_selector("#accountStatus")
         assert "Free" in page.locator("#accountStatus").text_content()
         assert page.locator("#accountDetails").get_attribute("open") is None
@@ -928,9 +995,13 @@ def test_account_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch)
         page.select_option("#youtubeAuthMode", "cookies_file")
         page.fill("#youtubeCookiesText", "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret-value")
         page.click('#youtubeAuthForm button[type="submit"]')
-        page.wait_for_function("() => document.querySelector('#youtubeAuthStatus')?.textContent?.includes('Cookies file configured')")
+        page.wait_for_function("() => document.querySelector('#youtubeAuthStatus')?.textContent?.includes('Cookies saved')")
         auth_text = page.locator("#youtubeAuthDetails").text_content() or ""
         assert "secret-value" not in auth_text
+        assert page.locator('a[href="/saved"]').count() == 1
+
+        page.goto(f"{base_url}/#account", wait_until="networkidle")
+        page.wait_for_selector('.workspace-tab.active[data-tab="settings"]')
 
 
 @pytest.mark.e2e
@@ -990,7 +1061,7 @@ def test_library_folder_scan_deep_scan_and_missing_search(tmp_path) -> None:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="library"]')
-        page.select_option("#libraryFolderKind", "kids")
+        page.click("#libraryKidsModeBtn")
         page.click("#libraryFoldersScanBtn")
         page.wait_for_selector('.library-folder-card[data-folder-name="Bluey"]')
         page.click('.library-deep-scan[data-folder-name="Bluey"]')
@@ -1012,6 +1083,7 @@ def test_library_music_scan_deep_scan_and_search(tmp_path) -> None:
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
         page.click('.workspace-tab[data-tab="library"]')
+        page.click("#libraryMusicModeBtn")
         page.click("#libraryMusicFoldersScanBtn")
         page.wait_for_selector('.library-music-artist[data-artist-name="Daft Punk"]')
         page.click('.library-music-album[data-album-name="Discovery"]')
@@ -1205,6 +1277,122 @@ def test_reacher_tv_episode_search_runs_without_extra_selection(tmp_path) -> Non
         first_episode = page.locator("#tvResults details.tv-season[open] .tv-episode-card").first
         assert "done" in first_episode.locator(".tv-episode-status").text_content().lower()
         assert first_episode.locator(".tv-result-item a").first.text_content().lower().find("reacher") >= 0
+
+
+@pytest.mark.e2e
+def test_tv_search_uses_the_tv_audio_preference(tmp_path) -> None:
+    app = _build_reacher_tv_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        requests: list[dict] = []
+        page.on(
+            "request",
+            lambda request: requests.append(json.loads(request.post_data or "{}"))
+            if request.method == "POST" and request.url.endswith("/api/tv/search-jobs")
+            else None,
+        )
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "Reacher")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowSummaryCard")
+        page.click("#tvModePanel .tv-filter-editor summary")
+        page.wait_for_selector("#tvModePanel .tv-filter-editor[open]")
+        page.select_option("#tvFilterAudioPreference", "original_or_english")
+        page.click("#tvSearchBtn")
+        page.wait_for_function("() => document.querySelector('#tvStatus')?.textContent?.includes('TV search')")
+
+    assert requests
+    assert requests[0]["audio_preference"] == "original_or_english"
+
+
+@pytest.mark.e2e
+def test_restored_tv_search_job_hydrates_its_filters(tmp_path) -> None:
+    app, storage, _ = _build_tv_polling_app(tmp_path)
+    job = storage.enqueue_tv_search_job(
+        show={"id": 321, "name": "Bluey"},
+        title_metadata=None,
+        aliases=["Bluey"],
+        search_aliases=["Bluey"],
+        selected_seasons=[1],
+        episodes_by_season={"1": [1]},
+        category="video",
+        language="EN",
+        language_scope="audio",
+        strict_dubbing=True,
+        audio_preference="original_or_english",
+        max_results_per_variant=25,
+        episodes=[
+            {
+                "season_number": 1,
+                "episode_number": 1,
+                "episode_name": "Magic Xylophone",
+                "episode_code": "S01E01",
+            }
+        ],
+    )
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.add_init_script(
+            f"""
+            localStorage.setItem('activeTvSearchJobId', '{job["id"]}');
+            localStorage.setItem('searchMode', 'tv');
+            """
+        )
+        page.goto(base_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#tvFilterAudioPreference')?.value === 'original_or_english'")
+
+        assert page.locator("#tvFilterLanguage").input_value() == "EN"
+        assert page.locator("#tvFilterLanguageScope").input_value() == "audio"
+        assert page.locator("#tvFilterStrictDubbing").is_checked()
+        assert page.locator("#tvFilterMaxResults").input_value() == "25"
+        assert "Original / English" in (page.locator("#tvActiveFilters").text_content() or "")
+
+
+@pytest.mark.e2e
+def test_tv_lookup_allows_selecting_a_similar_show(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+    shows = [
+        {"id": 101, "name": "The Equalizer", "premiered": "1985-09-18", "language": "English", "type": "Scripted"},
+        {"id": 202, "name": "The Equalizer", "premiered": "2021-02-07", "language": "English", "type": "Scripted"},
+    ]
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        lookup_ids: list[int | None] = []
+
+        def fulfill_tv_lookup(route) -> None:
+            payload = json.loads(route.request.post_data or "{}")
+            selected_id = int(payload.get("show_id") or 101)
+            lookup_ids.append(payload.get("show_id"))
+            show = next(item for item in shows if item["id"] == selected_id)
+            route.fulfill(
+                status=200,
+                json={
+                    "show": show,
+                    "show_matches": shows,
+                    "aliases": [show["name"]],
+                    "all_search_aliases": [show["name"]],
+                    "search_aliases": [show["name"]],
+                    "seasons": [{"season_number": 1, "episode_count": 1, "episodes": [{"number": 1, "name": "Pilot", "episode_code": "S01E01"}]}],
+                    "season_count": 1,
+                    "episode_count": 1,
+                },
+            )
+
+        page.route("**/api/tv/lookup", fulfill_tv_lookup)
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "The Equalizer")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowMatches:not(.hidden) .tv-show-match-btn")
+        assert page.locator("#tvShowMatches .tv-show-match-btn").count() == 2
+
+        page.locator('#tvShowMatches .tv-show-match-btn[data-show-id="202"]').click()
+        page.wait_for_function("() => document.querySelector('#tvShowSummaryCard')?.textContent?.includes('2021')")
+        assert lookup_ids == [None, 202]
 
 
 @pytest.mark.e2e

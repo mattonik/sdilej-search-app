@@ -36,6 +36,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const sortSelect = document.getElementById("sortSelect");
       const languageInput = document.getElementById("languageInput");
       const languageScopeSelect = document.getElementById("languageScopeSelect");
+      const audioPreferenceSelect = document.getElementById("audioPreferenceSelect");
       const strictDubbingInput = document.getElementById("strictDubbingInput");
       const releaseYearInput = document.getElementById("releaseYearInput");
       const maxResultsInput = document.getElementById("maxResultsInput");
@@ -78,12 +79,14 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const tvLookupBtn = document.getElementById("tvLookupBtn");
       const tvStatus = document.getElementById("tvStatus");
       const tvShowSummaryCard = document.getElementById("tvShowSummaryCard");
+      const tvShowMatches = document.getElementById("tvShowMatches");
       const tvLookupInfo = document.getElementById("tvLookupInfo");
       const tvSeasonPicker = document.getElementById("tvSeasonPicker");
       const tvActiveFilters = document.getElementById("tvActiveFilters");
       const tvFilterCategory = document.getElementById("tvFilterCategory");
       const tvFilterLanguage = document.getElementById("tvFilterLanguage");
       const tvFilterLanguageScope = document.getElementById("tvFilterLanguageScope");
+      const tvFilterAudioPreference = document.getElementById("tvFilterAudioPreference");
       const tvFilterMaxResults = document.getElementById("tvFilterMaxResults");
       const tvFilterStrictDubbing = document.getElementById("tvFilterStrictDubbing");
       const tvSearchBtn = document.getElementById("tvSearchBtn");
@@ -108,6 +111,13 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const libraryTvShowName = document.getElementById("libraryTvShowName");
       const libraryStatus = document.getElementById("libraryStatus");
       const libraryTvMissingResults = document.getElementById("libraryTvMissingResults");
+      const libraryTvModeBtn = document.getElementById("libraryTvModeBtn");
+      const libraryKidsModeBtn = document.getElementById("libraryKidsModeBtn");
+      const libraryMusicModeBtn = document.getElementById("libraryMusicModeBtn");
+      const libraryTvPanel = document.getElementById("libraryTvPanel");
+      const libraryMusicPanel = document.getElementById("libraryMusicPanel");
+      const libraryFolderHeading = document.getElementById("libraryFolderHeading");
+      const libraryFolderHint = document.getElementById("libraryFolderHint");
       const libraryFolderKind = document.getElementById("libraryFolderKind");
       const libraryFoldersScanBtn = document.getElementById("libraryFoldersScanBtn");
       const libraryFolderResults = document.getElementById("libraryFolderResults");
@@ -115,15 +125,6 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const libraryMusicFoldersScanBtn = document.getElementById("libraryMusicFoldersScanBtn");
       const libraryMusicFolderResults = document.getElementById("libraryMusicFolderResults");
       const libraryMusicDeepScanResults = document.getElementById("libraryMusicDeepScanResults");
-      const youtubeQuickForm = document.getElementById("youtubeQuickForm");
-      const youtubeQuickDestinationPreset = document.getElementById("youtubeQuickDestinationPreset");
-      const youtubeQuickUrl = document.getElementById("youtubeQuickUrl");
-      const youtubeQuickPlaylist = document.getElementById("youtubeQuickPlaylist");
-      const youtubeQuickTvFields = document.getElementById("youtubeQuickTvFields");
-      const youtubeQuickSeriesName = document.getElementById("youtubeQuickSeriesName");
-      const youtubeQuickSeriesSuggestions = document.getElementById("youtubeQuickSeriesSuggestions");
-      const youtubeQuickSeasonNumber = document.getElementById("youtubeQuickSeasonNumber");
-      const youtubeQuickSubmit = document.getElementById("youtubeQuickSubmit");
       const downloadForm = document.getElementById("downloadForm");
       const downloadSourceType = document.getElementById("downloadSourceType");
       const downloadDetailUrl = document.getElementById("downloadDetailUrl");
@@ -133,8 +134,14 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const downloadDestinationPreview = document.getElementById("downloadDestinationPreview");
       const downloadMediaKind = document.getElementById("downloadMediaKind");
       const downloadKidsTag = document.getElementById("downloadKidsTag");
+      const downloadTvFields = document.getElementById("downloadTvFields");
       const downloadSeriesName = document.getElementById("downloadSeriesName");
+      const downloadSeriesSuggestions = document.getElementById("downloadSeriesSuggestions");
       const downloadSeasonNumber = document.getElementById("downloadSeasonNumber");
+      const downloadPlaylistLabel = document.getElementById("downloadPlaylistLabel");
+      const downloadPlaylist = document.getElementById("downloadPlaylist");
+      const downloadYoutubeAccessHint = document.getElementById("downloadYoutubeAccessHint");
+      const openYoutubeSettingsBtn = document.getElementById("openYoutubeSettingsBtn");
       const downloadChunkCountLabel = document.getElementById("downloadChunkCountLabel");
       const downloadChunkCount = document.getElementById("downloadChunkCount");
       const downloadPriority = document.getElementById("downloadPriority");
@@ -148,7 +155,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const clearFinishedBtn = document.getElementById("clearFinishedBtn");
       const downloadSummary = document.getElementById("downloadSummary");
       const downloadWorkerState = document.getElementById("downloadWorkerState");
-      const openAccountTabBtn = document.getElementById("openAccountTabBtn");
+      const downloadNavBadge = document.getElementById("downloadNavBadge");
       const kidsCatalogLoadBtn = document.getElementById("kidsCatalogLoadBtn");
       const kidsCatalogFilter = document.getElementById("kidsCatalogFilter");
       const kidsCatalogStatus = document.getElementById("kidsCatalogStatus");
@@ -237,13 +244,17 @@ import { initMovieDiscovery } from "./movie-discovery.js";
 
       const initialTab = (() => {
         const hash = (window.location.hash || "").replace("#", "").trim();
-        if (hash === "search" || hash === "downloads" || hash === "library" || hash === "account") return hash;
+        if (hash === "search" || hash === "downloads" || hash === "library" || hash === "settings") return hash;
+        if (hash === "account") return "settings";
         const saved = readActiveWorkspaceTab();
-        if (saved === "search" || saved === "downloads" || saved === "library" || saved === "account") return saved;
+        if (saved === "search" || saved === "downloads" || saved === "library" || saved === "settings") return saved;
+        if (saved === "account") return "settings";
         return "search";
       })();
 
       let setWorkspaceTab = null;
+      let activeWorkspaceTab = initialTab;
+      let workspaceTabsReady = false;
       let tvApi = null;
 
       let downloadsApi = null;
@@ -295,15 +306,6 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           youtubeAuthClearBtn,
           youtubeAuthTestUrl,
           youtubeAuthTestBtn,
-          youtubeQuickForm,
-          youtubeQuickDestinationPreset,
-          youtubeQuickUrl,
-          youtubeQuickPlaylist,
-          youtubeQuickTvFields,
-          youtubeQuickSeriesName,
-          youtubeQuickSeriesSuggestions,
-          youtubeQuickSeasonNumber,
-          youtubeQuickSubmit,
           downloadForm,
           downloadSourceType,
           downloadDetailUrl,
@@ -313,8 +315,14 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           downloadDestinationPreview,
           downloadMediaKind,
           downloadKidsTag,
+          downloadTvFields,
           downloadSeriesName,
+          downloadSeriesSuggestions,
           downloadSeasonNumber,
+          downloadPlaylistLabel,
+          downloadPlaylist,
+          downloadYoutubeAccessHint,
+          openYoutubeSettingsBtn,
           downloadChunkCountLabel,
           downloadChunkCount,
           downloadPriority,
@@ -327,13 +335,21 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           clearFinishedBtn,
           downloadSummary,
           downloadWorkerState,
-          openAccountTabBtn,
+          downloadNavBadge,
         },
         api,
         setActiveQueueStateFromJobs,
         setDownloadStatus,
         focusDownloadJob,
         openQueueDialog: (...args) => openQueueDialog?.(...args),
+        openYoutubeSettings: () => {
+          const details = document.getElementById("youtubeAuthDetails");
+          if (details) details.open = true;
+          setWorkspaceTab?.("settings");
+          window.requestAnimationFrame(() => {
+            details?.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        },
       });
 
       const {
@@ -378,6 +394,13 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           libraryTvShowName,
           libraryStatus,
           libraryTvMissingResults,
+          libraryTvModeBtn,
+          libraryKidsModeBtn,
+          libraryMusicModeBtn,
+          libraryTvPanel,
+          libraryMusicPanel,
+          libraryFolderHeading,
+          libraryFolderHint,
           libraryFolderKind,
           libraryFoldersScanBtn,
           libraryFolderResults,
@@ -397,6 +420,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           sortSelect,
           languageInput,
           languageScopeSelect,
+          audioPreferenceSelect,
           strictDubbingInput,
           releaseYearInput,
           maxResultsInput,
@@ -441,6 +465,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           sortSelect,
           languageInput,
           languageScopeSelect,
+          audioPreferenceSelect,
           strictDubbingInput,
           releaseYearInput,
           maxResultsInput,
@@ -460,6 +485,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           fileResultsBlocks,
           tvActiveFilters,
           tvShowSummaryCard,
+          tvShowMatches,
           tvLookupInfo,
           tvSeasonPicker,
           tvLookupForm,
@@ -469,6 +495,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           tvFilterCategory,
           tvFilterLanguage,
           tvFilterLanguageScope,
+          tvFilterAudioPreference,
           tvFilterStrictDubbing,
           tvFilterMaxResults,
           downloadStatus,
@@ -491,7 +518,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         refreshActiveTvSearchJob,
       } = tvApi;
 
-      [categorySelect, sortSelect, languageInput, languageScopeSelect, strictDubbingInput, releaseYearInput, maxResultsInput].forEach((el) => {
+      [categorySelect, sortSelect, languageInput, languageScopeSelect, audioPreferenceSelect, strictDubbingInput, releaseYearInput, maxResultsInput].forEach((el) => {
         el?.addEventListener("change", () => {
           renderFileSearchActiveFilters();
           syncFileFiltersToTvEditor();
@@ -509,7 +536,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         renderTvActiveFilters();
       });
       releaseYearInput?.addEventListener("input", renderFileSearchActiveFilters);
-      [tvFilterCategory, tvFilterLanguage, tvFilterLanguageScope, tvFilterStrictDubbing, tvFilterMaxResults].forEach((el) => {
+      [tvFilterCategory, tvFilterLanguage, tvFilterLanguageScope, tvFilterAudioPreference, tvFilterStrictDubbing, tvFilterMaxResults].forEach((el) => {
         el?.addEventListener("change", () => {
           syncTvEditorToFileFilters();
           renderFileSearchActiveFilters();
@@ -546,12 +573,16 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         tabSections,
         initialTab,
         onTabChange: (resolved) => {
+          activeWorkspaceTab = resolved;
           window.location.hash = resolved;
           writeActiveWorkspaceTab(resolved);
+          if (workspaceTabsReady && resolved === "downloads") {
+            refreshDownloads({ notifyOnFailure: true, background: true });
+          }
         },
       });
       setWorkspaceTab = workspaceTabsApi.setActiveTab;
-      openAccountTabBtn?.addEventListener("click", () => setWorkspaceTab?.("account"));
+      workspaceTabsReady = true;
       setSearchMode(initialMode);
       setFileResultsView(state.fileResultsView);
       setFileResultsFilter(state.fileResultsFilter);
@@ -564,14 +595,22 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       if (activeTvSearchJobId) {
         refreshActiveTvSearchJob({ force: true });
       }
+      const shouldPollDownloads = () =>
+        document.visibilityState === "visible" &&
+        (activeWorkspaceTab === "downloads" || downloadsApi?.hasActiveDownloads?.());
       setInterval(() => {
-        refreshDownloads({ notifyOnFailure: true, background: true });
+        if (shouldPollDownloads()) {
+          refreshDownloads({ notifyOnFailure: true, background: true });
+        }
       }, 2500);
       setInterval(() => {
         refreshActiveTvSearchJob();
       }, 2500);
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
+          if (shouldPollDownloads()) {
+            refreshDownloads({ notifyOnFailure: true, background: true });
+          }
           refreshActiveTvSearchJob({ force: true });
         }
       });

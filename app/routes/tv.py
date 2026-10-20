@@ -4,14 +4,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from ..diagnostics import error_response
+from ..api_models import TvEpisodeSearchPayload, TvLookupPayload, TvSeasonSearchPayload
 from ..main import (
-    TvEpisodeSearchPayload,
-    TvLookupPayload,
-    TvSeasonSearchPayload,
     _annotate_downloaded_tv_search_items,
     _build_tv_lookup_payload,
     _coerce_title_metadata_payload,
-    _get_services,
     _resolve_tv_search_alias_context,
     _resolve_tv_search_alias_sets,
     _resolve_tv_show_local_context,
@@ -19,6 +16,7 @@ from ..main import (
     _search_single_tv_episode,
     _selected_tv_search_items,
 )
+from ..services import get_services as _get_services
 from ..sdilej_client import SdilejClientError
 from ..tvmaze_client import TvMazeClientError
 
@@ -49,7 +47,11 @@ def _tv_error(
 @router.post("/api/tv/lookup")
 def api_tv_lookup(request: Request, payload: TvLookupPayload):
     try:
-        show, seasons, title_metadata = _build_tv_lookup_payload(payload.show_name, services=_get_services(request))
+        show, seasons, title_metadata, show_matches = _build_tv_lookup_payload(
+            payload.show_name,
+            show_id=payload.show_id,
+            services=_get_services(request),
+        )
         aliases, search_aliases = _resolve_tv_search_alias_context(
             show_name=str(show.get("name") or payload.show_name),
             title_metadata=title_metadata,
@@ -57,6 +59,7 @@ def api_tv_lookup(request: Request, payload: TvLookupPayload):
         return JSONResponse(
             {
                 "show": show,
+                "show_matches": show_matches,
                 "title_metadata": title_metadata,
                 "aliases": aliases,
                 "all_search_aliases": search_aliases,
@@ -126,6 +129,7 @@ def api_tv_search(request: Request, payload: TvSeasonSearchPayload):
                         language=payload.language,
                         language_scope=payload.language_scope,
                         strict_dubbing=payload.strict_dubbing,
+                        audio_preference=payload.audio_preference,
                         max_results_per_variant=payload.max_results_per_variant,
                         alias_mode="optimized",
                         local_context=local_context,
@@ -154,6 +158,7 @@ def api_tv_search(request: Request, payload: TvSeasonSearchPayload):
                 "language": services.client.normalize_language(payload.language),
                 "language_scope": payload.language_scope,
                 "strict_dubbing": payload.strict_dubbing,
+                "audio_preference": payload.audio_preference,
                 "max_results_per_variant": payload.max_results_per_variant,
                 "category": payload.category,
                 "status": "done",
@@ -226,6 +231,7 @@ def api_tv_search_episode(request: Request, payload: TvEpisodeSearchPayload):
             language=payload.language,
             language_scope=payload.language_scope,
             strict_dubbing=payload.strict_dubbing,
+            audio_preference=payload.audio_preference,
             max_results_per_variant=payload.max_results_per_variant,
             alias_mode=payload.alias_mode,
             force_search=payload.force_search,
@@ -239,6 +245,7 @@ def api_tv_search_episode(request: Request, payload: TvEpisodeSearchPayload):
                 "aliases": aliases,
                 "all_search_aliases": all_search_aliases,
                 "search_aliases": search_aliases,
+                "audio_preference": payload.audio_preference,
                 "max_results_per_variant": payload.max_results_per_variant,
                 "episode": episode,
             }
@@ -306,6 +313,7 @@ def api_tv_search_jobs_create(request: Request, payload: TvSeasonSearchPayload):
             language=services.client.normalize_language(payload.language),
             language_scope=payload.language_scope,
             strict_dubbing=payload.strict_dubbing,
+            audio_preference=payload.audio_preference,
             max_results_per_variant=payload.max_results_per_variant,
             episodes=annotated_items,
         )

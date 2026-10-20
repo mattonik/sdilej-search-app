@@ -21,11 +21,12 @@ class StorageSearchRepository:
                     language,
                     language_scope,
                     strict_dubbing,
+                    audio_preference,
                     release_year,
                     search_url,
                     result_count,
                     unfiltered_result_count
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     search.query,
@@ -35,6 +36,7 @@ class StorageSearchRepository:
                     search.language,
                     search.language_scope,
                     1 if search.strict_dubbing else 0,
+                    search.audio_preference,
                     search.release_year,
                     search.search_url,
                     search.result_count,
@@ -57,6 +59,7 @@ class StorageSearchRepository:
                     language,
                     language_scope,
                     strict_dubbing,
+                    audio_preference,
                     release_year,
                     search_url,
                     result_count,
@@ -79,6 +82,7 @@ class StorageSearchRepository:
                 "language": row["language"],
                 "language_scope": row["language_scope"],
                 "strict_dubbing": bool(row["strict_dubbing"]),
+                "audio_preference": row["audio_preference"],
                 "release_year": row["release_year"],
                 "search_url": row["search_url"],
                 "result_count": row["result_count"],

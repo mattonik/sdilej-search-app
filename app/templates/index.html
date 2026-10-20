@@ -15,13 +15,12 @@
 
       <nav class="workspace-tabs" aria-label="Main navigation">
         <button type="button" class="workspace-tab btn btn-pill active" data-tab="search" aria-current="page">Search</button>
-        <button type="button" class="workspace-tab btn btn-pill" data-tab="downloads">Downloads</button>
+        <button type="button" class="workspace-tab btn btn-pill" data-tab="downloads">Downloads <span id="downloadNavBadge" class="nav-badge hidden" aria-label=""></span></button>
         <button type="button" class="workspace-tab btn btn-pill" data-tab="library">Library</button>
-        <button type="button" class="workspace-tab btn btn-pill" data-tab="account">Account</button>
-        <a href="/saved" class="workspace-tab-link btn btn-pill">Saved Picks</a>
+        <button type="button" class="workspace-tab btn btn-pill" data-tab="settings">Settings</button>
       </nav>
 
-      <div id="downloadStatus" class="download-status global-status" aria-live="polite" aria-atomic="true">Queue idle.</div>
+      <div id="downloadStatus" class="download-status global-status" data-mode="neutral" aria-live="polite" aria-atomic="true">Queue idle.</div>
 
       <section class="panel downloader-panel tab-section tab-downloads">
         <div class="downloader-header">
@@ -29,9 +28,6 @@
           <div class="downloader-meta">
             <span id="downloadWorkerState">Worker: checking...</span>
             <span id="downloadSummary">Queue: checking...</span>
-          </div>
-          <div class="downloader-actions">
-            <button type="button" id="openAccountTabBtn" class="secondary-btn btn btn-secondary btn-sm">Account</button>
           </div>
         </div>
         <section class="download-queue-section">
@@ -50,96 +46,29 @@
 
         <section class="download-add-section">
           <div class="download-section-heading">
-            <h3>Add download</h3>
-            <p>Paste a direct sdilej link, YouTube URL, or route the item manually when auto detection is not enough.</p>
+            <h3>New download</h3>
+            <p>Paste a Sdilej or YouTube link, choose its library destination, and add it to the queue.</p>
           </div>
-
-          <form id="youtubeQuickForm" class="youtube-quick-form" aria-label="YouTube quick download">
-            <div class="youtube-quick-copy">
-              <strong>YouTube quick download</strong>
-              <span>Paste a video link and choose the target library route directly.</span>
-            </div>
-            <label>
-              Destination
-              <select id="youtubeQuickDestinationPreset">
-                <option value="auto" selected>Auto route</option>
-                <option value="movies">Movies</option>
-                <option value="tv">TV Show</option>
-                <option value="kids_movies">Kids Movies</option>
-                <option value="kids_tv">Kids TV</option>
-                <option value="music">Music</option>
-                <option value="unsorted">Unsorted</option>
-              </select>
-            </label>
-            <label>
-              YouTube URL
-              <input
-                id="youtubeQuickUrl"
-                type="url"
-                placeholder="https://www.youtube.com/watch?v=..."
-                autocomplete="off"
-              />
-            </label>
-            <label class="checkbox-field youtube-playlist-field">
-              Download full playlist
-              <span><input id="youtubeQuickPlaylist" type="checkbox" /> include every video in this playlist</span>
-            </label>
-            <div id="youtubeQuickTvFields" class="youtube-quick-tv-fields hidden">
-              <label>
-                TV show
-                <input
-                  id="youtubeQuickSeriesName"
-                  type="text"
-                  placeholder="Pick existing or type a new show"
-                  autocomplete="off"
-                  list="youtubeQuickSeriesSuggestions"
-                  disabled
-                />
-                <datalist id="youtubeQuickSeriesSuggestions"></datalist>
-              </label>
-              <label>
-                Season
-                <input
-                  id="youtubeQuickSeasonNumber"
-                  type="number"
-                  min="1"
-                  step="1"
-                  placeholder="1"
-                  inputmode="numeric"
-                  disabled
-                />
-              </label>
-            </div>
-            <button type="submit" id="youtubeQuickSubmit" class="btn btn-primary">Download YouTube</button>
-          </form>
 
           <form id="downloadForm" class="download-form">
             <label>
               Source
               <select id="downloadSourceType">
-                <option value="sdilej" selected>Sdilej</option>
+                <option value="auto" selected>Auto detect from link</option>
+                <option value="sdilej">Sdilej</option>
                 <option value="youtube">YouTube</option>
               </select>
             </label>
 
             <label>
-              Detail URL
+              Link
               <input
                 id="downloadDetailUrl"
-                type="text"
-                placeholder="https://sdilej.cz/123456/file-name.mkv"
+                type="url"
+                placeholder="https://sdilej.cz/... or https://youtube.com/..."
                 autocomplete="off"
                 required
               />
-            </label>
-
-            <label id="downloadModeLabel">
-              Mode
-              <select id="downloadMode">
-                <option value="premium" selected>Premium</option>
-                <option value="auto">Auto</option>
-                <option value="free">Free</option>
-              </select>
             </label>
 
             <label>
@@ -155,11 +84,41 @@
               </select>
             </label>
 
+            <div id="downloadTvFields" class="download-tv-fields hidden">
+              <label>
+                TV show
+                <input id="downloadSeriesName" type="text" placeholder="Pick existing or type a new show" autocomplete="off" list="downloadSeriesSuggestions" />
+                <datalist id="downloadSeriesSuggestions"></datalist>
+              </label>
+              <label>
+                Season
+                <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" inputmode="numeric" />
+              </label>
+            </div>
+
+            <label id="downloadPlaylistLabel" class="checkbox-field hidden">
+              Download full playlist
+              <span><input id="downloadPlaylist" type="checkbox" /> include every video in this playlist</span>
+            </label>
+
+            <div id="downloadYoutubeAccessHint" class="youtube-access-hint hidden">
+              <span>Private or age-restricted videos may require YouTube cookies.</span>
+              <button type="button" id="openYoutubeSettingsBtn" class="btn btn-secondary btn-sm">Configure YouTube access</button>
+            </div>
+
             <div id="downloadDestinationPreview" class="destination-preview">Destination will be detected after you paste a URL.</div>
 
             <details class="destination-advanced">
-              <summary>Advanced destination</summary>
+              <summary>Advanced options</summary>
               <div class="destination-advanced-grid">
+                <label id="downloadModeLabel">
+                  Mode
+                  <select id="downloadMode">
+                    <option value="premium" selected>Premium</option>
+                    <option value="auto">Auto</option>
+                    <option value="free">Free</option>
+                  </select>
+                </label>
                 <label>
                   Type
                   <select id="downloadMediaKind">
@@ -179,61 +138,31 @@
                   </select>
                 </label>
 
-                <label>
-                  Series (for TV)
-                  <input id="downloadSeriesName" type="text" placeholder="e.g. Bluey" autocomplete="off" />
+                <label id="downloadChunkCountLabel">
+                  Chunk count
+                  <input id="downloadChunkCount" type="number" min="1" max="8" value="1" />
                 </label>
 
                 <label>
-                  Season (for TV)
-                  <input id="downloadSeasonNumber" type="number" min="1" max="99" value="" />
+                  Priority
+                  <input id="downloadPriority" type="number" min="-100" max="100" value="0" />
                 </label>
               </div>
             </details>
 
-            <label id="downloadChunkCountLabel">
-              Chunk count
-              <input id="downloadChunkCount" type="number" min="1" max="8" value="1" />
-            </label>
-
-            <label>
-              Priority
-              <input id="downloadPriority" type="number" min="-100" max="100" value="0" />
-            </label>
-
             <div class="download-actions">
-              <button type="submit" class="btn btn-primary">Enqueue download</button>
+              <button type="submit" class="btn btn-primary">Add to queue</button>
             </div>
           </form>
         </section>
 
-        <details class="download-settings-section">
-          <summary>Download settings</summary>
-          <form id="downloadSettingsForm" class="download-form settings-form">
-            <label>
-              Max concurrent jobs
-              <input id="settingsMaxConcurrent" type="number" min="1" max="8" value="1" />
-            </label>
-            <label>
-              Default chunk count
-              <input id="settingsDefaultChunks" type="number" min="1" max="8" value="1" />
-            </label>
-            <label>
-              Bandwidth limit (KB/s)
-              <input id="settingsBandwidth" type="number" min="0" max="2000000" value="0" />
-            </label>
-            <div class="download-actions">
-              <button type="submit" class="btn btn-primary">Save download settings</button>
-            </div>
-          </form>
-        </details>
       </section>
 
-      <section class="panel account-panel tab-section tab-account">
+      <section class="panel account-panel tab-section tab-settings">
         <details id="accountDetails" class="account-details">
           <summary class="account-summary">
             <div class="account-summary-copy">
-              <h2>Account Credentials</h2>
+              <h2>Sdilej Access</h2>
               <div id="accountStatus" class="account-status">Checking account status...</div>
             </div>
             <span class="account-summary-action btn btn-secondary btn-sm">Manage</span>
@@ -268,7 +197,7 @@
         <details id="youtubeAuthDetails" class="account-details youtube-auth-details">
           <summary class="account-summary">
             <div class="account-summary-copy">
-              <h2>YouTube Authentication</h2>
+              <h2>YouTube Access</h2>
               <div id="youtubeAuthStatus" class="account-status">Checking YouTube auth...</div>
             </div>
             <span class="account-summary-action btn btn-secondary btn-sm">Manage</span>
@@ -325,6 +254,37 @@
             </div>
           </form>
         </details>
+
+        <details class="account-details settings-download-defaults">
+          <summary class="account-summary">
+            <div class="account-summary-copy">
+              <h2>Download Defaults</h2>
+              <div class="account-status">Concurrency, chunks, and bandwidth.</div>
+            </div>
+            <span class="account-summary-action btn btn-secondary btn-sm">Manage</span>
+          </summary>
+          <form id="downloadSettingsForm" class="account-form settings-form">
+            <label>
+              Max concurrent jobs
+              <input id="settingsMaxConcurrent" type="number" min="1" max="8" value="1" />
+            </label>
+            <label>
+              Default chunk count
+              <input id="settingsDefaultChunks" type="number" min="1" max="8" value="1" />
+            </label>
+            <label>
+              Bandwidth limit (KB/s)
+              <input id="settingsBandwidth" type="number" min="0" max="2000000" value="0" />
+            </label>
+            <div class="account-actions">
+              <button type="submit" class="btn btn-primary">Save download defaults</button>
+            </div>
+          </form>
+        </details>
+
+        <div class="settings-utilities">
+          <a href="/saved" class="btn btn-secondary btn-sm">Saved picks (advanced)</a>
+        </div>
       </section>
 
       <section class="panel library-panel tab-section tab-library">
@@ -335,19 +295,20 @@
           </div>
         </div>
 
+        <div class="library-mode-switch" role="tablist" aria-label="Library type">
+          <button id="libraryTvModeBtn" type="button" role="tab" aria-selected="true" class="btn btn-pill active" data-library-mode="tv">TV</button>
+          <button id="libraryKidsModeBtn" type="button" role="tab" aria-selected="false" class="btn btn-pill" data-library-mode="kids">Kids TV</button>
+          <button id="libraryMusicModeBtn" type="button" role="tab" aria-selected="false" class="btn btn-pill" data-library-mode="music">Music</button>
+        </div>
+
+        <div id="libraryTvPanel" class="library-mode-panel">
         <section class="library-folder-tools" aria-labelledby="libraryFolderHeading">
           <div class="library-section-heading">
             <h3 id="libraryFolderHeading">Folders</h3>
-            <p>Start here when you do not remember the exact show name.</p>
+            <p id="libraryFolderHint">Start here when you do not remember the exact show name.</p>
           </div>
           <div class="library-folder-actions">
-            <label>
-              Library
-              <select id="libraryFolderKind">
-                <option value="tv">TV shows</option>
-                <option value="kids">Kids TV</option>
-              </select>
-            </label>
+            <select id="libraryFolderKind" class="hidden" aria-hidden="true"><option value="tv" selected>TV shows</option><option value="kids">Kids TV</option></select>
             <button type="button" id="libraryFoldersScanBtn" class="btn btn-secondary">Scan folders</button>
           </div>
           <div id="libraryFolderResults" class="library-folder-results"></div>
@@ -364,8 +325,9 @@
 
         <div id="libraryStatus" class="download-status" aria-live="polite" aria-atomic="true">Library scan idle.</div>
         <div id="libraryTvMissingResults" class="library-results"></div>
+        </div>
 
-        <section class="library-folder-tools music-library-tools" aria-labelledby="libraryMusicHeading">
+        <section id="libraryMusicPanel" class="library-folder-tools music-library-tools library-mode-panel hidden" aria-labelledby="libraryMusicHeading">
           <div class="library-section-heading">
             <h3 id="libraryMusicHeading">Music folders</h3>
             <p>Inspect artists and albums, then search Sdilej using the local folder name.</p>
@@ -383,10 +345,9 @@
             <p id="searchModeHint" class="search-mode-hint">Search files and movies by title, language, year, and category.</p>
           </div>
           <div class="search-mode-switch" role="tablist" aria-label="Search mode">
-            <button id="fileSearchModeBtn" type="button" role="tab" aria-selected="true" aria-controls="fileSearchPanel" class="btn btn-pill active" data-search-mode="file">Movies / Files</button>
+            <button id="fileSearchModeBtn" type="button" role="tab" aria-selected="true" aria-controls="fileSearchPanel" class="btn btn-pill active" data-search-mode="file">Files</button>
             <button id="tvSearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="tvModePanel" class="btn btn-pill" data-search-mode="tv">TV Shows</button>
             <button id="musicSearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="musicSearchPanel" class="btn btn-pill" data-search-mode="music">Music</button>
-            <button id="discoverySearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="movieDiscoveryPanel" class="btn btn-pill" data-search-mode="discovery">Discover</button>
             <button id="kidsSearchModeBtn" type="button" role="tab" aria-selected="false" aria-controls="kidsCatalogPanel" class="btn btn-pill" data-search-mode="kids">Kids</button>
           </div>
         </div>
@@ -464,6 +425,10 @@
         </div>
 
         <div id="fileSearchPanel" role="tabpanel" class="search-mode-panel">
+          <div class="file-search-discovery">
+            <span>Not sure what to watch?</span>
+            <button id="discoverySearchModeBtn" type="button" class="btn btn-secondary btn-sm" data-search-mode="discovery">Browse film lists</button>
+          </div>
           <form method="get" action="/" class="search-form" id="fileSearchForm">
             <div class="file-search-quick">
               <label class="file-search-query">
@@ -500,6 +465,15 @@
                   maxlength="32"
                   placeholder="e.g. SK or Slovak"
                 />
+              </label>
+
+              <label>
+                Audio preference
+                <select id="audioPreferenceSelect" name="audio_preference">
+                  {% for label, value in audio_preference_options %}
+                    <option value="{{ value }}" {% if audio_preference == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
               </label>
 
               <label>
@@ -540,7 +514,6 @@
                     {% endfor %}
                   </select>
                 </label>
-
                 <label class="checkbox-field">
                   Strict dubbing
                   <span>
@@ -570,6 +543,7 @@
               </label>
               <button id="tvLookupBtn" type="submit" class="tv-primary-btn btn btn-primary btn-lg">Load seasons</button>
             </form>
+            <div id="tvShowMatches" class="tv-show-matches hidden" aria-live="polite"></div>
           </div>
           <div class="tv-step">
             <h3>Step 2. Select Seasons</h3>
@@ -600,6 +574,14 @@
                   <select id="tvFilterLanguageScope">
                     {% for label, value in language_scope_options %}
                       <option value="{{ value }}" {% if language_scope == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>
+                  Audio preference
+                  <select id="tvFilterAudioPreference">
+                    {% for label, value in audio_preference_options %}
+                      <option value="{{ value }}" {% if audio_preference == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                   </select>
                 </label>
@@ -696,6 +678,9 @@
               <span><strong>Sort:</strong> {{ sort }}</span>
             </div>
           </div>
+          {% if search.query_errors %}
+            <div class="search-warning" role="status">Some title variants could not be searched. Results shown may be incomplete.</div>
+          {% endif %}
           <details class="file-results-debug">
             <summary>Search details</summary>
             <div><strong>Effective query:</strong> <code>{{ search.effective_query }}</code></div>
@@ -707,6 +692,9 @@
             <div><strong>Parsed results:</strong> {{ search.result_count }} / {{ search.unfiltered_result_count }}</div>
             {% if search.expanded_queries %}
               <div><strong>Expanded queries:</strong> {{ search.expanded_queries | join(" | ") }}</div>
+            {% endif %}
+            {% if search.query_errors %}
+              <div><strong>Failed queries:</strong> {{ search.query_errors | join(" | ") }}</div>
             {% endif %}
             {% if search.title_metadata %}
               <div><strong>Resolved title:</strong> {{ search.title_metadata.canonical_title }}{% if search.title_metadata.original_title %} / {{ search.title_metadata.original_title }}{% endif %}</div>

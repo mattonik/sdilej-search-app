@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from ..main import _get_services
+from ..services import get_services as _get_services
 
 router = APIRouter()
 
