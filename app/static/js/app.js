@@ -36,6 +36,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const sortSelect = document.getElementById("sortSelect");
       const languageInput = document.getElementById("languageInput");
       const languageScopeSelect = document.getElementById("languageScopeSelect");
+      const audioPreferenceSelect = document.getElementById("audioPreferenceSelect");
       const strictDubbingInput = document.getElementById("strictDubbingInput");
       const releaseYearInput = document.getElementById("releaseYearInput");
       const maxResultsInput = document.getElementById("maxResultsInput");
@@ -85,6 +86,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const tvFilterCategory = document.getElementById("tvFilterCategory");
       const tvFilterLanguage = document.getElementById("tvFilterLanguage");
       const tvFilterLanguageScope = document.getElementById("tvFilterLanguageScope");
+      const tvFilterAudioPreference = document.getElementById("tvFilterAudioPreference");
       const tvFilterMaxResults = document.getElementById("tvFilterMaxResults");
       const tvFilterStrictDubbing = document.getElementById("tvFilterStrictDubbing");
       const tvSearchBtn = document.getElementById("tvSearchBtn");
@@ -418,6 +420,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           sortSelect,
           languageInput,
           languageScopeSelect,
+          audioPreferenceSelect,
           strictDubbingInput,
           releaseYearInput,
           maxResultsInput,
@@ -462,6 +465,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           sortSelect,
           languageInput,
           languageScopeSelect,
+          audioPreferenceSelect,
           strictDubbingInput,
           releaseYearInput,
           maxResultsInput,
@@ -491,6 +495,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           tvFilterCategory,
           tvFilterLanguage,
           tvFilterLanguageScope,
+          tvFilterAudioPreference,
           tvFilterStrictDubbing,
           tvFilterMaxResults,
           downloadStatus,
@@ -513,7 +518,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         refreshActiveTvSearchJob,
       } = tvApi;
 
-      [categorySelect, sortSelect, languageInput, languageScopeSelect, strictDubbingInput, releaseYearInput, maxResultsInput].forEach((el) => {
+      [categorySelect, sortSelect, languageInput, languageScopeSelect, audioPreferenceSelect, strictDubbingInput, releaseYearInput, maxResultsInput].forEach((el) => {
         el?.addEventListener("change", () => {
           renderFileSearchActiveFilters();
           syncFileFiltersToTvEditor();
@@ -531,7 +536,7 @@ import { initMovieDiscovery } from "./movie-discovery.js";
         renderTvActiveFilters();
       });
       releaseYearInput?.addEventListener("input", renderFileSearchActiveFilters);
-      [tvFilterCategory, tvFilterLanguage, tvFilterLanguageScope, tvFilterStrictDubbing, tvFilterMaxResults].forEach((el) => {
+      [tvFilterCategory, tvFilterLanguage, tvFilterLanguageScope, tvFilterAudioPreference, tvFilterStrictDubbing, tvFilterMaxResults].forEach((el) => {
         el?.addEventListener("change", () => {
           syncTvEditorToFileFilters();
           renderFileSearchActiveFilters();

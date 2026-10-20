@@ -1280,6 +1280,34 @@ def test_reacher_tv_episode_search_runs_without_extra_selection(tmp_path) -> Non
 
 
 @pytest.mark.e2e
+def test_tv_search_uses_the_tv_audio_preference(tmp_path) -> None:
+    app = _build_reacher_tv_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        requests: list[dict] = []
+        page.on(
+            "request",
+            lambda request: requests.append(json.loads(request.post_data or "{}"))
+            if request.method == "POST" and request.url.endswith("/api/tv/search-jobs")
+            else None,
+        )
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#tvSearchModeBtn")
+        page.fill("#tvShowName", "Reacher")
+        page.press("#tvShowName", "Enter")
+        page.wait_for_selector("#tvShowSummaryCard")
+        page.click("#tvModePanel .tv-filter-editor summary")
+        page.wait_for_selector("#tvModePanel .tv-filter-editor[open]")
+        page.select_option("#tvFilterAudioPreference", "original_or_english")
+        page.click("#tvSearchBtn")
+        page.wait_for_function("() => document.querySelector('#tvStatus')?.textContent?.includes('TV search')")
+
+    assert requests
+    assert requests[0]["audio_preference"] == "original_or_english"
+
+
+@pytest.mark.e2e
 def test_tv_lookup_allows_selecting_a_similar_show(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
     shows = [
