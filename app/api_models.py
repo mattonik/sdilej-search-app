@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .models import Category, LanguageScope
+from .models import AudioPreference, Category, LanguageScope
 
 
 class SaveCandidatePayload(BaseModel):
@@ -137,6 +137,7 @@ class TvSeasonSearchPayload(BaseModel):
     language: str | None = Field(default=None, max_length=32)
     language_scope: LanguageScope = "any"
     strict_dubbing: bool = False
+    audio_preference: AudioPreference = "any"
     max_results_per_variant: int = Field(default=120, ge=1, le=500)
 
 
@@ -153,6 +154,7 @@ class TvEpisodeSearchPayload(BaseModel):
     language: str | None = Field(default=None, max_length=32)
     language_scope: LanguageScope = "any"
     strict_dubbing: bool = False
+    audio_preference: AudioPreference = "any"
     max_results_per_variant: int = Field(default=120, ge=1, le=500)
     alias_mode: Literal["optimized", "all"] = "all"
     force_search: bool = False

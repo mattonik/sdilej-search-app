@@ -20,7 +20,7 @@ from .media_routing import (
     requires_classification_confirmation,
     resolve_destination_subpath,
 )
-from .models import Category, LanguageScope, SearchResponse, SortMode, TitleMetadata
+from .models import AudioPreference, Category, LanguageScope, SearchResponse, SortMode, TitleMetadata
 from .sdilej_client import BASE_URL, SdilejClient, SdilejClientError
 from .search_utils import (
     SearchUpstreamError,
@@ -120,6 +120,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 DEFAULT_CATEGORY: Category = "all"
 DEFAULT_SORT: SortMode = "relevance"
 DEFAULT_LANGUAGE_SCOPE: LanguageScope = "any"
+DEFAULT_AUDIO_PREFERENCE: AudioPreference = "any"
 
 CATEGORY_OPTIONS: list[tuple[str, Category]] = [
     ("All", "all"),
@@ -141,6 +142,12 @@ LANGUAGE_SCOPE_OPTIONS: list[tuple[str, LanguageScope]] = [
     ("Any language hint", "any"),
     ("Audio / dubbing focus", "audio"),
     ("Subtitles only", "subtitles"),
+]
+
+AUDIO_PREFERENCE_OPTIONS: list[tuple[str, AudioPreference]] = [
+    ("No preference", "any"),
+    ("Original / English", "original_or_english"),
+    ("SK/CZ dubbed", "local_dub"),
 ]
 
 
@@ -500,6 +507,7 @@ def _search_files(
     language: str,
     language_scope: LanguageScope,
     strict_dubbing: bool,
+    audio_preference: AudioPreference,
     release_year: int | None,
     max_results: int,
     services: ServiceContainer,
@@ -513,6 +521,7 @@ def _search_files(
             language=language,
             language_scope=language_scope,
             strict_dubbing=strict_dubbing,
+            audio_preference=audio_preference,
             release_year=release_year,
             max_results=max_results,
         )
@@ -526,6 +535,7 @@ def _search_files(
         language=language,
         language_scope=language_scope,
         strict_dubbing=strict_dubbing,
+        audio_preference=audio_preference,
         release_year=release_year,
         max_results_per_query=max_results,
         max_results_total=max_results,
@@ -541,6 +551,7 @@ def _search_files(
         language=services.client.normalize_language(language),
         language_scope=language_scope,
         strict_dubbing=strict_dubbing,
+        audio_preference=audio_preference,
         release_year=release_year,
         search_url=aggregated["search_url"],
         unfiltered_result_count=aggregated["unfiltered_result_count"],
@@ -882,6 +893,7 @@ def _search_single_tv_episode(
     language: str | None,
     language_scope: LanguageScope,
     strict_dubbing: bool,
+    audio_preference: AudioPreference,
     max_results_per_variant: int,
     alias_mode: Literal["optimized", "all"] = "optimized",
     force_search: bool = False,
@@ -921,6 +933,7 @@ def _search_single_tv_episode(
         language=language,
         language_scope=language_scope,
         strict_dubbing=strict_dubbing,
+        audio_preference=audio_preference,
         release_year=None,
         max_results_per_query=max_results_per_variant,
         result_scorer=result_scorer,

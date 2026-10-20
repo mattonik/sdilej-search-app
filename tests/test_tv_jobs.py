@@ -258,6 +258,7 @@ def test_sync_tv_search_ignores_support_files_when_detecting_downloaded_episodes
                 "episodes_by_season": {"1": [1]},
                 "aliases": ["Shaun the Sheep"],
                 "title_metadata": metadata.to_dict(),
+                "audio_preference": "original_or_english",
             },
         )
 
@@ -491,6 +492,7 @@ def test_tv_search_job_worker_processes_and_finalizes_job(app_factory, storage) 
                 "episodes_by_season": {"1": [1, 2]},
                 "aliases": ["Shaun the Sheep"],
                 "title_metadata": metadata.to_dict(),
+                "audio_preference": "original_or_english",
             },
         )
         assert created.status_code == 200
@@ -506,6 +508,7 @@ def test_tv_search_job_worker_processes_and_finalizes_job(app_factory, storage) 
     assert job is not None
     assert job["status"] == "done"
     assert job["search_aliases"] == ["Shaun the Sheep", "Vesela farma"]
+    assert job["audio_preference"] == "original_or_english"
     assert job["completed_episodes"] == 2
     assert job["result_count"] == 2
     assert all(episode["status"] == "done" for season in job["seasons"] for episode in season["episodes"])

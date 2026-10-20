@@ -6,6 +6,7 @@ from typing import Literal
 Category = Literal["all", "video", "audio", "archive", "image"]
 SortMode = Literal["relevance", "downloads", "newest", "size_desc", "size_asc"]
 LanguageScope = Literal["any", "audio", "subtitles"]
+AudioPreference = Literal["any", "original_or_english", "local_dub"]
 
 
 @dataclass(slots=True)
@@ -65,11 +66,36 @@ class SearchResponse:
     expanded_queries: list[str] = field(default_factory=list)
     query_errors: list[str] = field(default_factory=list)
     title_metadata: TitleMetadata | None = None
+    audio_preference: AudioPreference = "any"
 
     def to_dict(self) -> dict:
         data = asdict(self)
         data["results"] = [item.to_dict() for item in self.results]
         return data
+
+
+def audio_preference_priority(result: SearchResult, preference: AudioPreference) -> int:
+    if preference == "any":
+        return 0
+
+    languages = {value.upper() for value in result.detected_languages}
+    has_local_audio = bool(languages & {"CZ", "SK"})
+    has_english_audio = "EN" in languages
+
+    if preference == "original_or_english":
+        if has_english_audio:
+            return 40
+        if not has_local_audio and not result.has_dub_hint:
+            return 15
+        return 0
+
+    if has_local_audio and result.has_dub_hint:
+        return 40
+    if has_local_audio:
+        return 30
+    if not result.has_dub_hint:
+        return 10
+    return 0
 
 
 @dataclass(slots=True)

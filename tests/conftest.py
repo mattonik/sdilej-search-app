@@ -96,6 +96,7 @@ class FakeSdilejClient:
         language: str | None = None,
         language_scope: str = "any",
         strict_dubbing: bool = False,
+        audio_preference: str = "any",
         release_year: int | None = None,
     ) -> SearchResponse:
         self.calls.append(query)

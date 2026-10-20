@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
-from .models import LanguageScope, SearchResult, TitleMetadata
+from .models import AudioPreference, LanguageScope, SearchResult, TitleMetadata, audio_preference_priority
 from .sdilej_client import SdilejClient
 from .title_metadata import MAX_ALIAS_COUNT, normalize_alias_key
 
@@ -241,6 +241,7 @@ def aggregate_query_results(
     language: str | None,
     language_scope: LanguageScope,
     strict_dubbing: bool,
+    audio_preference: AudioPreference = "any",
     release_year: int | None,
     max_results_per_query: int,
     max_results_total: int | None = None,
@@ -292,6 +293,7 @@ def aggregate_query_results(
             if key not in aggregated:
                 item = result.to_dict()
                 item["language_priority"] = language_priority
+                item["audio_preference_priority"] = audio_preference_priority(result, audio_preference)
                 item["size_bytes"] = size_bytes
                 item["query_priority"] = query_index
                 item["query_hits"] = [query]
@@ -300,6 +302,10 @@ def aggregate_query_results(
 
             current = aggregated[key]
             current["language_priority"] = max(int(current.get("language_priority") or 0), language_priority)
+            current["audio_preference_priority"] = max(
+                int(current.get("audio_preference_priority") or 0),
+                audio_preference_priority(result, audio_preference),
+            )
             current["size_bytes"] = max(int(current.get("size_bytes") or 0), size_bytes)
             current_query_priority = current.get("query_priority")
             if current_query_priority is None:
@@ -313,6 +319,7 @@ def aggregate_query_results(
         sort_key = lambda item: (
             int(item.get("size_bytes") or 0),
             -int(item.get("language_priority") or 0),
+            -int(item.get("audio_preference_priority") or 0),
             int(item.get("query_priority") or 0),
             str(item.get("title") or "").lower(),
         )
@@ -320,6 +327,7 @@ def aggregate_query_results(
         sort_key = lambda item: (
             -int(item.get("size_bytes") or 0),
             -int(item.get("language_priority") or 0),
+            -int(item.get("audio_preference_priority") or 0),
             int(item.get("query_priority") or 0),
             str(item.get("title") or "").lower(),
         )
@@ -327,6 +335,7 @@ def aggregate_query_results(
         sort_key = lambda item: (
             int(item.get("query_priority") or 0),
             -int(item.get("language_priority") or 0),
+            -int(item.get("audio_preference_priority") or 0),
             -int(item.get("size_bytes") or 0),
             str(item.get("title") or "").lower(),
         )
@@ -366,6 +375,7 @@ def search_tv_episode_results(
     language: str | None,
     language_scope: LanguageScope,
     strict_dubbing: bool,
+    audio_preference: AudioPreference = "any",
     release_year: int | None,
     max_results_per_query: int,
     result_scorer: Callable[[SearchResult, str], int | None] | None = None,
@@ -421,6 +431,7 @@ def search_tv_episode_results(
                     item = result.to_dict()
                     item["title_match_score"] = int(title_match_score or 0)
                     item["language_priority"] = language_priority
+                    item["audio_preference_priority"] = audio_preference_priority(result, audio_preference)
                     item["size_bytes"] = size_bytes
                     item["query_priority"] = len(expanded_queries) - 1
                     item["query_hits"] = [query]
@@ -429,6 +440,10 @@ def search_tv_episode_results(
                     current = aggregated[key]
                     current["title_match_score"] = max(int(current.get("title_match_score") or 0), int(title_match_score or 0))
                     current["language_priority"] = max(int(current.get("language_priority") or 0), language_priority)
+                    current["audio_preference_priority"] = max(
+                        int(current.get("audio_preference_priority") or 0),
+                        audio_preference_priority(result, audio_preference),
+                    )
                     current["size_bytes"] = max(int(current.get("size_bytes") or 0), size_bytes)
                     current["query_priority"] = min(int(current.get("query_priority") or 0), len(expanded_queries) - 1)
                     current_hits = set(current.get("query_hits") or [])
@@ -439,6 +454,7 @@ def search_tv_episode_results(
         key=lambda item: (
             -int(item.get("title_match_score") or 0),
             -int(item.get("language_priority") or 0),
+            -int(item.get("audio_preference_priority") or 0),
             -int(item.get("size_bytes") or 0),
             int(item.get("query_priority") or 0),
             str(item.get("title") or "").lower(),
@@ -471,6 +487,7 @@ def search_tv_episode_results(
 def strip_internal_result_fields(item: dict[str, Any]) -> SearchResult:
     payload = dict(item)
     payload.pop("language_priority", None)
+    payload.pop("audio_preference_priority", None)
     payload.pop("size_bytes", None)
     payload.pop("query_priority", None)
     return SearchResult(**payload)

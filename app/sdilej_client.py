@@ -8,7 +8,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
-from .models import Category, DetailProbeResponse, LanguageScope, SearchResponse, SearchResult, SortMode
+from .models import AudioPreference, Category, DetailProbeResponse, LanguageScope, SearchResponse, SearchResult, SortMode, audio_preference_priority
 
 BASE_URL = "https://sdilej.cz"
 SEARCH_ENTRYPOINT = f"{BASE_URL}/sk/s"
@@ -226,6 +226,7 @@ class SdilejClient:
         language: str | None = None,
         language_scope: LanguageScope = "any",
         strict_dubbing: bool = False,
+        audio_preference: AudioPreference = "any",
         release_year: int | None = None,
     ) -> SearchResponse:
         normalized_query = query.strip()
@@ -236,6 +237,8 @@ class SdilejClient:
             raise SdilejClientError(f"Unsupported sort mode: {sort}")
         if language_scope not in {"any", "audio", "subtitles"}:
             raise SdilejClientError(f"Unsupported language scope: {language_scope}")
+        if audio_preference not in {"any", "original_or_english", "local_dub"}:
+            raise SdilejClientError(f"Unsupported audio preference: {audio_preference}")
         if release_year is not None and (release_year < 1900 or release_year > 2099):
             raise SdilejClientError("Release year must be between 1900 and 2099.")
 
@@ -272,6 +275,12 @@ class SdilejClient:
             strict_dubbing=strict_dubbing,
         )
         filtered_results = self._apply_year_filter(filtered_results, release_year=release_year)
+        if sort == "relevance" and audio_preference != "any":
+            filtered_results = sorted(
+                filtered_results,
+                key=lambda result: audio_preference_priority(result, audio_preference),
+                reverse=True,
+            )
 
         limited_results = filtered_results[:max_results]
 
@@ -284,6 +293,7 @@ class SdilejClient:
             language=normalized_language,
             language_scope=language_scope,
             strict_dubbing=strict_dubbing,
+            audio_preference=audio_preference,
             release_year=release_year,
             search_url=search_url,
             unfiltered_result_count=len(all_results),

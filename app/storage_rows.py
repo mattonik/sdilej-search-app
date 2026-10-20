@@ -112,6 +112,7 @@ class StorageRowsRepository:
             "language": row["language"],
             "language_scope": row["language_scope"],
             "strict_dubbing": bool(row["strict_dubbing"]),
+            "audio_preference": row["audio_preference"],
             "max_results_per_variant": row["max_results_per_variant"],
             "total_episodes": row["total_episodes"],
             "completed_episodes": row["completed_episodes"],

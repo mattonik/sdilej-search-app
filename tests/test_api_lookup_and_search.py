@@ -432,6 +432,33 @@ def test_video_search_expands_aliases_and_merges_query_hits(app_factory, sample_
     assert sorted(merged["query_hits"]) == ["Shaun the Sheep", "Vesela farma"]
 
 
+def test_video_search_prefers_english_results_without_filtering_dubbed_versions(app_factory, sample_movie_metadata) -> None:
+    fake_client = FakeSdilejClient(
+        responses_by_query={
+            "Shaun the Sheep": [
+                build_search_result(file_id=1, title="Shaun the Sheep CZ dabing", detected_languages=["CZ"]),
+                build_search_result(file_id=2, title="Shaun the Sheep EN 1080p", detected_languages=["EN"]),
+            ],
+        }
+    )
+    app = app_factory(client_instance=fake_client, metadata_resolver_instance=StaticMetadataResolver(sample_movie_metadata))
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/search",
+            params={
+                "query": "Shaun the Sheep",
+                "category": "video",
+                "audio_preference": "original_or_english",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["audio_preference"] == "original_or_english"
+    assert [item["file_id"] for item in payload["results"]] == [2, 1]
+
+
 def test_non_video_search_keeps_single_query(app_factory, sample_movie_metadata) -> None:
     fake_client = FakeSdilejClient(
         responses_by_query={

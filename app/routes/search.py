@@ -4,8 +4,11 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from ..api_models import MovieInfoLinkPayload, MovieLookupPayload, SaveCandidatePayload
+from ..models import AudioPreference
 from ..main import (
+    AUDIO_PREFERENCE_OPTIONS,
     CATEGORY_OPTIONS,
+    DEFAULT_AUDIO_PREFERENCE,
     DEFAULT_CATEGORY,
     DEFAULT_LANGUAGE_SCOPE,
     DEFAULT_SORT,
@@ -34,6 +37,7 @@ def index(
     language: str = Query(default="", max_length=32),
     language_scope: str = Query(default=DEFAULT_LANGUAGE_SCOPE),
     strict_dubbing: bool = Query(default=False),
+    audio_preference: AudioPreference = Query(default=DEFAULT_AUDIO_PREFERENCE),
     release_year: str = Query(default="", max_length=8),
     max_results: int = Query(default=120, ge=1, le=500),
 ):
@@ -51,6 +55,7 @@ def index(
                 language=language,
                 language_scope=language_scope,
                 strict_dubbing=strict_dubbing,
+                audio_preference=audio_preference,
                 release_year=parsed_release_year,
                 max_results=max_results,
                 services=services,
@@ -71,6 +76,7 @@ def index(
             "language": language,
             "language_scope": language_scope,
             "strict_dubbing": strict_dubbing,
+            "audio_preference": audio_preference,
             "release_year": release_year,
             "max_results": max_results,
             "error": error,
@@ -78,6 +84,7 @@ def index(
             "category_options": CATEGORY_OPTIONS,
             "sort_options": SORT_OPTIONS,
             "language_scope_options": LANGUAGE_SCOPE_OPTIONS,
+            "audio_preference_options": AUDIO_PREFERENCE_OPTIONS,
         },
     )
 
@@ -107,6 +114,7 @@ def api_search(
     language: str = Query(default="", max_length=32),
     language_scope: str = Query(default=DEFAULT_LANGUAGE_SCOPE),
     strict_dubbing: bool = Query(default=False),
+    audio_preference: AudioPreference = Query(default=DEFAULT_AUDIO_PREFERENCE),
     release_year: str = Query(default="", max_length=8),
     max_results: int = Query(default=120, ge=1, le=500),
 ):
@@ -120,6 +128,7 @@ def api_search(
             language=language,
             language_scope=language_scope,
             strict_dubbing=strict_dubbing,
+            audio_preference=audio_preference,
             release_year=parsed_release_year,
             max_results=max_results,
             services=services,

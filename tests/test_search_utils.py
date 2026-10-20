@@ -170,3 +170,32 @@ def test_tv_episode_search_checks_all_episode_notations() -> None:
 
     assert [item["file_id"] for item in result["items"]] == [1, 2]
     assert client.calls == ["Reacher S01E01", "Reacher 1x01", "Reacher 1x1"]
+
+
+def test_tv_episode_search_prefers_english_without_hiding_dubbed_results() -> None:
+    client = FakeSdilejClient(
+        responses_by_query={
+            "Reacher S01E01": [
+                build_search_result(file_id=1, title="Reacher S01E01 CZ dabing", detected_languages=["CZ"]),
+                build_search_result(file_id=2, title="Reacher S01E01 1080p EN", detected_languages=["EN"]),
+            ],
+        }
+    )
+    scorer = build_tv_episode_result_scorer(show_aliases=["Reacher"], season=1, episode=1)
+
+    result = search_tv_episode_results(
+        client=client,
+        show_aliases=["Reacher"],
+        season=1,
+        episode=1,
+        category="video",
+        language=None,
+        language_scope="any",
+        strict_dubbing=False,
+        audio_preference="original_or_english",
+        release_year=None,
+        max_results_per_query=10,
+        result_scorer=scorer,
+    )
+
+    assert [item["file_id"] for item in result["items"]] == [2, 1]

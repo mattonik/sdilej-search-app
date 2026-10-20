@@ -98,6 +98,7 @@ class TvSearchWorker:
                     language=job.get("language"),
                     language_scope=str(job.get("language_scope") or "any"),
                     strict_dubbing=bool(job.get("strict_dubbing")),
+                    audio_preference=str(job.get("audio_preference") or "any"),
                     release_year=None,
                     max_results_per_query=int(job.get("max_results_per_variant") or 120),
                     result_scorer=result_scorer,
