@@ -1003,6 +1003,10 @@ def test_settings_tab_is_separate_and_collapsed_by_default(tmp_path, monkeypatch
         page.goto(f"{base_url}/#account", wait_until="networkidle")
         page.wait_for_selector('.workspace-tab.active[data-tab="settings"]')
 
+        page.goto(base_url, wait_until="networkidle")
+        page.evaluate("window.location.hash = 'settings'")
+        page.wait_for_selector('.workspace-tab.active[data-tab="settings"]')
+
 
 @pytest.mark.e2e
 def test_tv_search_marks_downloaded_episode_without_searching(tmp_path) -> None:
