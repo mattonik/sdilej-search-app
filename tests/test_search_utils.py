@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models import TitleMetadata
+from app.models import TitleMetadata, audio_preference_priority
 from app.search_utils import (
     aggregate_query_results,
     build_episode_query_variants,
@@ -143,6 +143,38 @@ def test_aggregate_query_results_respects_size_sort_after_alias_merge() -> None:
     )
 
     assert [item["file_id"] for item in result["items"]] == [2, 1]
+
+
+def test_aggregate_query_results_prefers_requested_audio_over_earlier_alias() -> None:
+    client = FakeSdilejClient(
+        responses_by_query={
+            "Localized title": [build_search_result(file_id=1, title="Localized title CZ dabing", detected_languages=["CZ"])],
+            "Original title": [build_search_result(file_id=2, title="Original title EN 1080p", detected_languages=["EN"])],
+        }
+    )
+
+    result = aggregate_query_results(
+        client=client,
+        queries=["Localized title", "Original title"],
+        category="video",
+        sort="relevance",
+        language=None,
+        language_scope="any",
+        strict_dubbing=False,
+        audio_preference="original_or_english",
+        release_year=None,
+        max_results_per_query=10,
+    )
+
+    assert [item["file_id"] for item in result["items"]] == [2, 1]
+
+
+def test_audio_preference_does_not_promote_subtitle_only_language_tags() -> None:
+    english_subtitles = build_search_result(file_id=1, title="Film EN titulky", detected_languages=["EN"])
+    czech_subtitles = build_search_result(file_id=2, title="Film CZ titulky", detected_languages=["CZ"])
+
+    assert audio_preference_priority(english_subtitles, "original_or_english") < 40
+    assert audio_preference_priority(czech_subtitles, "local_dub") == 0
 
 
 def test_tv_episode_search_checks_all_episode_notations() -> None:

@@ -81,9 +81,10 @@ def audio_preference_priority(result: SearchResult, preference: AudioPreference)
     languages = {value.upper() for value in result.detected_languages}
     has_local_audio = bool(languages & {"CZ", "SK"})
     has_english_audio = "EN" in languages
+    subtitle_only = result.has_subtitle_hint and not result.has_dub_hint
 
     if preference == "original_or_english":
-        if has_english_audio:
+        if has_english_audio and not subtitle_only:
             return 40
         if not has_local_audio and not result.has_dub_hint:
             return 15
@@ -91,9 +92,9 @@ def audio_preference_priority(result: SearchResult, preference: AudioPreference)
 
     if has_local_audio and result.has_dub_hint:
         return 40
-    if has_local_audio:
+    if has_local_audio and not subtitle_only:
         return 30
-    if not result.has_dub_hint:
+    if not result.has_dub_hint and not result.has_subtitle_hint:
         return 10
     return 0
 

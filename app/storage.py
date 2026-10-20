@@ -56,6 +56,7 @@ class Storage:
                     language TEXT,
                     language_scope TEXT NOT NULL,
                     strict_dubbing INTEGER NOT NULL DEFAULT 0,
+                    audio_preference TEXT NOT NULL DEFAULT 'any',
                     release_year INTEGER,
                     search_url TEXT NOT NULL,
                     result_count INTEGER NOT NULL,

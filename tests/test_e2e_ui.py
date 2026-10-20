@@ -1308,6 +1308,50 @@ def test_tv_search_uses_the_tv_audio_preference(tmp_path) -> None:
 
 
 @pytest.mark.e2e
+def test_restored_tv_search_job_hydrates_its_filters(tmp_path) -> None:
+    app, storage, _ = _build_tv_polling_app(tmp_path)
+    job = storage.enqueue_tv_search_job(
+        show={"id": 321, "name": "Bluey"},
+        title_metadata=None,
+        aliases=["Bluey"],
+        search_aliases=["Bluey"],
+        selected_seasons=[1],
+        episodes_by_season={"1": [1]},
+        category="video",
+        language="EN",
+        language_scope="audio",
+        strict_dubbing=True,
+        audio_preference="original_or_english",
+        max_results_per_variant=25,
+        episodes=[
+            {
+                "season_number": 1,
+                "episode_number": 1,
+                "episode_name": "Magic Xylophone",
+                "episode_code": "S01E01",
+            }
+        ],
+    )
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.add_init_script(
+            f"""
+            localStorage.setItem('activeTvSearchJobId', '{job["id"]}');
+            localStorage.setItem('searchMode', 'tv');
+            """
+        )
+        page.goto(base_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#tvFilterAudioPreference')?.value === 'original_or_english'")
+
+        assert page.locator("#tvFilterLanguage").input_value() == "EN"
+        assert page.locator("#tvFilterLanguageScope").input_value() == "audio"
+        assert page.locator("#tvFilterStrictDubbing").is_checked()
+        assert page.locator("#tvFilterMaxResults").input_value() == "25"
+        assert "Original / English" in (page.locator("#tvActiveFilters").text_content() or "")
+
+
+@pytest.mark.e2e
 def test_tv_lookup_allows_selecting_a_similar_show(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
     shows = [

@@ -6,6 +6,8 @@ import threading
 from pathlib import Path
 
 from app.db import run_with_sqlite_retry
+from app.storage import Storage
+from tests.conftest import build_search_response, build_search_result
 
 
 def test_storage_connections_enable_pragmas_and_indexes(storage) -> None:
@@ -30,6 +32,47 @@ def test_storage_connections_enable_pragmas_and_indexes(storage) -> None:
     assert "idx_download_jobs_status_priority_id" in index_names
     assert "idx_tv_search_jobs_status_priority_id" in index_names
     assert "idx_title_metadata_cache_lookup_updated_at" in index_names
+
+
+def test_search_history_keeps_audio_preference(storage) -> None:
+    search = build_search_response("Matrix", [build_search_result(file_id=1, title="Matrix EN")])
+    search.audio_preference = "original_or_english"
+
+    storage.record_search(search)
+
+    assert storage.list_search_history()[0]["audio_preference"] == "original_or_english"
+
+
+def test_search_history_schema_adds_audio_preference_to_existing_database(tmp_path: Path) -> None:
+    db_path = tmp_path / "existing.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE search_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                query TEXT NOT NULL,
+                effective_query TEXT NOT NULL,
+                category TEXT NOT NULL,
+                sort TEXT NOT NULL,
+                language TEXT,
+                language_scope TEXT NOT NULL,
+                strict_dubbing INTEGER NOT NULL DEFAULT 0,
+                release_year INTEGER,
+                search_url TEXT NOT NULL,
+                result_count INTEGER NOT NULL,
+                unfiltered_result_count INTEGER NOT NULL
+            )
+            """
+        )
+
+    storage = Storage(db_path=str(db_path))
+    storage.init_db()
+    search = build_search_response("Matrix", [build_search_result(file_id=1, title="Matrix EN")])
+    search.audio_preference = "original_or_english"
+    storage.record_search(search)
+
+    assert storage.list_search_history()[0]["audio_preference"] == "original_or_english"
 
 
 def test_run_with_sqlite_retry_retries_transient_lock_errors() -> None:

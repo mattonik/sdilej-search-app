@@ -331,6 +331,14 @@ def aggregate_query_results(
             int(item.get("query_priority") or 0),
             str(item.get("title") or "").lower(),
         )
+    elif audio_preference != "any":
+        sort_key = lambda item: (
+            -int(item.get("language_priority") or 0),
+            -int(item.get("audio_preference_priority") or 0),
+            int(item.get("query_priority") or 0),
+            -int(item.get("size_bytes") or 0),
+            str(item.get("title") or "").lower(),
+        )
     else:
         sort_key = lambda item: (
             int(item.get("query_priority") or 0),

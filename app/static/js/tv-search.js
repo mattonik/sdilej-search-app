@@ -217,6 +217,16 @@ export const initTvSearch = ({
         if (tvFilterMaxResults) maxResultsInput.value = tvFilterMaxResults.value || "120";
       };
 
+      const hydrateTvFiltersFromJob = (payload) => {
+        if (tvFilterCategory) tvFilterCategory.value = payload.category || "video";
+        if (tvFilterLanguage) tvFilterLanguage.value = payload.language || "";
+        if (tvFilterLanguageScope) tvFilterLanguageScope.value = payload.language_scope || "any";
+        if (tvFilterAudioPreference) tvFilterAudioPreference.value = payload.audio_preference || "any";
+        if (tvFilterStrictDubbing) tvFilterStrictDubbing.checked = Boolean(payload.strict_dubbing);
+        if (tvFilterMaxResults) tvFilterMaxResults.value = String(payload.max_results_per_variant || 120);
+        renderTvActiveFilters();
+      };
+
       const updateTvSearchButtonState = () => {
         const canSearch =
           Boolean(tvLookupState?.show?.id) &&
@@ -538,6 +548,8 @@ export const initTvSearch = ({
             }));
             return;
           }
+
+          if (!tvResultsState) hydrateTvFiltersFromJob(data);
 
           tvLookupState = {
             show: data.show || tvLookupState?.show || null,
