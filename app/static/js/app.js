@@ -583,6 +583,13 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       });
       setWorkspaceTab = workspaceTabsApi.setActiveTab;
       workspaceTabsReady = true;
+      window.addEventListener("hashchange", () => {
+        const hash = (window.location.hash || "").replace("#", "").trim();
+        const tab = hash === "account" ? "settings" : hash;
+        if (["search", "downloads", "library", "settings"].includes(tab) && tab !== activeWorkspaceTab) {
+          setWorkspaceTab(tab);
+        }
+      });
       setSearchMode(initialMode);
       setFileResultsView(state.fileResultsView);
       setFileResultsFilter(state.fileResultsFilter);
