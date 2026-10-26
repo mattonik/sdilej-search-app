@@ -4,6 +4,7 @@ export const initMovieDiscovery = ({
   elements,
   api,
   openQueueDialog,
+  openTvSearch,
 }) => {
   const {
     movieDiscoveryForm,
@@ -14,6 +15,16 @@ export const initMovieDiscovery = ({
     movieDiscoveryLimit,
     movieDiscoveryStatus,
     movieDiscoveryResults,
+    movieDiscoverySourceBtn,
+    sdilejPopularSourceBtn,
+    movieDiscoverySourcePanel,
+    sdilejPopularSourcePanel,
+    sdilejPopularFilter,
+    sdilejPopularType,
+    sdilejPopularSort,
+    sdilejPopularRefreshBtn,
+    sdilejPopularStatus,
+    sdilejPopularResults,
   } = elements;
 
   if (!movieDiscoveryForm || !movieDiscoveryResults) {
@@ -21,6 +32,8 @@ export const initMovieDiscovery = ({
   }
 
   let genresLoaded = false;
+  let popularItems = [];
+  let popularLoaded = false;
 
   const setStatus = (message, mode = "neutral") => {
     if (!movieDiscoveryStatus) return;
@@ -40,6 +53,103 @@ export const initMovieDiscovery = ({
   const movieVoteAverage = (item) => item?.vote_average ?? "n/a";
   const movieVoteCount = (item) => item?.vote_count ?? 0;
   const movieLanguages = (best) => (Array.isArray(best?.detected_languages) ? best.detected_languages : []);
+
+  const setPopularStatus = (message, mode = "neutral") => {
+    if (!sdilejPopularStatus) return;
+    sdilejPopularStatus.textContent = message || "";
+    sdilejPopularStatus.dataset.mode = mode;
+  };
+
+  const parseSize = (value) => {
+    const match = String(value || "").match(/(\d+(?:[.,]\d+)?)\s*([kmgt])?b/i);
+    if (!match) return 0;
+    const unit = (match[2] || "").toLowerCase();
+    return Number(match[1].replace(",", ".")) * ({ k: 1024, m: 1024 ** 2, g: 1024 ** 3, t: 1024 ** 4 }[unit] || 1);
+  };
+
+  const renderPopular = () => {
+    if (!sdilejPopularResults) return;
+    const filter = (sdilejPopularFilter?.value || "").trim().toLowerCase();
+    const type = sdilejPopularType?.value || "all";
+    const sort = sdilejPopularSort?.value || "source";
+    const items = popularItems
+      .filter((item) => type === "all" || item.media_kind === type)
+      .filter((item) => !filter || [item.title, ...(item.detected_languages || [])].join(" ").toLowerCase().includes(filter));
+
+    if (sort === "title") items.sort((left, right) => String(left.title || "").localeCompare(String(right.title || "")));
+    if (sort === "size_asc") items.sort((left, right) => parseSize(left.size) - parseSize(right.size));
+    if (sort === "size_desc") items.sort((left, right) => parseSize(right.size) - parseSize(left.size));
+
+    if (!items.length) {
+      sdilejPopularResults.innerHTML = `<div class="download-empty">No popular files match these filters.</div>`;
+      return;
+    }
+
+    sdilejPopularResults.innerHTML = items.map((item) => {
+      const isTv = item.media_kind === "tv" && item.show_name;
+      const languages = Array.isArray(item.detected_languages) ? item.detected_languages.join(", ") : "";
+      return `
+        <article class="movie-discovery-card sdilej-popular-card" data-kind="${esc(item.media_kind || "movie")}">
+          ${item.thumbnail_url ? `<img src="${esc(item.thumbnail_url)}" alt="" loading="lazy" />` : `<div class="movie-discovery-poster-fallback">No preview</div>`}
+          <div class="movie-discovery-body">
+            <div class="movie-discovery-head"><strong>${esc(item.title || "Untitled file")}</strong></div>
+            <div class="movie-discovery-meta">
+              <span>${esc(isTv ? "TV episode" : "Movie / file")}</span>
+              <span>${esc(item.size || "size n/a")}</span>
+              ${item.duration ? `<span>${esc(item.duration)}</span>` : ""}
+              ${languages ? `<span>${esc(languages)}</span>` : ""}
+            </div>
+            <a href="${esc(item.detail_url || "#")}" target="_blank" rel="noreferrer">Open on Sdilej</a>
+            <div class="movie-discovery-actions">
+              <button type="button" class="sdilej-popular-search btn btn-primary btn-sm" data-search-query="${esc(item.search_query || item.title || "")}">${esc(isTv ? "Search episode alternatives" : "Search all alternatives")}</button>
+              ${isTv ? `<button type="button" class="sdilej-popular-tv btn btn-secondary btn-sm" data-show-name="${esc(item.show_name)}">Open TV show</button>` : ""}
+            </div>
+          </div>
+        </article>
+      `;
+    }).join("");
+
+    sdilejPopularResults.querySelectorAll(".sdilej-popular-search").forEach((button) => {
+      button.addEventListener("click", () => {
+        const query = button.dataset.searchQuery || "";
+        window.location.href = `/?${new URLSearchParams({ query, category: "video", sort: "relevance" }).toString()}#search`;
+      });
+    });
+    sdilejPopularResults.querySelectorAll(".sdilej-popular-tv").forEach((button) => {
+      button.addEventListener("click", () => openTvSearch?.(button.dataset.showName || ""));
+    });
+  };
+
+  const loadPopular = async (force = false) => {
+    if (popularLoaded && !force) {
+      renderPopular();
+      return;
+    }
+    setPopularStatus("Loading current popular files from Sdilej...", "neutral");
+    sdilejPopularRefreshBtn && (sdilejPopularRefreshBtn.disabled = true);
+    const { ok, data } = await api.listSdilejPopular();
+    sdilejPopularRefreshBtn && (sdilejPopularRefreshBtn.disabled = false);
+    if (!ok) {
+      setPopularStatus(data?.error || "Popular files could not be loaded.", "error");
+      sdilejPopularResults.innerHTML = `<div class="download-empty">${esc(data?.hint || data?.error || "Popular files could not be loaded.")}</div>`;
+      return;
+    }
+    popularItems = Array.isArray(data.items) ? data.items : [];
+    popularLoaded = true;
+    renderPopular();
+    setPopularStatus(`Loaded ${popularItems.length} files in the current Sdilej order.`, "ok");
+  };
+
+  const setDiscoverySource = (source) => {
+    const popular = source === "sdilej";
+    movieDiscoverySourceBtn?.classList.toggle("active", !popular);
+    movieDiscoverySourceBtn?.setAttribute("aria-selected", popular ? "false" : "true");
+    sdilejPopularSourceBtn?.classList.toggle("active", popular);
+    sdilejPopularSourceBtn?.setAttribute("aria-selected", popular ? "true" : "false");
+    movieDiscoverySourcePanel?.classList.toggle("hidden", popular);
+    sdilejPopularSourcePanel?.classList.toggle("hidden", !popular);
+    if (popular) loadPopular();
+  };
 
   const renderMovies = (items) => {
     const discoveryItems = Array.isArray(items) ? items : [];
@@ -180,6 +290,13 @@ export const initMovieDiscovery = ({
     const availableCount = items.filter((item) => item?.availability?.status === "available").length;
     const checkedCount = items.filter((item) => item?.availability?.status !== "error").length;
     setStatus(`Loaded ${availableCount} available movies from ${items.length}. Checked ${checkedCount}.`, "ok");
+  });
+
+  movieDiscoverySourceBtn?.addEventListener("click", () => setDiscoverySource("movies"));
+  sdilejPopularSourceBtn?.addEventListener("click", () => setDiscoverySource("sdilej"));
+  sdilejPopularRefreshBtn?.addEventListener("click", () => loadPopular(true));
+  [sdilejPopularFilter, sdilejPopularType, sdilejPopularSort].forEach((element) => {
+    element?.addEventListener(element === sdilejPopularFilter ? "input" : "change", renderPopular);
   });
 
   loadGenres();

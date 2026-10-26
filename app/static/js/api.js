@@ -85,6 +85,9 @@ export const api = {
     const query = new URLSearchParams(params || {});
     return jsonRequest(`/api/discovery/movies?${query.toString()}`);
   },
+  listSdilejPopular(limit = 80) {
+    return jsonRequest(`/api/discovery/sdilej-popular?limit=${encodeURIComponent(limit)}`);
+  },
   scanMissingTv(payload) {
     return jsonRequest("/api/library/tv/missing", {
       method: "POST",

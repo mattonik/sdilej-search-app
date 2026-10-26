@@ -312,6 +312,28 @@ def test_movie_discovery_endpoint_reports_sdilej_availability_errors(app_factory
     assert availability["best_result"] is None
 
 
+def test_sdilej_popular_endpoint_classifies_movies_and_tv_episodes(app_factory) -> None:
+    class PopularClient(FakeSdilejClient):
+        def list_user_downloads(self, max_results: int = 100):
+            return [
+                build_search_result(file_id=1, title="The Matrix 1999 1080p EN mkv", size="4 GB", detected_languages=["EN"]),
+                build_search_result(file_id=2, title="Reacher S02E08 Fly Boy EN 1080p mkv", size="1 GB", detected_languages=["EN"]),
+            ][:max_results]
+
+    app = app_factory(client_instance=PopularClient())
+
+    with TestClient(app) as client:
+        response = client.get("/api/discovery/sdilej-popular?limit=10")
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert items[0]["media_kind"] == "movie"
+    assert items[0]["search_query"] == "The Matrix 1999"
+    assert items[1]["media_kind"] == "tv"
+    assert items[1]["show_name"] == "Reacher"
+    assert items[1]["search_query"] == "Reacher S02E08"
+
+
 @responses.activate
 def test_movie_info_link_endpoint_returns_not_found_for_unmatched_titles(storage) -> None:
     responses.get(

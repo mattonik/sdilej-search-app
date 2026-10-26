@@ -557,6 +557,50 @@ textarea {
   align-items: end;
 }
 
+.discovery-source-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.discovery-source-tabs .btn {
+  min-height: 38px;
+}
+
+.discovery-source-note {
+  margin: 0.75rem 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.sdilej-popular-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.sdilej-popular-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.sdilej-popular-controls input,
+.sdilej-popular-controls select {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.sdilej-popular-card[data-kind="tv"] {
+  border-color: #99f6e4;
+}
+
 .movie-discovery-form label,
 .music-search-form label {
   display: flex;

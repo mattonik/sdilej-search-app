@@ -14,6 +14,7 @@ BASE_URL = "https://sdilej.cz"
 SEARCH_ENTRYPOINT = f"{BASE_URL}/sk/s"
 AUTOCOMPLETE_ENDPOINT = f"{BASE_URL}/autocomplete.php"
 LOGIN_PAGE_URL = f"{BASE_URL}/prihlasit"
+USER_DOWNLOADS_URL = f"{BASE_URL}/uzivatele_stahuji"
 
 CATEGORY_SEGMENT: dict[Category, str] = {
     "all": "-",
@@ -300,6 +301,15 @@ class SdilejClient:
             result_count=len(limited_results),
             results=limited_results,
         )
+
+    def list_user_downloads(self, max_results: int = 100) -> list[SearchResult]:
+        safe_limit = max(1, min(int(max_results), 200))
+        response = self.session.get(USER_DOWNLOADS_URL, timeout=self.timeout_seconds)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "lxml")
+        results = [result for card in soup.select("div.videobox") if (result := self._parse_card(card)) is not None]
+        return self._dedupe_results(results)[:safe_limit]
 
     def probe_detail(self, detail_url: str, run_preflight: bool = True) -> DetailProbeResponse:
         if not detail_url.strip():

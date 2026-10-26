@@ -65,6 +65,16 @@ import { initMovieDiscovery } from "./movie-discovery.js";
       const movieDiscoveryLimit = document.getElementById("movieDiscoveryLimit");
       const movieDiscoveryStatus = document.getElementById("movieDiscoveryStatus");
       const movieDiscoveryResults = document.getElementById("movieDiscoveryResults");
+      const movieDiscoverySourceBtn = document.getElementById("movieDiscoverySourceBtn");
+      const sdilejPopularSourceBtn = document.getElementById("sdilejPopularSourceBtn");
+      const movieDiscoverySourcePanel = document.getElementById("movieDiscoverySourcePanel");
+      const sdilejPopularSourcePanel = document.getElementById("sdilejPopularSourcePanel");
+      const sdilejPopularFilter = document.getElementById("sdilejPopularFilter");
+      const sdilejPopularType = document.getElementById("sdilejPopularType");
+      const sdilejPopularSort = document.getElementById("sdilejPopularSort");
+      const sdilejPopularRefreshBtn = document.getElementById("sdilejPopularRefreshBtn");
+      const sdilejPopularStatus = document.getElementById("sdilejPopularStatus");
+      const sdilejPopularResults = document.getElementById("sdilejPopularResults");
       const fileSearchPanel = document.getElementById("fileSearchPanel");
       const musicSearchPanel = document.getElementById("musicSearchPanel");
       const musicSearchForm = document.getElementById("musicSearchForm");
@@ -383,9 +393,25 @@ import { initMovieDiscovery } from "./movie-discovery.js";
           movieDiscoveryLimit,
           movieDiscoveryStatus,
           movieDiscoveryResults,
+          movieDiscoverySourceBtn,
+          sdilejPopularSourceBtn,
+          movieDiscoverySourcePanel,
+          sdilejPopularSourcePanel,
+          sdilejPopularFilter,
+          sdilejPopularType,
+          sdilejPopularSort,
+          sdilejPopularRefreshBtn,
+          sdilejPopularStatus,
+          sdilejPopularResults,
         },
         api,
         openQueueDialog: (...args) => openQueueDialog?.(...args),
+        openTvSearch: async (showName) => {
+          if (!showName || !tvApi) return;
+          tvApi.setSearchMode("tv");
+          tvShowName.value = showName;
+          await tvApi.runTvLookup();
+        },
       });
 
       initLibraryManagement({

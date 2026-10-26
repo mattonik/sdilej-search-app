@@ -7,12 +7,22 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from ..diagnostics import error_response
+from ..media_routing import classify_media_title
 from ..services import get_services as _get_services
 from ..models import SearchResult
 from ..sdilej_client import SdilejClientError
 from ..tmdb_client import DiscoveryMode, TmdbClient, TmdbClientError
 
 router = APIRouter()
+
+_POPULAR_FILE_EXTENSION_RE = re.compile(r"\.[a-z0-9]{2,5}$", re.IGNORECASE)
+_POPULAR_SEPARATOR_RE = re.compile(r"[._\-]+")
+_POPULAR_TITLE_STOP_RE = re.compile(
+    r"^(?:480p|576p|720p|1080p|2160p|4k|fhd|uhd|web|webdl|webrip|bluray|bdrip|brrip|remux|"
+    r"x26[45]|h26[45]|hevc|av1|aac|dts|ddp?\d*|mkv|mp4|avi|mov|cz|sk|cs|en|de|fr|it|es|pl|ru|"
+    r"dab(?:ing)?|dub|tit(?:ulky)?|sub(?:title)?s?)$",
+    re.IGNORECASE,
+)
 
 
 def _normalize_key(value: str | None) -> str:
@@ -43,6 +53,34 @@ def _parse_size_bytes(value: str | None) -> int:
     unit = (match.group(2) or "").lower()
     multiplier = {"k": 1024, "m": 1024**2, "g": 1024**3, "t": 1024**4}.get(unit, 1)
     return int(amount * multiplier)
+
+
+def _popular_movie_query(title: str) -> str:
+    normalized = _POPULAR_SEPARATOR_RE.sub(" ", _POPULAR_FILE_EXTENSION_RE.sub("", title)).strip()
+    kept: list[str] = []
+    for token in normalized.split():
+        if _POPULAR_TITLE_STOP_RE.fullmatch(token) and kept:
+            break
+        kept.append(token)
+    return " ".join(kept).strip() or title.strip()
+
+
+def _popular_item(result: SearchResult) -> dict:
+    classification = classify_media_title(result.title)
+    is_tv = classification.media_kind == "tv" and bool(classification.series_name)
+    if is_tv:
+        show_name = str(classification.series_name)
+        episode_query = f"{show_name} S{int(classification.season_number or 0):02d}E{int(classification.episode_number or 0):02d}"
+        search_query = episode_query
+    else:
+        show_name = None
+        search_query = _popular_movie_query(result.title)
+    return {
+        **result.to_dict(),
+        "media_kind": "tv" if is_tv else "movie",
+        "search_query": search_query,
+        "show_name": show_name,
+    }
 
 
 def _score_candidate(result: SearchResult, *, movie: dict) -> int:
@@ -193,6 +231,41 @@ def api_discovery_movies(
             error="Movie discovery failed.",
             error_code="tmdb_discovery_failed",
             hint="Retry the request or check TMDB and sdilej connectivity.",
+            retryable=True,
+            details=str(exc),
+        )
+
+
+@router.get("/api/discovery/sdilej-popular")
+def api_discovery_sdilej_popular(
+    request: Request,
+    limit: int = Query(default=80, ge=1, le=200),
+):
+    try:
+        results = _get_services(request).client.list_user_downloads(max_results=limit)
+        return JSONResponse(
+            {
+                "source_url": "https://sdilej.cz/uzivatele_stahuji",
+                "items": [_popular_item(result) for result in results],
+            }
+        )
+    except SdilejClientError as exc:
+        return error_response(
+            request,
+            status_code=502,
+            error="Sdilej popular list could not be loaded.",
+            error_code="sdilej_popular_list_failed",
+            hint="Retry shortly; Sdilej may be temporarily unavailable.",
+            retryable=True,
+            details=str(exc),
+        )
+    except Exception as exc:  # noqa: BLE001
+        return error_response(
+            request,
+            status_code=502,
+            error="Sdilej popular list could not be loaded.",
+            error_code="sdilej_popular_list_failed",
+            hint="Retry shortly; Sdilej may be temporarily unavailable.",
             retryable=True,
             details=str(exc),
         )

@@ -354,9 +354,14 @@
 
         <div id="movieDiscoveryPanel" role="tabpanel" class="movie-discovery-panel search-mode-panel hidden">
           <div class="search-section-intro">
-            <h3>Movie Discovery</h3>
-            <p>Browse top lists and check which movies look available before searching manually.</p>
+            <h3>Explore</h3>
+            <p>Browse curated movie lists or the current popular files on Sdilej.</p>
           </div>
+          <div class="discovery-source-tabs" role="tablist" aria-label="Explore source">
+            <button id="movieDiscoverySourceBtn" type="button" class="btn btn-pill active" role="tab" aria-selected="true">Movie lists</button>
+            <button id="sdilejPopularSourceBtn" type="button" class="btn btn-pill" role="tab" aria-selected="false">Popular on Sdilej</button>
+          </div>
+          <section id="movieDiscoverySourcePanel">
           <form id="movieDiscoveryForm" class="movie-discovery-form">
             <label>
               List
@@ -393,6 +398,18 @@
           </form>
           <div id="movieDiscoveryStatus" class="download-status">Discovery idle.</div>
           <div id="movieDiscoveryResults" class="movie-discovery-results"></div>
+          </section>
+          <section id="sdilejPopularSourcePanel" class="hidden">
+            <p class="discovery-source-note">The source does not publish a time window, so this preserves its current ordering.</p>
+            <div class="sdilej-popular-controls">
+              <label>Filter <input id="sdilejPopularFilter" type="search" placeholder="Title or language" /></label>
+              <label>Type <select id="sdilejPopularType"><option value="all">All files</option><option value="movie">Movies</option><option value="tv">TV episodes</option></select></label>
+              <label>Sort <select id="sdilejPopularSort"><option value="source">Sdilej order</option><option value="size_desc">Largest first</option><option value="size_asc">Smallest first</option><option value="title">Title</option></select></label>
+              <button id="sdilejPopularRefreshBtn" type="button" class="btn btn-primary">Load popular files</button>
+            </div>
+            <div id="sdilejPopularStatus" class="download-status">Load the current Sdilej list when you need it.</div>
+            <div id="sdilejPopularResults" class="movie-discovery-results"></div>
+          </section>
         </div>
 
         <div id="musicSearchPanel" role="tabpanel" class="music-search-panel search-mode-panel hidden">
@@ -427,7 +444,7 @@
         <div id="fileSearchPanel" role="tabpanel" class="search-mode-panel">
           <div class="file-search-discovery">
             <span>Not sure what to watch?</span>
-            <button id="discoverySearchModeBtn" type="button" class="btn btn-secondary btn-sm" data-search-mode="discovery">Browse film lists</button>
+            <button id="discoverySearchModeBtn" type="button" class="btn btn-secondary btn-sm" data-search-mode="discovery">Explore movies and Sdilej</button>
           </div>
           <form method="get" action="/" class="search-form" id="fileSearchForm">
             <div class="file-search-quick">

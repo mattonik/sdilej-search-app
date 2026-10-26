@@ -788,6 +788,87 @@ def test_movie_discovery_offers_full_search_for_unavailable_movie(tmp_path) -> N
 
 
 @pytest.mark.e2e
+def test_sdilej_popular_explore_opens_tv_show(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+    popular_items = {
+        "items": [
+            {
+                "file_id": 1,
+                "title": "The Matrix 1999 1080p EN mkv",
+                "detail_url": "https://sdilej.cz/1/matrix",
+                "thumbnail_url": None,
+                "size": "4 GB",
+                "duration": "02:16:00",
+                "detected_languages": ["EN"],
+                "media_kind": "movie",
+                "search_query": "The Matrix 1999",
+            },
+            {
+                "file_id": 2,
+                "title": "Reacher S02E08 Fly Boy EN 1080p mkv",
+                "detail_url": "https://sdilej.cz/2/reacher",
+                "thumbnail_url": None,
+                "size": "1 GB",
+                "duration": "00:45:00",
+                "detected_languages": ["EN"],
+                "media_kind": "tv",
+                "show_name": "Reacher",
+                "search_query": "Reacher S02E08",
+            },
+        ]
+    }
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.route("**/api/discovery/sdilej-popular?limit=80", lambda route: route.fulfill(json=popular_items))
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#discoverySearchModeBtn")
+        page.click("#sdilejPopularSourceBtn")
+        page.wait_for_selector(".sdilej-popular-card")
+        page.select_option("#sdilejPopularSort", "size_asc")
+        assert "Reacher" in (page.locator(".sdilej-popular-card").first.text_content() or "")
+        page.select_option("#sdilejPopularType", "tv")
+        page.click(".sdilej-popular-tv")
+        page.wait_for_function("() => document.querySelector('#tvShowName')?.value === 'Reacher'")
+        assert page.locator("#tvModePanel").is_visible()
+
+
+
+@pytest.mark.e2e
+def test_sdilej_popular_explore_opens_movie_alternatives(tmp_path) -> None:
+    app = _build_file_search_app(tmp_path)
+
+    with run_test_server(app) as base_url, launch_browser() as browser:
+        page = browser.new_page()
+        page.route(
+            "**/api/discovery/sdilej-popular?limit=80",
+            lambda route: route.fulfill(
+                json={
+                    "items": [
+                        {
+                            "file_id": 1,
+                            "title": "The Matrix 1999 1080p EN mkv",
+                            "detail_url": "https://sdilej.cz/1/matrix",
+                            "thumbnail_url": None,
+                            "size": "4 GB",
+                            "duration": "02:16:00",
+                            "detected_languages": ["EN"],
+                            "media_kind": "movie",
+                            "search_query": "The Matrix 1999",
+                        }
+                    ]
+                }
+            ),
+        )
+        page.goto(base_url, wait_until="networkidle")
+        page.click("#discoverySearchModeBtn")
+        page.click("#sdilejPopularSourceBtn")
+        page.wait_for_selector(".sdilej-popular-card")
+        page.click(".sdilej-popular-search")
+        page.wait_for_url("**/?query=The+Matrix+1999&category=video&sort=relevance#search")
+
+
+@pytest.mark.e2e
 def test_unified_download_composer_enqueues_youtube_link(tmp_path) -> None:
     app = _build_file_search_app(tmp_path)
 

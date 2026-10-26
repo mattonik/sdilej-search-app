@@ -239,7 +239,7 @@ export const initTvSearch = ({
         file: "Search files and movies by title, language, year, and category.",
         tv: "Find a show, choose seasons, then scan episode results.",
         music: "Search audio results and route queue actions to the music destination by default.",
-        discovery: "Browse top movie lists and check sdilej availability before picking a title.",
+        discovery: "Browse movie lists or currently popular Sdilej files, then find alternatives.",
         kids: "Browse the curated kids catalog and enqueue episodes directly.",
       };
 
@@ -1495,6 +1495,7 @@ export const initTvSearch = ({
     syncTvEditorToFileFilters,
     updateTvSearchButtonState,
     setSearchMode,
+    runTvLookup,
     prepareTvSearchForEpisode,
     setTvStatus,
     setActiveTvSearchJobId,
